@@ -60,6 +60,14 @@ async fn open_report(host: tauri::State<'_, Host>, id: String) -> Result<(), Str
     hidden(&mut Command::new("explorer.exe")).arg(directory).spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
+#[tauri::command]
+async fn open_provider_source(host: tauri::State<'_, Host>, id: String) -> Result<(), String> {
+    let result = core_call(host, "provider-source".into(), json!({"id":id})).await?;
+    let url = result.as_str().ok_or("没有获取地址")?;
+    if !url.starts_with("https://") || url.chars().any(|c| c.is_control()) { return Err("获取地址必须使用 HTTPS".into()); }
+    hidden(&mut Command::new("rundll32.exe")).args(["url.dll,FileProtocolHandler", url]).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
 fn main() {
     let mut context = tauri::generate_context!();
     // WebView2 150+ 的提升权限进程忽略环境中的 Chromium 参数；测试端口须通过原生 API 设置。
@@ -72,6 +80,6 @@ fn main() {
     }
     tauri::Builder::default().plugin(tauri_plugin_dialog::init())
         .manage(Host(Arc::new(Mutex::new(None))))
-        .invoke_handler(tauri::generate_handler![core_call, open_report])
+        .invoke_handler(tauri::generate_handler![core_call, open_report, open_provider_source])
         .run(context).expect("无法启动资源工具箱窗口");
 }

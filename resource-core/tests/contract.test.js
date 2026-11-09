@@ -13,6 +13,20 @@ function temporary(t) {
     return root;
 }
 const resize = (id = 'resize') => ({ id, resourceType: 'png', operation: 'image-resize', provider: 'sharp', enabled: true, parameters: { width: 10, height: 20 }, providerOptions: {} });
+test('missing binaries and DLLs expose acquisition metadata and refresh without writing user data', t => {
+    const root = temporary(t), core = path.join(copyTool(root), 'resource-core');
+    fs.unlinkSync(path.join(core, 'providers/pngquant/pngquant.exe'));
+    fs.unlinkSync(path.join(core, 'providers/lame/libmpg123-0.dll'));
+    const catalog = registry.createRegistry(core), before = catalog.describe().providers;
+    assert.equal(before.find(p => p.id === 'pngquant').availability.available, false);
+    assert.match(before.find(p => p.id === 'pngquant').acquisition.instructions, /cargo install/);
+    assert.match(before.find(p => p.id === 'lame').availability.reason, /libmpg123-0.dll/);
+    fs.copyFileSync(path.join(__dirname, '../providers/pngquant/pngquant.exe'), path.join(core, 'providers/pngquant/pngquant.exe'));
+    assert.equal(catalog.describe().providers.find(p => p.id === 'pngquant').availability.available, true);
+    assert.equal(fs.existsSync(path.join(core, 'data')), false);
+    const { DesktopBridge } = require(path.join(core, 'desktop-bridge'));
+    return new DesktopBridge().dispatch('provider-source', { id: 'pngquant' }).then(url => assert.equal(url, 'https://pngquant.org/'));
+});
 test('independent type, operation and provider catalog allows same extension and isolated repeated parameters', () => {
     const steps = registry.normalizePipeline([resize('first'), { ...resize('second'), parameters: { width: 30, height: 40 } }, { id: 'compress', resourceType: 'png', operation: 'compress', provider: 'pngquant', enabled: true }]);
     assert.equal(steps[0].parameters.width, 10); assert.equal(steps[1].parameters.width, 30);

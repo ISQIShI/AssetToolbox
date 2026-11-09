@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { call, chooseFolder, openReport } from './api';
+import { call, chooseFolder, openReport, openProviderSource } from './api';
 import { bytes, processingRequest, resetParameters, createStep } from './model';
 import StepEditor from './StepEditor.vue';
+import ProviderInventory from './ProviderInventory.vue';
 import RestoreTable from './RestoreTable.vue';
-import type { Bootstrap, Configuration, JobRequest, JobState, RestorePreview, RestoreScope, ScanPreview, Selection, Task } from './types';
+import type { Bootstrap, Configuration, JobRequest, JobState, RestorePreview, RestoreScope, ScanPreview, Selection, Task, Provider } from './types';
 const page = ref<'process' | 'history' | 'restore'>('process');
 const boot = ref<Bootstrap>(), config = ref<Configuration>(), tasks = ref<Task[]>([]), selectedTask = ref<Task>();
 const error = ref(''), notice = ref(''), loading = ref(true), submitting = ref(false), cancelled = ref(false), closing = ref(false);
@@ -15,6 +16,11 @@ const restorePreview = ref<RestorePreview>(), restoreScope = ref<RestoreScope>('
 const exportBackup = ref(''), exportOutput = ref(''), historySearch = ref('');
 const busy = computed(() => submitting.value || Boolean(job.value && !job.value.done));
 const enabledCount = computed(() => config.value?.pipeline.filter(step => step.enabled).length || 0);
+const missingDependencies = computed(() => config.value?.pipeline.some(step => step.enabled && boot.value?.definition?.providers.find(provider => provider.id === step.provider)?.availability?.available === false) || false);
+async function refreshProviders() {
+    try { const providers = await call<Provider[]>('providers'); if (boot.value?.definition) boot.value.definition.providers = providers; }
+    catch (cause) { fail(cause); }
+}
 const historyRows = computed(() => tasks.value.filter(task => `${task.source || ''} ${task.id}`.toLowerCase().includes(historySearch.value.toLowerCase())));
 const percent = computed(() => job.value?.total ? Math.min(100, Math.round(job.value.processed / job.value.total * 100)) : 0);
 const phases: Record<string, string> = { starting: '正在启动', scanning: '扫描文件', checking: '检查文件', processing: '正在处理', restoring: '正在恢复', finished: '已结束' };
@@ -143,6 +149,7 @@ onUnmounted(() => { clearTimeout(timer); unlisten?.(); });
       <div v-if="boot?.configError" class="notice error">模块加载失败：{{ boot.configError }}。任务历史和备份恢复仍可使用。</div>
       <div v-if="loading" class="panel empty">正在加载模块和配置…</div>
       <template v-else-if="page === 'process' && config && boot?.definition">
+        <ProviderInventory :providers="boot.definition.providers" :disabled="busy" @refresh="refreshProviders" @open-source="openProviderSource($event).catch(fail)" />
         <section class="panel"><div class="section-heading"><div><h2><span class="step">01</span> 文件夹与保存方式</h2><p>子目录结构会保留，未启用的资源在另存时直接复制。</p></div></div>
           <label class="field">源文件夹<div class="path-input"><input v-model="config.sourceDir" :disabled="busy" placeholder="选择或粘贴文件夹路径" aria-label="源文件夹"><button :disabled="busy" @click="pick('sourceDir')">浏览…</button></div></label>
           <div class="save-options"><label class="save-option" :class="{ chosen: config.saveMode === 'overwrite' }"><input v-model="config.saveMode" type="radio" value="overwrite" :disabled="busy"><div><strong>覆盖原文件</strong><small>全部步骤成功后替换</small></div></label><label class="save-option" :class="{ chosen: config.saveMode === 'saveAs' }"><input v-model="config.saveMode" type="radio" value="saveAs" :disabled="busy"><div><strong>另存为</strong><small>保存到新位置，保留原文件</small></div></label></div>
@@ -153,7 +160,7 @@ onUnmounted(() => { clearTimeout(timer); unlisten?.(); });
           <div class="module-grid"><StepEditor v-for="(step, index) in config.pipeline" :key="step.id" :model-value="step" :definition="boot.definition" :index="index" :count="config.pipeline.length" :disabled="busy" @update:model-value="config.pipeline[index] = $event" @remove="config.pipeline.splice(index, 1)" @move="moveStep(index, $event)" /></div>
           <div v-if="!config.pipeline.length" class="panel empty">添加资源类型、处理操作和实现提供方。没有启用步骤的已知资源在另存时原样复制。</div>
         </section>
-        <div class="action-bar"><div><strong>准备好后开始处理</strong><small>开始或点击保存配置后，下次自动恢复当前设置。</small></div><div class="actions"><button :disabled="busy" @click="save">保存配置</button><button :disabled="busy" @click="processResources('preview')">扫描预览</button><button class="primary" :disabled="busy || !boot.definition.resourceTypes.length" @click="processResources('process')">开始处理 <span>→</span></button></div></div>
+        <div class="action-bar"><div><strong>准备好后开始处理</strong><small>开始或点击保存配置后，下次自动恢复当前设置。</small></div><div class="actions"><button :disabled="busy" @click="save">保存配置</button><button :disabled="busy" @click="processResources('preview')">扫描预览</button><button class="primary" :disabled="busy || missingDependencies || !boot.definition.resourceTypes.length" @click="processResources('process')">开始处理 <span>→</span></button></div></div>
         <section v-if="scan" class="panel"><h2>扫描结果</h2><div class="stat-row"><div><strong>{{ scan.total }}</strong><span>资源文件</span></div><div><strong>{{ bytes(scan.totalBytes) }}</strong><span>原始体积</span></div><div><strong>{{ scan.enabledFiles }}</strong><span>启用处理</span></div><div><strong>{{ scan.conflicts }}</strong><span>输出冲突</span></div></div><p v-if="scan.cancelled" class="notice warning">扫描已取消，结果不完整。</p><div class="scan-modules"><span v-for="module in scan.resources" :key="module.id">{{ module.name }} · {{ module.count }} 项 · {{ bytes(module.bytes) }} · {{ module.enabled ? '已启用' : '未启用' }}</span></div><p v-for="issue in scan.issues" :key="issue" class="notice warning">{{ issue }}</p></section>
       </template>
       <template v-else-if="page === 'history'">

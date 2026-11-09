@@ -51,6 +51,17 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     }
     try {
         await launch();
+        const pngTool = path.join(tool, 'resource-core/providers/pngquant/pngquant.exe');
+        fs.renameSync(pngTool, pngTool + '.held');
+        await page.getByRole('button', { name: '刷新依赖状态', exact: true }).click();
+        const missing = page.locator('[data-provider-id="pngquant"]');
+        await expect(missing).toContainText('缺少文件：pngquant.exe');
+        await expect(missing.getByRole('link', { name: '打开获取页面' })).toHaveAttribute('href', 'https://pngquant.org/');
+        await expect(missing).toContainText('cargo install pngquant');
+        await page.screenshot({ path: info.outputPath('missing-provider.png'), fullPage: true });
+        fs.renameSync(pngTool + '.held', pngTool);
+        await page.getByRole('button', { name: '刷新依赖状态', exact: true }).click();
+        await expect(missing).toContainText('可用');
         await expect(page.getByLabel('测试级别', { exact: false })).toHaveValue('6');
         await expect(page.getByLabel('测试文字', { exact: true })).toHaveValue('中文 配置');
         expect(fs.existsSync(path.join(tool, 'resource-core/config'))).toBe(false);

@@ -4,6 +4,7 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { byExtension, providers, operations, normalizePipeline } = require('./framework/registry');
 const { relativeFile, safeSource, digest } = require('./tasks');
+const { providerAvailability } = require('./framework/availability');
 
 function isWithin(parent, child) {
     const relative = path.relative(parent, child);
@@ -114,8 +115,8 @@ function scanFolder(folder, options = {}) {
             groups.set(resourceDefinition.id, group);
             for (const step of steps) {
                 const provider = providers.get(step.provider);
-                if (provider.executableName && !fs.existsSync(path.join(provider.directory, provider.executableName))) issue('缺少处理工具：' + provider.id);
-                try { provider.check?.(); } catch (error) { issue('处理工具不可用：' + provider.id + '：' + error.message); }
+                const availability = providerAvailability(provider);
+                if (!availability.available) issue('缺少处理工具或依赖：' + provider.id + '：' + availability.reason);
             }
         }
         const bytes = fs.statSync(filename).size;
@@ -269,7 +270,8 @@ function processFolder(folder, options = {}) {
     const requiredProviders = [...new Set(pipeline.filter(step => step.enabled && present.has(step.resourceType)).map(step => providers.get(step.provider)))];
     const executables = new Map();
     for (const resourceDefinition of requiredProviders) {
-        resourceDefinition.check?.();
+        const availability = providerAvailability(resourceDefinition);
+        if (!availability.available) throw new Error('缺少处理工具或依赖：' + resourceDefinition.id + '：' + availability.reason + (resourceDefinition.acquisition ? '；获取：' + resourceDefinition.acquisition.url : ''));
         if (!resourceDefinition.executableName) continue;
         const executable = path.join(resourceDefinition.directory, resourceDefinition.executableName);
         if (!fs.existsSync(executable)) throw new Error('缺少处理工具：' + executable);

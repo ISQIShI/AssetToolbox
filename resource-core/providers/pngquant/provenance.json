@@ -1,0 +1,10 @@
+{
+  "name": "pngquant",
+  "version": "3.0.3",
+  "license": "GPL-3.0-or-later（含原始版权声明）；另有商业许可",
+  "url": "https://pngquant.org/",
+  "source": "https://github.com/kornelski/pngquant/tree/3.0.3",
+  "instructions": "Windows 官网压缩包当前仍为 2.17.0。推荐在 Rust/MSVC 环境运行 cargo install pngquant --version 3.0.3 --locked，再将 pngquant.exe 放入 resource-core/providers/pngquant/。仅下载官方来源并保留 COPYRIGHT。",
+  "redistribution": "源码仓库不附带 EXE。分发二进制前须满足 GPL 对应源码与声明要求，或取得覆盖该用途的商业许可。",
+  "checkedAt": "2026-11-08"
+}

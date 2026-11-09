@@ -36,3 +36,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+# 外部工具只供本地使用，源码发布不包含二进制
+/resource-core/providers/**/*.exe
+/resource-core/providers/**/*.dll

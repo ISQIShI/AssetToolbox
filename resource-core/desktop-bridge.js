@@ -30,6 +30,12 @@ class DesktopBridge {
         switch (action) {
             case 'bootstrap': return this.bootstrap();
             case 'tasks': return require('./tasks').listTasks();
+            case 'providers': return require('./framework/registry').describe().providers;
+            case 'provider-source': {
+                const provider = require('./framework/registry').providers.get(payload.id);
+                if (!provider?.acquisition?.url) throw new Error('此提供方没有登记获取渠道');
+                return provider.acquisition.url;
+            }
             case 'normalize': return normalizeConfiguration(payload);
             case 'save': return require('./settings').saveConfiguration(normalizeConfiguration(payload));
             case 'start': return this.start(payload);

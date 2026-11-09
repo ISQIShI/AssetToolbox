@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { compileSchema, normalizeParameters } = require('./schema');
+const { providerAvailability } = require('./availability');
 
 const identifier = /^[a-z][a-z0-9-]*$/;
 function discover(root, category) {
@@ -12,6 +13,8 @@ function discover(root, category) {
         if (!fs.existsSync(filename)) continue;
         if (!identifier.test(entry.name)) throw new Error('扩展 ID 无效：' + entry.name);
         const definition = require(filename);
+        const provenance = path.join(directory, entry.name, 'provenance.json');
+        if (category === 'providers' && fs.existsSync(provenance)) definition.acquisition = JSON.parse(fs.readFileSync(provenance, 'utf8'));
         if (definition.apiVersion !== 1 || !/^\d+\.\d+\.\d+$/.test(definition.version || '') || typeof definition.displayName !== 'string' || !definition.displayName.trim()) throw new Error('扩展契约无效：' + entry.name);
         result.set(entry.name, { ...definition, id: entry.name, directory: path.dirname(filename) });
     }
@@ -32,6 +35,11 @@ function createRegistry(root = path.join(__dirname, '..')) {
         operation.schema = compileSchema(operation.schema);
     }
     for (const provider of providers.values()) {
+        if (provider.requiredFiles !== undefined && (!Array.isArray(provider.requiredFiles) || provider.requiredFiles.some(name => typeof name !== 'string' || !name || path.basename(name) !== name || /[\\/:\0]/.test(name)))) throw new Error('requiredFiles 必须为本目录文件名数组');
+        if (provider.acquisition) {
+            const url = new URL(provider.acquisition.url);
+            if (url.protocol !== 'https:' || url.username || url.password || typeof provider.acquisition.instructions !== 'string' || !provider.acquisition.instructions) throw new Error('提供方获取信息无效');
+        }
         if (typeof provider.execute !== 'function' || !Array.isArray(provider.supports) || !provider.supports.length) throw new Error('提供方定义无效：' + provider.id);
         if (provider.prepare !== undefined && typeof provider.prepare !== 'function') throw new Error('prepare 必须为函数');
         if (provider.check !== undefined && typeof provider.check !== 'function') throw new Error('check 必须为函数');
@@ -65,7 +73,8 @@ function createRegistry(root = path.join(__dirname, '..')) {
         return { apiVersion: 1,
             resourceTypes: [...resourceTypes.values()].map(type => ({ ...base(type), kind: type.kind, extensions: type.extensions })),
             operations: [...operations.values()].map(operation => ({ ...base(operation), accepts: operation.accepts, resultPolicy: operation.resultPolicy, fields: operation.schema.fields })),
-            providers: [...providers.values()].map(provider => ({ ...base(provider), supports: provider.supports, fields: provider.schema.fields })) };
+            providers: [...providers.values()].map(provider => ({ ...base(provider), supports: provider.supports, fields: provider.schema.fields,
+                availability: providerAvailability(provider), acquisition: provider.acquisition || null })) };
     }
     return { resourceTypes, operations, providers, byExtension, normalizePipeline, describe };
 }

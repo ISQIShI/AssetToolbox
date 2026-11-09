@@ -2,7 +2,8 @@ export type Value = string | number | boolean;
 export interface Field { key: string; type: 'integer' | 'number' | 'boolean' | 'enum' | 'text'; default: Value; label: string; hint?: string; min?: number; max?: number; decimalPlaces?: number; step?: number; maxLength?: number; choices?: { label: string; value: Value }[] }
 export interface ResourceType { id: string; displayName: string; kind: string; extensions: string[]; version: string }
 export interface Operation { id: string; displayName: string; description: string; accepts: string[]; resultPolicy: 'smaller-only' | 'valid-output'; fields: Field[]; version: string }
-export interface Provider { id: string; displayName: string; description: string; supports: { resourceType: string; operation: string }[]; fields: Field[]; version: string }
+export interface Acquisition { name: string; version: string; license: string; url: string; source: string; instructions: string; redistribution: string; checkedAt: string }
+export interface Provider { id: string; displayName: string; description: string; supports: { resourceType: string; operation: string }[]; fields: Field[]; version: string; availability?: { available: boolean; reason: string }; acquisition?: Acquisition | null }
 export interface Definition { apiVersion: 1; resourceTypes: ResourceType[]; operations: Operation[]; providers: Provider[] }
 export interface Step { id: string; resourceType: string; operation: string; provider: string; enabled: boolean; parameters: Record<string, Value>; providerOptions: Record<string, Value>; versions?: { resourceType: string; operation: string; provider: string } }
 export interface Configuration { schema: 'asset-toolbox.settings/1'; sourceDir: string; outputDir: string; backupDir: string; saveMode: 'overwrite' | 'saveAs'; backupEnabled: boolean; pipeline: Step[] }

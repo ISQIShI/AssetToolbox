@@ -1,0 +1,48 @@
+{
+  "checkedAt": "2026-11-08",
+  "scope": "仅记录本地文件；源码仓库不分发二进制",
+  "pngquant": {
+    "version": "3.0.3",
+    "source": "https://crates.io/api/v1/crates/pngquant/3.0.3/download",
+    "crateSha256": "68a12bdd8825f9989f4ee9a6ab0b42727dae57728b939ef63453366697a07232",
+    "sourceLockFile": "third-party/pngquant-3.0.3-Cargo.lock",
+    "sourceLockSha256": "80be78015298fc8e4a964eab70a57b85888cbb22c01e4954c016f03de3ba0abe",
+    "build": "cargo install pngquant --version 3.0.3 --locked --root <local-staging>",
+    "toolchain": "rustc 1.99.1, x86_64-pc-windows-msvc",
+    "binarySha256": "1dec948f2fa5eeb558853e24448d357f9a381898d9fae727016ca2a7fc18d6b5",
+    "officialWindowsZip": {
+      "url": "https://pngquant.org/pngquant-windows.zip",
+      "sha256": "bd0257aeeccfe446a4cd764927e26f8af6051796f28abed104307284107b120d",
+      "actualVersion": "2.17.0",
+      "sameAsPreviousLocalBinary": true
+    }
+  },
+  "lame": {
+    "version": "4.0",
+    "upstream": "https://lame.sourceforge.io/download.php",
+    "builder": "RareWares",
+    "archiveUrl": "https://www.rarewares.org/files/mp3/lame-4.0-x64.zip",
+    "archiveSha256": "722f4311e2795d5c852076a579b3183beeb76e9010d9cab1e7f9d2e86d9d0808",
+    "files": {
+      "lame.exe": "04839dd7308fa83e415584353475d605769043da05dd68c9bf60b15cdbef8b02",
+      "libmpg123-0.dll": "018e6833088b3fc7d9a97c3f45abb5f9f947f7c46de4f17fddf423f430fa70fa"
+    },
+    "correspondingSourceVerified": false
+  },
+  "jpgC": {
+    "version": "4.0.21.902",
+    "author": "zzy",
+    "homepage": "https://zzy.my/blog/post/Jpg-C",
+    "binarySha256": "51684974ff3113f0a58518b575b60c98ae8bd07b4efdabdef23fd795ba7b8d9e",
+    "originalDownloadVerified": false,
+    "redistributionPermissionVerified": false
+  },
+  "sharp": {
+    "version": "0.35.5",
+    "source": "https://github.com/lovell/sharp/tree/v0.35.5",
+    "integrityLocation": "resource-core/package-lock.json",
+    "platformPackage": "@img/sharp-win32-x64@0.35.5",
+    "platformLicense": "Apache-2.0 AND LGPL-3.0-or-later",
+    "componentVersions": "third-party/sharp-win32-x64-versions.json"
+  }
+}

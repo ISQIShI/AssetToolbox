@@ -35,3 +35,7 @@ JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分�
 遵循[文档管理规范](docs/documentation.md)：行为、协议、格式或依赖变化同步更新对应专题、索引及项目状态，记录实际通过和未执行项。新 EXE 必须重新验证。
 
 提交使用 Conventional Commits，例如 `feat(core)!: 实现资源处理流水线`。提交前检查暂存差异及 `git diff --cached --check`；PR 说明最终行为、验证结果、关联问题和文档更新，界面改动附截图。
+
+## 来源、许可与发布
+
+项目自有源码使用 MIT，第三方许可见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md)。提供方必须登记官方获取渠道、安装说明、版本与许可；缺依赖需在前端可见。对外发布前执行[分发核对](docs/distribution.md)，不能把本地可运行视为允许分发。当前仅发布私有源码仓库，禁止上传第三方 EXE/DLL、node_modules 或包含这些文件的历史备份。

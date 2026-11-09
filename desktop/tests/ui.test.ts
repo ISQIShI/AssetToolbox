@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
 import StepEditor from '../src/StepEditor.vue';
+import ProviderInventory from '../src/ProviderInventory.vue';
 import { config, definition } from './fixtures';
 import RestoreTable from '../src/RestoreTable.vue';
 import { processingRequest, resetParameters } from '../src/model';
@@ -8,6 +9,17 @@ import type { Step, RestoreFile, RestorePreview } from '../src/types';
 const file = (path: string, state: RestoreFile['state'] = 'recoverable', queue: RestoreFile['queue'] = 'pending', inLastSelection = false): RestoreFile => ({ path, state, queue, inLastSelection, selectable: state === 'recoverable', backupHash: 'a'.repeat(64), targetHash: 'b'.repeat(64), backupBytes: 100, currentBytes: state === 'conflict' ? null : 10, reason: '测试说明' });
 const preview: RestorePreview = { source: 'D:\\备份', destination: 'D:\\源', total: 5, checked: 5, recoverable: 3, restored: 1, conflict: 1, cancelled: false, files: [file('a.png', 'recoverable', 'pending', true), file('b.png', 'recoverable', 'failed', true), file('c.png'), file('done.png', 'restored'), file('conflict.png', 'conflict')] };
 describe('动态模块与恢复交互', () => {
+    it('shows missing dependencies and acquisition instructions, and emits safe provider IDs for links', async () => {
+        const provider = { ...definition.providers[0], availability: { available: false, reason: '缺少文件：tool.exe' }, acquisition: { name: '工具', version: '1.0', license: 'MIT', url: 'https://example.com/download', source: 'https://example.com', instructions: '将 tool.exe 放入 providers/test/', redistribution: '保留许可声明', checkedAt: '2026-11-08' } };
+        const wrapper = mount(ProviderInventory, { props: { providers: [provider] } });
+        expect(wrapper.find('details').attributes('open')).toBeDefined();
+        expect(wrapper.text()).toContain('缺少文件：tool.exe'); expect(wrapper.text()).toContain('providers/test/');
+        expect(wrapper.find('a').attributes('href')).toBe(provider.acquisition.url);
+        await wrapper.find('a').trigger('click'); expect(wrapper.emitted('open-source')).toEqual([['test']]);
+        await wrapper.find('button').trigger('click'); expect(wrapper.emitted('refresh')).toHaveLength(1);
+        await wrapper.setProps({ providers: [{ ...provider, availability: { available: true, reason: '' } }] });
+        expect(wrapper.text()).not.toContain('缺少文件'); expect(wrapper.text()).toContain('可用');
+    });
     it('edits namespaced fields, changes operations and preserves enable/path choices when resetting', async () => {
         const step = config.pipeline[0];
         const wrapper = mount(StepEditor, { props: { definition, modelValue: step, index: 0, count: 1 } });

@@ -14,4 +14,6 @@ Node CommonJS 核心，实现资源处理流水线、任务和安全恢复。当
 | `data/` | 运行时配置、任务和报告，不提交 |
 | `tests/` | 生成素材和隔离副本的核心回归 |
 
+源码仓库不包含第三方 EXE/DLL；获取方式见各提供方 `provenance.json` 及桌面界面。提供方可用性同时检查可执行文件、伴随 DLL 和只读加载检查。
+
 本目录执行 `npm ci` 安装锁定的 Sharp（含平台原生依赖），再执行 `npm test`；`npm run process -- --help` 查看 CLI。发布 Windows x64 便携包必须包含完整生产 `node_modules/` 及三个 EXE，不能只复制 JS。核心配置、任务、报告均使用新 schema，不兼容旧项目格式。

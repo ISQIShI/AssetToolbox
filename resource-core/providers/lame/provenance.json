@@ -1,0 +1,10 @@
+{
+  "name": "LAME",
+  "version": "4.0（RareWares Windows x64，2026-08-23）",
+  "license": "LAME 主体 LGPL-2.0-or-later；解码库及实际构建许可需分别核对",
+  "url": "https://www.rarewares.org/mp3-lame-bundle.php",
+  "source": "https://lame.sourceforge.io/download.php",
+  "instructions": "从 LAME 官网 Links 指向的 RareWares 下载 LAME 4.0 x64 bundle（非 q4 补丁版），将 lame.exe 和 libmpg123-0.dll 一起放入 resource-core/providers/lame/。不要仅复制 EXE。",
+  "redistribution": "当前仅本地使用。发布前补齐匹配构建的 LAME/解码库源码、许可及构建说明，不以版本字符串代替来源校验。",
+  "checkedAt": "2026-11-08"
+}

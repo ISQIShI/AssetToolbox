@@ -861,3 +861,10 @@ summary {
 .step-card .fields + .fields { margin-top: 16px; }
 .step-actions { justify-content: flex-end; margin-top: 18px; }
 .section-heading > .actions { flex-wrap: wrap; justify-content: flex-end; }
+.provider-inventory { margin-bottom: 22px; }
+.provider-inventory details { padding: 12px 0; border-top: 1px solid var(--line, #dbe3df); }
+.provider-inventory summary { cursor: pointer; font-weight: 600; }
+.provider-inventory p { margin: 10px 0; line-height: 1.6; overflow-wrap: anywhere; }
+.provider-inventory a { color: #21694f; }
+.provider-warning { color: #98552a; line-height: 1.6; }
+.provider-url { font-family: monospace; }

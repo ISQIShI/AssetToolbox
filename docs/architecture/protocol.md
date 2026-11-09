@@ -10,6 +10,8 @@
 | --- | --- | --- |
 | bootstrap | 空对象 | config、definition、warnings、configError、root、nodeVersion |
 | normalize / save | Configuration | 规范化配置；save 原子保存后返回 |
+| providers | 空对象 | 提供方目录及实时 availability/acquisition，不保存配置 |
+| provider-source | `{id}` 提供方 ID | 已登记的 HTTPS 获取地址，未知 ID 拒绝 |
 | tasks | 空对象 | 持久任务摘要数组 |
 | start | JobRequest | `{id}` 临时作业会话 |
 | poll | `{id}` | JobState，进程退出才最终 done |
@@ -46,3 +48,5 @@ JobState 含 phase、done、processed（本次已检查/尝试的文件数）、
 exitCode：0 成功，1 错误，2 取消（存在文件错误时优先 1）；原生预览的冲突/依赖问题通过 issues 显示，直接 CLI 对非空 issues 返回 1。参数错误在 start 前拒绝；运行错误通过 state.error 或逐文件记录呈现。保存报告失败用 reportWarning，不抹掉处理结果。
 
 同一桥接只允许一个活动作业。会话失效后用 tasks 返回的 taskFile 继续，不复用旧会话 ID。测试：核心 desktop/batch、前端组件及 native.spec.ts。
+
+原生 `open_provider_source({id})` 从核心读取登记地址并在默认浏览器打开；前端不能传任意 URL。缺失依赖的启用步骤阻止“开始处理”，预览和无关功能仍可使用。

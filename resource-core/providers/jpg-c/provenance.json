@@ -1,0 +1,10 @@
+{
+  "name": "JPG-C",
+  "version": "4.0.21.902（现有本地文件）",
+  "license": "未找到明确再分发授权",
+  "url": "https://zzy.my/blog/post/Jpg-C",
+  "source": "https://zzy.my/blog/post/Jpg-C",
+  "instructions": "向作者 zzy 的 JPG-C 页面获取或询问授权，将对应版本 JPG-C_v4.0.21.902.exe 放入 resource-core/providers/jpg-c/。本次核验作者站点存在证书/访问问题，不绕过安全校验；暂时无法获取时请禁用此步骤。",
+  "redistribution": "禁止纳入本项目发布包，直到获得作者明确授权；免费使用不代表可再分发。",
+  "checkedAt": "2026-11-08"
+}

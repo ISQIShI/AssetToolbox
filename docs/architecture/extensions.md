@@ -70,3 +70,9 @@ module.exports = {
 缩放保持格式，支持等比适应 inside、居中裁剪 cover、拉伸 fill；插值为 Lanczos3 或 nearest。默认 512×512、仅缩小；宽高各 1–16384，输入和目标最多 4000 万像素。按 EXIF 方向处理并移除附加元数据；PNG 保留 alpha，半透明颜色存在 libvips 预乘舍入；JPEG 质量由提供方参数控制。拒绝动画/多页与损坏图片，输出完整解码后再返回。
 
 恢复、备份导出、任务管理属于通用文件安全服务，不伪装为资源转换插件；它们无需加载原提供方即可恢复备份。测试入口：`contract.test.js`、`resize.test.js`、全部文件安全测试及原生 E2E。
+
+## 依赖可用性与获取信息
+
+提供方可声明 `requiredFiles`（本目录文件名数组），用于可执行文件之外的 DLL 等依赖。可选 `provenance.json` 记录 name/version/license/url/source/instructions/redistribution/checkedAt；url 必须 HTTPS，不能包含凭据。新增外部工具必须登记可操作的官方获取说明。
+
+`describe().providers` 返回 acquisition 和 availability（available/reason）。检查不写配置、不自动下载；Sharp 检查在短生命周期进程中进行。桌面通过 providers action 刷新，只替换目录状态，保留正在编辑的步骤；打开渠道按提供方 ID 从核心取得已登记地址，原生层只打开 HTTPS。实际处理前再次检查依赖。

@@ -2,6 +2,10 @@
 
 阅读 [AGENTS.md](../AGENTS.md)、[开发指南](../docs/development.md)、[前端架构](../docs/architecture/frontend.md)及[通信协议](../docs/architecture/protocol.md)。
 
+## 源码发布范围
+
+GitHub 私有仓库使用 MIT，仅包含项目源码和许可记录；没有第三方 EXE/DLL 或完整便携包。依赖缺失时界面提供官方渠道、安装位置、许可说明和刷新按钮。对外二进制发布见[分发核对](../docs/distribution.md)。
+
 ## 开发
 
 Windows x64，Node/npm、Rust MSVC、C++ Build Tools/Windows SDK、WebView2 版本以仓库配置及项目状态为准。从仓库根目录：

@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { runTool, checkExit } = require('../../framework/process');
 module.exports = {
-    apiVersion: 1, version: '1.0.0', displayName: 'pngquant',
+    apiVersion: 1, version: '2.0.0', displayName: 'pngquant 3.0.3',
     supports: [{ resourceType: 'png', operation: 'compress' }],
     executableName: 'pngquant.exe', schema: require('./schema'),
     execute({ executable, input, workDirectory, providerOptions }) {

@@ -16,6 +16,8 @@
 | [通信协议](architecture/protocol.md) | Tauri 命令、JSON Lines、操作与作业模式、错误语义 |
 | [持久化与版本契约](architecture/persistence.md) | 新 schema、步骤快照、锁、崩溃恢复、报告格式 |
 | [开发与验证](development.md) | 环境、构建、测试矩阵、Git 与 Conventional Commits |
+| [分发核对](distribution.md) | MIT 源码发布范围、历史清理、提供方许可与二进制放行条件 |
+| [第三方声明](../THIRD_PARTY_NOTICES.md) | 来源、版本、许可证及当前分发结论 |
 | [项目状态](project-status.md) | 接手基线、实际验证结果、已知限制和后续事项 |
 | [职责扩展与 Cordis 评估](plans/resource-processing-and-cordis.md) | 多操作扩展瓶颈、官方论文依据、框架收益和阶段性建议；历史评估；当前契约已实现，Cordis 未接入 |
 | [架构决策记录](decisions/README.md) | 重要设计变更的背景、方案、代价及替代关系 |

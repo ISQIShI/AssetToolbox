@@ -24,6 +24,7 @@ function change(resourceType: string, operationId?: string, providerId?: string)
       <label class="field">实现提供方<select aria-label="实现提供方" :disabled="disabled" :value="modelValue.provider" @change="change(modelValue.resourceType, modelValue.operation, ($event.target as HTMLSelectElement).value)"><option v-for="item in providers" :key="item.id" :value="item.id">{{ item.displayName }}</option></select></label>
     </div>
     <p class="module-description">{{ operation?.description }}</p>
+    <p v-if="provider?.availability?.available === false" class="provider-warning">此提供方缺少依赖；请在“提供方与获取渠道”中查看安装方式，或禁用此步骤。</p>
     <ParameterFields :fields="operation?.fields || []" :model-value="modelValue.parameters" :disabled="disabled || !modelValue.enabled" @update:model-value="emit('update:modelValue', { ...modelValue, parameters: $event })" />
     <ParameterFields :fields="provider?.fields || []" :model-value="modelValue.providerOptions" :disabled="disabled || !modelValue.enabled" @update:model-value="emit('update:modelValue', { ...modelValue, providerOptions: $event })" />
     <div class="actions step-actions"><button :disabled="disabled || index === 0" aria-label="上移步骤" @click="emit('move', -1)">上移</button><button :disabled="disabled || index === count - 1" aria-label="下移步骤" @click="emit('move', 1)">下移</button><button :disabled="disabled" aria-label="删除步骤" @click="emit('remove')">删除</button></div>
