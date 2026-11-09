@@ -54,4 +54,13 @@
   --rail-width: 272px;
   --bar-height: 52px;
   --measure: 720px;          /* 编辑区正文最大宽度，约 50 个汉字 */
+  --control-height: 38px;
+  --pane-padding: 32px;
+}
+
+@media (max-width: 1000px) {
+  :root { --rail-width: 248px; --pane-padding: 24px; }
+}
+@media (max-width: 760px) {
+  :root { --pane-padding: 16px; }
 }

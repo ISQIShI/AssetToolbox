@@ -21,6 +21,8 @@ npm run dev
 
 `npm run dev` 通过 Tauri 启动 Vite 及原生窗口。`npm run dev:web` 在浏览器中打开界面；没有 native API 时自动使用模拟核心，只用于调整界面，不是业务测试环境，见[前端设计规范](design/frontend-design.md#在浏览器中调试界面)。
 
+Vite 热更新只监听前端相关文件，排除 `src-tauri/`，避免 Windows 原生构建锁定产物时触发 `EBUSY` 并关闭预览服务。
+
 全新 Git 克隆不含 `runtime/node.exe` 和根目录 EXE。首次可先执行 `npm run build` 生成便携布局；若先做原生调试，应把已安装且版本满足要求的 Node 可执行文件复制到 `runtime/node.exe`。`portable.mjs` 只在运行时缺失时复制当前 Node，不会自动升级已存在的运行时；替换运行时时同时核对其许可证文件。
 
 ## 命令与构建产物

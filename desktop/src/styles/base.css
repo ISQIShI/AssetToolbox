@@ -31,7 +31,7 @@ code, .path { font-family: var(--font-mono); font-size: 0.93em; overflow-wrap: a
   align-items: center;
   justify-content: center;
   gap: var(--s-2);
-  min-height: 34px;
+  min-height: var(--control-height);
   padding: 0 var(--s-4);
   border: 1px solid var(--rule);
   border-radius: var(--r-control);
@@ -57,7 +57,7 @@ code, .path { font-family: var(--font-mono); font-size: 0.93em; overflow-wrap: a
 .input, .select {
   width: 100%;
   min-width: 0;
-  min-height: 34px;
+  min-height: var(--control-height);
   padding: 0 var(--s-3);
   border: 1px solid var(--rule);
   border-radius: var(--r-control);
@@ -106,6 +106,9 @@ input[type='checkbox'], input[type='radio'] { width: 16px; height: 16px; margin:
   background: var(--paper-sunk);
 }
 .callout > p { flex: 1; min-width: 0; }
+.callout > span:not(.missing-swatch) { flex: 1; min-width: 0; }
+.callout { overflow-wrap: anywhere; flex-wrap: wrap; }
+.callout > .button { flex-shrink: 0; }
 .callout.danger { border-color: var(--danger); background: var(--danger-wash); }
 .callout.warn { border-color: var(--warn); background: var(--warn-wash); }
 .callout.ok { border-color: var(--ok); background: var(--ok-wash); }

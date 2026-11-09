@@ -79,6 +79,7 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
 
 <style scoped>
 .dock {
+  flex: none;
   position: relative;
   display: grid;
   gap: var(--s-1);
@@ -95,7 +96,7 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
 @keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 
 .row { display: flex; align-items: center; gap: var(--s-5); flex-wrap: wrap; }
-.title { display: flex; align-items: baseline; gap: var(--s-3); min-width: 0; }
+.title { display: flex; align-items: baseline; gap: var(--s-1) var(--s-3); flex-wrap: wrap; min-width: 0; }
 h2 { font-size: var(--t-title); }
 .progress { display: flex; gap: var(--s-4); align-items: baseline; }
 .count { font-size: var(--t-title); font-weight: 500; }
@@ -106,4 +107,10 @@ h2 { font-size: var(--t-title); }
 .actions { display: flex; gap: var(--s-2); margin-left: auto; }
 .current { color: var(--ink-2); font-size: var(--t-small); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .details { display: grid; gap: var(--s-1); }
+@media (max-width: 560px) {
+  .dock { padding: var(--s-3) var(--s-4); }
+  .row { gap: var(--s-3); }
+  .title { width: 100%; }
+  .actions { flex-wrap: wrap; }
+}
 </style>

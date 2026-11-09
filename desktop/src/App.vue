@@ -73,6 +73,7 @@ onUnmounted(() => { bench.stop(); unlisten?.(); });
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   min-width: 0;
 }
 .bar {
@@ -86,10 +87,10 @@ onUnmounted(() => { bench.stop(); unlisten?.(); });
   border-bottom: 1px solid var(--rule);
 }
 .wordmark {
+  flex: none;
   align-self: center;
   font-size: var(--t-lead);
   font-weight: 600;
-  letter-spacing: 0.04em;
 }
 .tabs { display: flex; gap: var(--s-1); }
 .tab {
@@ -115,4 +116,11 @@ onUnmounted(() => { bench.stop(); unlisten?.(); });
 .stage { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .stage > :deep(*) { flex: 1; min-height: 0; }
 .loading { padding: var(--s-6); color: var(--ink-2); }
+@media (max-width: 560px) {
+  .bar { height: auto; flex-wrap: wrap; gap: 0; padding: 0 var(--s-4); }
+  .wordmark { width: 100%; padding-top: var(--s-3); }
+  .tabs { width: 100%; min-height: var(--bar-height); }
+  .tab { flex: 1; justify-content: center; padding: 0 var(--s-2); }
+  .messages { max-height: 25vh; overflow-y: auto; }
+}
 </style>

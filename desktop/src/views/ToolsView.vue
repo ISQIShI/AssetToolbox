@@ -39,6 +39,7 @@ function supports(provider: Provider) {
         <li v-for="provider in ordered" :key="provider.id" :data-provider-id="provider.id">
           <details :open="isMissing(provider)">
             <summary>
+              <span class="disclosure" aria-hidden="true"></span>
               <span class="name">{{ provider.displayName }}</span>
               <span class="what muted">{{ supports(provider) }}</span>
               <span v-if="isMissing(provider)" class="tone missing state"><span class="missing-swatch" aria-hidden="true"></span> 缺少依赖</span>
@@ -85,8 +86,9 @@ function supports(provider: Provider) {
 
 <style scoped>
 .tools-page { overflow-y: auto; background: var(--paper); }
-.sheet { display: grid; gap: var(--s-5); max-width: 860px; padding: var(--s-6) var(--s-6) var(--s-7); }
-.head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s-4); }
+.sheet { display: grid; gap: var(--s-5); max-width: 860px; padding: var(--pane-padding) var(--pane-padding) var(--s-7); }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s-4); flex-wrap: wrap; }
+.head > .button { flex: none; }
 .head > div { display: grid; gap: var(--s-2); max-width: 60ch; }
 h2 { font-size: var(--t-heading); }
 h3 { font-size: var(--t-body); margin-bottom: var(--s-2); }
@@ -95,26 +97,29 @@ h3 { font-size: var(--t-body); margin-bottom: var(--s-2); }
 .providers > li { border-bottom: 1px solid var(--rule-soft); }
 summary {
   display: grid;
-  grid-template-columns: minmax(140px, max-content) minmax(0, 1fr) max-content;
+  grid-template-columns: 12px minmax(140px, 1fr) minmax(0, 1.4fr) max-content;
   gap: var(--s-4);
   align-items: baseline;
-  padding: var(--s-3) 0;
+  padding: var(--s-4) var(--s-3);
   cursor: pointer;
   list-style: none;
 }
 summary::-webkit-details-marker { display: none; }
+summary:hover { background: var(--paper-sunk); }
+.disclosure { width: 8px; height: 8px; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(-45deg); align-self: center; }
+details[open] .disclosure { transform: rotate(45deg); }
+details[open] summary { background: var(--paper-sunk); }
 summary:hover .name { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); }
 .name { font-weight: 600; }
 .what { font-size: var(--t-small); }
 .state { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--t-small); }
-.body { display: grid; gap: var(--s-3); padding: 0 0 var(--s-4); max-width: 68ch; }
+.body { display: grid; gap: var(--s-3); padding: var(--s-4) var(--s-3) var(--s-5); max-width: 76ch; overflow-wrap: anywhere; }
 a { color: var(--focus); font-weight: 500; }
 .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-1) var(--s-4); margin: 0; font-size: var(--t-small); }
 .facts dt { color: var(--ink-2); }
 .facts dd { margin: 0; }
 @media (max-width: 760px) {
-  .sheet { padding: var(--s-5) var(--s-4); }
-  summary { grid-template-columns: 1fr max-content; }
-  .what { grid-column: 1 / -1; grid-row: 2; }
+  summary { grid-template-columns: 12px minmax(0, 1fr) max-content; gap: var(--s-2) var(--s-3); }
+  .what { grid-column: 2 / -1; grid-row: 2; }
 }
 </style>

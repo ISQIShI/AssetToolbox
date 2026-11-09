@@ -125,6 +125,33 @@ it('resumes and retries tasks by task file only', async () => {
     expect(call).toHaveBeenCalledWith('start', { mode: 'retry', taskFile: task.taskFile });
 });
 
+it('keeps the write policy visible and links it to its settings without changing the configuration', async () => {
+    await mountApp();
+    const summary = () => wrapper.find('.summary-link');
+    expect(summary().text()).toBe('覆盖原文件，替换前备份');
+    await summary().trigger('click');
+    expect(wrapper.find('h2').text()).toBe('写入方式');
+    await wrapper.find('.check input').setValue(false);
+    expect(summary().text()).toBe('覆盖原文件，不保留备份');
+    expect(summary().classes()).toContain('warn');
+    await wrapper.find('input[value="saveAs"]').setValue(true);
+    expect(summary().text()).toBe('另存结果，保留原文件');
+    expect(call).not.toHaveBeenCalledWith('save', expect.anything());
+    expect(call).not.toHaveBeenCalledWith('start', expect.anything());
+});
+
+it('returns keyboard focus to the add-step button when Escape dismisses its choices', async () => {
+    await mountApp();
+    const add = wrapper.find('.adder .station-button');
+    await add.trigger('click');
+    const choice = wrapper.find('.choice');
+    (choice.element as HTMLButtonElement).focus();
+    await choice.trigger('keydown', { key: 'Escape' });
+    expect(wrapper.find('.choices').exists()).toBe(false);
+    expect(document.activeElement).toBe(add.element);
+    expect(add.attributes('aria-expanded')).toBe('false');
+});
+
 it('checks a task backup, then restores exactly the selected files with hashes', async () => {
     await mountApp(); await go('任务');
     await button('检查备份').trigger('click'); await flushPromises();

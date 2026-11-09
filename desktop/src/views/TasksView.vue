@@ -111,7 +111,7 @@ const share = (item: Task, value: number) => item.total ? `${(value / item.total
 .key.pending { background: var(--rule); }
 
 .detail { min-height: 0; overflow-y: auto; background: var(--paper); }
-.sheet { display: grid; gap: var(--s-5); max-width: var(--measure); padding: var(--s-6) var(--s-6) var(--s-7); }
+.sheet { display: grid; gap: var(--s-5); max-width: var(--measure); padding: var(--pane-padding) var(--pane-padding) var(--s-7); }
 .head { display: flex; align-items: baseline; gap: var(--s-4); flex-wrap: wrap; }
 h2 { font-size: var(--t-heading); overflow-wrap: anywhere; }
 h3 { font-size: var(--t-body); }
@@ -126,10 +126,12 @@ h3 { font-size: var(--t-body); }
 .group { display: grid; gap: var(--s-3); padding-top: var(--s-4); border-top: 1px solid var(--rule-soft); }
 .actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .empty-detail { align-content: start; }
+@media (min-width: 761px) and (max-width: 1000px) {
+  .tasks { grid-template-columns: 280px minmax(0, 1fr); }
+}
 
 @media (max-width: 760px) {
   .tasks { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
   .list { max-height: 40vh; box-shadow: inset 0 -1px 0 var(--rule); }
-  .sheet { padding: var(--s-5) var(--s-4); }
 }
 </style>

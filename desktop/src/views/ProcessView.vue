@@ -98,12 +98,18 @@ const canStart = computed(() => !busy.value && !blockedSteps.value.length && Boo
     </section>
 
     <footer v-if="!job" class="runbar">
-      <p class="summary">
+      <div class="summary">
         <template v-if="blockedSteps.length">
           <span class="tone missing">第 {{ blockedSteps.map(item => item.index + 1).join('、') }} 步的处理工具缺少依赖，安装或停用后才能开始处理。</span>
+          <button type="button" class="summary-link" @click="bench.page.value = 'tools'">查看获取方式</button>
         </template>
-        <template v-else>{{ config.pipeline.length ? `${enabledCount} / ${config.pipeline.length} 个步骤已启用` : '还没有步骤，添加后才会改动文件' }}</template>
-      </p>
+        <template v-else>
+          <span>{{ config.pipeline.length ? `${enabledCount} / ${config.pipeline.length} 个步骤已启用` : '还没有步骤，添加后才会改动文件' }}</span>
+          <button type="button" class="summary-link" :class="{ 'tone warn': config.saveMode === 'overwrite' && !config.backupEnabled }" @click="station = 'output'">
+            {{ config.saveMode === 'saveAs' ? '另存结果，保留原文件' : config.backupEnabled ? '覆盖原文件，替换前备份' : '覆盖原文件，不保留备份' }}
+          </button>
+        </template>
+      </div>
       <div class="run-actions">
         <button type="button" class="button" :disabled="busy" @click="bench.saveConfig()">保存配置</button>
         <button type="button" class="button" :disabled="busy" @click="bench.runPipeline('preview')">扫描预览</button>
@@ -122,8 +128,9 @@ const canStart = computed(() => !busy.value && !blockedSteps.value.length && Boo
 }
 .rail { grid-row: 1; min-height: 0; }
 .detail { grid-row: 1; min-height: 0; overflow-y: auto; background: var(--paper); }
-.sheet { max-width: var(--measure); padding: var(--s-6) var(--s-6) var(--s-7); }
+.sheet { container: editor / inline-size; max-width: var(--measure); padding: var(--pane-padding) var(--pane-padding) var(--s-7); }
 .panel { display: grid; gap: var(--s-5); }
+.coverage { display: grid; gap: var(--s-2); }
 h2 { font-size: var(--t-heading); }
 h3 { font-size: var(--t-body); margin-bottom: var(--s-2); }
 
@@ -145,17 +152,24 @@ h3 { font-size: var(--t-body); margin-bottom: var(--s-2); }
   border-top: 1px solid var(--rule);
   background: var(--canvas);
 }
-.summary { color: var(--ink-2); min-width: 0; }
+.summary { display: grid; justify-items: start; gap: var(--s-1); color: var(--ink-2); min-width: 0; font-size: var(--t-small); }
+.summary-link { border: 0; padding: 0; background: none; color: var(--ink); font-size: var(--t-small); text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.summary-link:hover { text-decoration-color: currentColor; }
+.summary-link.warn { color: var(--warn); }
 .run-actions { display: flex; gap: var(--s-2); flex: none; }
 
 .unavailable { display: grid; align-content: start; gap: var(--s-3); padding: var(--s-7) var(--s-6); max-width: var(--measure); }
+@container editor (max-width: 600px) {
+  .modes { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 760px) {
   .process { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; }
-  .rail { grid-row: 1; max-height: 38vh; box-shadow: inset 0 -1px 0 var(--rule); }
+  .rail { grid-row: 1; max-height: 28vh; box-shadow: inset 0 -1px 0 var(--rule); }
   .detail { grid-row: 2; }
-  .sheet { padding: var(--s-5) var(--s-4); }
   .modes { grid-template-columns: 1fr; }
   .runbar { flex-wrap: wrap; padding: var(--s-3) var(--s-4); }
+  .run-actions { width: 100%; }
+  .run-actions > .button { flex: 1; padding: 0 var(--s-2); }
 }
 </style>

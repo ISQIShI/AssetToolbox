@@ -77,4 +77,10 @@ function check() {
 .body > * { flex: 1; min-height: 0; }
 .empty { display: grid; align-content: start; gap: var(--s-3); max-width: 60ch; padding-top: var(--s-5); }
 h2 { font-size: var(--t-heading); }
+@media (max-width: 1000px) { .body { padding: var(--s-4); } }
+@media (max-width: 560px) {
+  .restore { overflow-y: auto; display: block; }
+  .source, .body { padding: var(--s-4); }
+  .grow { flex-basis: 100%; }
+}
 </style>

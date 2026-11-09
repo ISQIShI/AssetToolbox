@@ -116,7 +116,7 @@ function selectVisible(checked: boolean) {
 .filter:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
 .count { font-size: var(--t-small); opacity: 0.75; }
 .search { max-width: 280px; }
-.restore-table > .scroller { flex: 1; min-height: 160px; overflow: auto; border: 1px solid var(--rule); }
+.restore-table > .scroller { flex: 1; min-height: 96px; overflow: auto; border: 1px solid var(--rule); }
 .pick { width: 40px; }
 .file { display: grid; gap: 2px; min-width: 0; }
 tr.chosen td { background: var(--focus-wash); }
@@ -124,4 +124,14 @@ tr.chosen td { background: var(--focus-wash); }
 .paging { display: flex; align-items: center; gap: var(--s-2); }
 .bulk { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .commit { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--rule-soft); }
+@media (max-width: 1000px) { .restore-table { gap: var(--s-3); } }
+@media (max-width: 560px) {
+  .head { flex-wrap: wrap; }
+  .filters { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .filter { border: 0; }
+  .search { max-width: none; }
+  .foot { grid-template-columns: 1fr; }
+  .commit { flex-wrap: wrap; }
+  .commit > .button { width: 100%; }
+}
 </style>

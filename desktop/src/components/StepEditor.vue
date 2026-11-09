@@ -30,8 +30,8 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
   <article class="editor" :aria-label="`第 ${index + 1} 步`">
     <header class="head">
       <div class="heading">
-        <p class="order">第 {{ index + 1 }} 步，共 {{ count }} 步</p>
         <h2>{{ stepTitle(definition, step) }}</h2>
+        <p class="order">第 {{ index + 1 }} 步，共 {{ count }} 步</p>
       </div>
       <label class="check switch">
         <input type="checkbox" :checked="step.enabled" :disabled="disabled" @change="patch({ enabled: ($event.target as HTMLInputElement).checked })">
@@ -90,15 +90,23 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
 
 <style scoped>
 .editor { display: grid; gap: var(--s-5); }
-.head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; }
-.order { color: var(--ink-2); }
+.head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; }
+.heading { display: grid; gap: var(--s-2); }
+.order { color: var(--ink-2); font-size: var(--t-small); }
 h2 { font-size: var(--t-heading); }
 .switch { padding: var(--s-1) 0; font-weight: 500; }
-.combo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+.combo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); padding: var(--s-4); background: var(--paper-sunk); border-radius: var(--r-control); }
 .about { color: var(--ink-2); max-width: 60ch; }
 .group { display: grid; gap: var(--s-3); padding-top: var(--s-4); border-top: 1px solid var(--rule-soft); }
 h3 { font-size: var(--t-body); }
 .actions { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-top: var(--s-4); border-top: 1px solid var(--rule-soft); }
 .end { margin-left: auto; }
-@media (max-width: 760px) { .combo { grid-template-columns: 1fr; } }
+@container editor (max-width: 600px) {
+  .combo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .combo .field:last-child { grid-column: 1 / -1; }
+}
+@container editor (max-width: 360px) {
+  .combo { grid-template-columns: 1fr; }
+  .end { margin-left: 0; }
+}
 </style>

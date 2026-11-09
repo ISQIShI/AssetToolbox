@@ -41,6 +41,8 @@
 | `job`、`submitting`、`closing` | 当前作业、start 请求进行中、窗口正在安全关闭 |
 | `missingProviders`、`blockedSteps` | 缺依赖的工具；启用了缺依赖工具的步骤 |
 
+处理页运行栏根据当前配置实时显示写入策略，点击只切换到 `output` 站点，不保存配置或启动作业；缺依赖入口只切换到工具页。处理线添加菜单关闭时恢复按钮焦点。容器查询负责步骤表单布局，不参与核心参数转换。
+
 视图不直接调用 `call('start')`。所有作业都经 `launch(request, kind, title, onDone)` 启动。
 
 ## 作业生命周期

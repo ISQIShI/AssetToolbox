@@ -10,7 +10,7 @@
 | --- | --- |
 | [文档管理规范](documentation.md) | 分类、维护责任、更新时机、决策与归档规则 |
 | [总体架构](architecture/overview.md) | 系统边界、进程关系、完整处理流程、设计取舍 |
-| [前端设计规范](design/frontend-design.md) | 视觉主张、设计令牌、布局、组件、状态语义、文案词汇、浏览器调试；任何界面改动必读 |
+| [前端设计规范](design/frontend-design.md) | 视觉主张、设计令牌、容器自适应布局、写入摘要、组件、状态语义与浏览器调试；任何界面改动必读 |
 | [前端架构](architecture/frontend.md) | 源码结构、工作台状态、作业生命周期、请求映射、步骤编辑与恢复勾选 |
 | [后端与框架设计](architecture/backend.md) | Rust 宿主、Node 调度、处理流水线、提供方扩展、安全恢复 |
 | [扩展契约](architecture/extensions.md) | 类型/操作/提供方、参数、版本、生命周期及新增实现示例 |

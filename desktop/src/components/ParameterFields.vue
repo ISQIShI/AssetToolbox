@@ -34,9 +34,11 @@ function hint(field: Field) {
 <style scoped>
 .parameters {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-4) var(--s-5);
 }
 .wide { grid-column: 1 / -1; }
+.field:only-child { grid-column: 1 / -1; }
 .check { font-weight: 500; }
+@container editor (max-width: 420px) { .parameters { grid-template-columns: 1fr; } }
 </style>

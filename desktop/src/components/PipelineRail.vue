@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // 处理线：来源 → 各步骤 → 写入 →（扫描结果）。这是界面上唯一的强调元素，
 // 文件沿竖线自上而下经过每个站点，编号即执行顺序。
-import { computed, ref } from 'vue';
+import { computed, ref, useId } from 'vue';
 import { useWorkbench } from '../core/workbench';
 import { folderName, isMissing, providerOf, stepChoices, stepTitle } from '../core/model';
 
 const bench = useWorkbench();
 const { config, definition, station, scan, scanStale, busy } = bench;
 const adding = ref(false);
+const addButton = ref<HTMLButtonElement>();
+const menuId = useId();
 
 const choices = computed(() => definition.value ? stepChoices(definition.value) : []);
 const full = computed(() => (config.value?.pipeline.length || 0) >= 64);
@@ -29,6 +31,7 @@ function choose(resourceType: string, operation: string) { bench.addStep(resourc
 
 <template>
   <nav class="rail" aria-label="处理顺序">
+    <div class="rail-heading"><strong>处理线</strong><span>{{ steps.length }} 个步骤</span></div>
     <ol class="line">
       <li class="station endpoint">
         <button type="button" class="station-button" data-station="source" :aria-current="station === 'source' ? 'true' : undefined" @click="station = 'source'">
@@ -52,11 +55,11 @@ function choose(resourceType: string, operation: string) { bench.addStep(resourc
       </li>
 
       <li class="station adder">
-        <button type="button" class="station-button" :aria-expanded="adding" :disabled="busy || full || !choices.length" @click="adding = !adding">
+        <button ref="addButton" type="button" class="station-button" :aria-controls="menuId" :aria-expanded="adding" :disabled="busy || full || !choices.length" @click="adding = !adding">
           <span class="node plus" aria-hidden="true">+</span>
           <span class="text"><span class="title">添加步骤</span><span v-if="full" class="sub">已达到 64 步上限</span></span>
         </button>
-        <ul v-if="adding" class="choices" aria-label="可添加的步骤" @keydown.esc="adding = false">
+        <ul v-if="adding" :id="menuId" class="choices" aria-label="可添加的步骤" @keydown.esc.stop="adding = false; addButton?.focus()">
           <li v-for="choice in choices" :key="`${choice.resourceType}/${choice.operation}`">
             <button type="button" class="choice" @click="choose(choice.resourceType, choice.operation)">{{ choice.label }}</button>
           </li>
@@ -86,13 +89,18 @@ function choose(resourceType: string, operation: string) { bench.addStep(resourc
   background: var(--canvas);
   box-shadow: inset -1px 0 0 var(--rule);
 }
-.line { list-style: none; margin: 0; padding: var(--s-4) 0 var(--s-6); }
+.rail-heading { position: sticky; top: 0; z-index: 3; display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); padding: var(--s-5) var(--s-4) var(--s-3) var(--s-5); background: var(--canvas); }
+.rail-heading strong { font-weight: 600; }
+.rail-heading span { color: var(--ink-2); font-size: var(--t-small); }
+.line { list-style: none; margin: 0; padding: var(--s-2) 0 var(--s-6); }
 
 /* 竖线：每个站点画自己那一段，首尾从节点中心开始/结束 */
 .station { position: relative; }
 .station::before {
   content: '';
   position: absolute;
+  z-index: 1;
+  pointer-events: none;
   left: 31px;
   top: 0;
   bottom: 0;
@@ -116,13 +124,13 @@ function choose(resourceType: string, operation: string) { bench.addStep(resourc
   cursor: pointer;
 }
 .station-button:hover:not(:disabled) .title { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--ink-3); }
-.station-button[aria-current='true'] { background: var(--paper); }
+.station-button[aria-current='true'] { background: var(--paper); box-shadow: inset 3px 0 var(--ink); }
 .station-button:disabled { cursor: not-allowed; color: var(--ink-3); }
 .station-button:focus-visible { outline-offset: -2px; }
 
 .node {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   justify-self: center;
   width: 12px;
   height: 12px;
