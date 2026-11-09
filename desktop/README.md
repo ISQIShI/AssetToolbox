@@ -27,6 +27,8 @@ runtime/node.exe             独立 Node.js 运行时
 
 开发机器需要 Node.js 22.12+、Rust stable MSVC 工具链、Visual Studio C++ Build Tools 与 Windows SDK、WebView2 Runtime。普通使用者只需随附的运行时和系统 WebView2。
 
+仓库固定的开发版本、`.vsconfig` 导入方式、PATH 刷新及依赖安装许可见[开发环境说明](../docs/development.md)。便携 Node 与开发 Node 分别验证，不因全局版本变化自动替换发布运行时。
+
 ```powershell
 cd desktop
 npm ci
@@ -51,6 +53,9 @@ npm test
 # 前端：动态字段、选择集、取消预览、保存方式
 cd ../desktop
 npm test
+
+# 独立类型检查
+npm run typecheck
 
 # 原生：必须先 npm run build
 npm run test:e2e

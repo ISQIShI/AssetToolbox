@@ -24,12 +24,15 @@
 
 开发环境为 Windows x64，需要 Node.js 22.12+、Rust stable MSVC、Visual Studio C++ Build Tools、Windows SDK 和 WebView2。
 
+开发版本与原生组件以 `.nvmrc`、`rust-toolchain.toml`、`.vsconfig` 为准。先用普通用户终端确认工具可用性；沙箱中的 nvm 检测可能受路径重定向影响。
+
 在 `desktop/` 下执行：
 
 - `npm ci`：按锁文件安装前端和 Tauri 依赖。
 - `npm run dev`：启动 Vite 和 Tauri 原生窗口。
 - `npm run dev:web`：仅在浏览器中调试样式，不支持原生调用。
 - `npm run build:web`：检查 TypeScript 并打包前端。
+- `npm run typecheck`：独立检查前端、测试及配置的 TypeScript 类型。
 - `npm run build`：构建发布版，并将 EXE 复制到仓库根目录。
 - `npm test`：运行 Vitest 组件测试。
 - `npm run test:e2e`：通过 Playwright 测试原生 WebView2，须先构建。
