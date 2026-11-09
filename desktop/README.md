@@ -1,5 +1,7 @@
 # 桌面开发与发布
 
+开发规则见 [AGENTS.md](../AGENTS.md)；架构解析见[前端设计](../docs/architecture/frontend.md)、[后端设计](../docs/architecture/backend.md)和[通信协议](../docs/architecture/protocol.md)。实际环境与验证记录见[项目状态](../docs/project-status.md)。
+
 日常使用：双击工具根目录的 `ResourceCompressor.exe`。前端资源嵌入 EXE；`runtime/node.exe`、`resCompress` 必须与 EXE 一起移动。用户配置、模块配置、任务和报告仍保留原位置。编码器仍由各自模块管理。
 
 ## 代码划分

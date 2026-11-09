@@ -1,5 +1,7 @@
 # 模块化资源压缩工具
 
+开发与接手请先阅读 [Repository Guidelines](AGENTS.md)、[开发文档索引](docs/README.md)和[当前项目状态](docs/project-status.md)。本页保留面向使用者的操作说明。
+
 在 Windows 上选择文件夹，递归处理已安装模块支持的文件，扩展名不区分大小写。内置支持 `.png`、`.jpg`、`.jpeg`、`.mp3`。桌面界面已迁移到 Tauri 2 + Vue 3 + TypeScript。便携版包含 `runtime/node.exe`，日常使用无需安装 Node.js 或执行 `npm install`；Windows 10/11 需有 WebView2 Runtime。
 
 ## 窗口使用与记住配置
@@ -264,7 +266,7 @@ Tauri 原生宿主和 Vue + TypeScript 负责窗口，Node.js 负责递归扫描
 ## 验证
 
 ```powershell
-node --test .\resCompress\tests\compress.test.js .\resCompress\tests\resources.test.js .\resCompress\tests\ui.test.js .\resCompress\tests\layout.test.js .\resCompress\tests\discovery.test.js .\resCompress\tests\batch.test.js .\resCompress\tests\resume.test.js .\resCompress\tests\restore.test.js .\resCompress\tests\restore-preview.test.js
+node --test resCompress/tests/*.test.js
 # 或进入 resCompress 后运行 npm test
 ```
 
