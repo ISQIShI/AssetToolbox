@@ -1,6 +1,6 @@
 # 项目状态
 
-核验日期：2026-11-08（America/Los_Angeles）。当前版本 1.0.0，本轮在三层契约基础上核对提供方来源/许可、更新本地工具、增加缺失依赖获取界面，并准备 GitHub 私有 MIT 源码发布。目标仓库为 ISQIShI/AssetToolbox；发布结果以文末记录为准。
+核验日期：2026-11-08（America/Los_Angeles）。当前版本 1.0.0，本轮在三层契约基础上核对提供方来源/许可、更新本地工具、增加缺失依赖获取界面，并完成 GitHub 私有 MIT 源码发布。仓库：[ISQIShI/AssetToolbox](https://github.com/ISQIShI/AssetToolbox)，main 跟踪 origin/main。
 
 ## 来源、更新与发布（本轮）
 
@@ -76,3 +76,11 @@ Sharp 原生库如果在父进程加载，会在 Windows 保持 DLL 文件锁；
 - 没有 CI、lint、覆盖率门槛、日志自动清理或全局素材锁。文件安全是单文件保证，不是整批事务。
 
 后续功能按扩展契约添加操作与提供方，先补真实输出和失败保护测试；出现共享服务或生命周期管理需求时，再单独评估 Cordis，当前不预装。
+
+## GitHub 发布结果
+
+已创建并推送 [ISQIShI/AssetToolbox](https://github.com/ISQIShI/AssetToolbox)，GitHub API 核验 private=true、默认分支 main、许可证识别 MIT。远端当前树 108 个文件，无 EXE/DLL/.node、node_modules、.local 或运行 data。
+
+在隔离裸仓库过滤 6 个历史提交中的第三方二进制，确认过滤前后当前源码 tree 完全一致，再更新本地 main。原 Git 历史完整保存在忽略的 `.local/release-review/pre-source-publication.bundle`；当前有效历史的提交 ID 因过滤而变化，前文旧 ID 仅为本地历史基线，不能据此推送归档 refs。已扫描这 6 个提交，未命中 GitHub token 或私钥标记。
+
+`node scripts/check-release.mjs --source` 通过；`--portable` 按预期拒绝，保留真实许可未闭合项。没有创建带二进制的 Release，也没有上传用户数据。三个 EXE 和 LAME 伴随 DLL 仍留在本地供使用，旧编码器保留本地备份。新获取界面的截图已核对。
