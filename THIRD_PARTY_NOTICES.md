@@ -2,7 +2,7 @@
 
 AssetToolbox 自有源码按根目录 [MIT License](LICENSE) 发布。MIT 不替换或重新许可第三方工具、依赖、源码及许可证文本。当前 GitHub 仓库仅发布项目源码、锁文件、来源记录和许可说明，不携带 EXE、DLL、Node 运行时或 node_modules；私有可见性本身不免除第三方义务。
 
-核验日期：2026-11-08。可安装渠道同步记录于每个提供方的 `provenance.json`，前端“提供方与获取渠道”读取这些记录。
+核验日期：2026-11-08。可安装渠道同步记录于每个提供方的 `provenance.json`，前端“工具”页读取这些记录。
 
 | 提供方 | 当前本地版本 / 来源 | 许可与本次处置 |
 | --- | --- | --- |
@@ -16,6 +16,6 @@ pngquant 主页宣告当前稳定版本 3.0.3，但本轮下载的官方 `pngqua
 
 LAME 官方只提供源码，Windows 包来自其 Links 页面指向的第三方构建者。[官方许可说明](https://lame.sourceforge.io/license.txt)还保留对旧 mpglib GPL 解码代码的提醒；当前包改用独立 DLL，仍需核对实际源码/链接方式。获取“官方推荐构建”与确认“完整分发条件已满足”是两件事。本次不作二进制分发承诺。
 
-本仓库没有重新发布第三方实现源码，保存许可证文本仅用于署名与审计。Node 运行时另见 [Node 许可合集](runtime/LICENSE-node.txt)。Vue、Tauri、Vite、Rust crate 等依赖各自按其锁定包的许可证使用；发布编译后的应用前还需生成所含依赖的完整声明，见[分发核对流程](docs/distribution.md)。
+本仓库没有重新发布第三方实现源码，保存许可证文本仅用于署名与审计。Node 运行时另见 [Node 许可合集](runtime/LICENSE-node.txt)。界面字体 IBM Plex Sans 与 IBM Plex Mono（Copyright IBM Corp.，SIL Open Font License 1.1）通过 npm 包 `@fontsource/ibm-plex-sans`、`@fontsource/ibm-plex-mono` 5.3.0 打包进前端产物；随 EXE 分发时须附带 OFL 许可文本（见两包的 `LICENSE`），字体不得单独出售。Vue、Tauri、Vite、Rust crate 等依赖各自按其锁定包的许可证使用；发布编译后的应用前还需生成所含依赖的完整声明，见[分发核对流程](docs/distribution.md)。
 
 项目源码仍保留提供方适配代码；缺少第三方工具时可按前端说明自行获取，或禁用相关步骤。工具不自动下载、不静默接受商业条款，也不以来源不明的镜像替代作者渠道。

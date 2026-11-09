@@ -1,68 +1,131 @@
-import { describe, it, expect } from 'vitest';
-import { mount } from '@vue/test-utils';
-import StepEditor from '../src/StepEditor.vue';
-import ProviderInventory from '../src/ProviderInventory.vue';
-import { config, definition } from './fixtures';
-import RestoreTable from '../src/RestoreTable.vue';
-import { processingRequest, resetParameters } from '../src/model';
-import type { Step, RestoreFile, RestorePreview } from '../src/types';
+// 组件与纯函数：动态参数、步骤组合、恢复勾选、工具获取渠道、请求构造。
+import { describe, it, expect, vi } from 'vitest';
+import { flushPromises, mount } from '@vue/test-utils';
+import StepEditor from '../src/components/StepEditor.vue';
+import RestoreTable from '../src/components/RestoreTable.vue';
+import ToolsView from '../src/views/ToolsView.vue';
+import { createWorkbench, workbenchKey } from '../src/core/workbench';
+import { call, openProviderSource } from '../src/core/api';
+import { config, definition, missingProvider, task } from './fixtures';
+import { processingRequest, resetStep, sizeChange, stepChoices, taskStatus } from '../src/core/model';
+import type { Step, RestoreFile, RestorePreview } from '../src/core/types';
+
+vi.mock('../src/core/api', () => ({ call: vi.fn(), chooseFolder: vi.fn(), openReport: vi.fn(), openProviderSource: vi.fn() }));
+vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => ({ onCloseRequested: async () => () => {}, close: vi.fn() }) }));
+
 const file = (path: string, state: RestoreFile['state'] = 'recoverable', queue: RestoreFile['queue'] = 'pending', inLastSelection = false): RestoreFile => ({ path, state, queue, inLastSelection, selectable: state === 'recoverable', backupHash: 'a'.repeat(64), targetHash: 'b'.repeat(64), backupBytes: 100, currentBytes: state === 'conflict' ? null : 10, reason: '测试说明' });
 const preview: RestorePreview = { source: 'D:\\备份', destination: 'D:\\源', total: 5, checked: 5, recoverable: 3, restored: 1, conflict: 1, cancelled: false, files: [file('a.png', 'recoverable', 'pending', true), file('b.png', 'recoverable', 'failed', true), file('c.png'), file('done.png', 'restored'), file('conflict.png', 'conflict')] };
-describe('动态模块与恢复交互', () => {
-    it('shows missing dependencies and acquisition instructions, and emits safe provider IDs for links', async () => {
-        const provider = { ...definition.providers[0], availability: { available: false, reason: '缺少文件：tool.exe' }, acquisition: { name: '工具', version: '1.0', license: 'MIT', url: 'https://example.com/download', source: 'https://example.com', instructions: '将 tool.exe 放入 providers/test/', redistribution: '保留许可声明', checkedAt: '2026-11-08' } };
-        const wrapper = mount(ProviderInventory, { props: { providers: [provider] } });
-        expect(wrapper.find('details').attributes('open')).toBeDefined();
-        expect(wrapper.text()).toContain('缺少文件：tool.exe'); expect(wrapper.text()).toContain('providers/test/');
-        expect(wrapper.find('a').attributes('href')).toBe(provider.acquisition.url);
-        await wrapper.find('a').trigger('click'); expect(wrapper.emitted('open-source')).toEqual([['test']]);
-        await wrapper.find('button').trigger('click'); expect(wrapper.emitted('refresh')).toHaveLength(1);
-        await wrapper.setProps({ providers: [{ ...provider, availability: { available: true, reason: '' } }] });
-        expect(wrapper.text()).not.toContain('缺少文件'); expect(wrapper.text()).toContain('可用');
-    });
-    it('edits namespaced fields, changes operations and preserves enable/path choices when resetting', async () => {
-        const step = config.pipeline[0];
+const lastEmitted = (wrapper: ReturnType<typeof mount>) => wrapper.emitted('update:modelValue')?.at(-1)?.[0] as Step;
+const byLabel = (wrapper: ReturnType<typeof mount>, label: string) => {
+    const target = wrapper.findAll('label').find(item => item.text().trim() === label)!;
+    return wrapper.find(`[id="${target.attributes('for')}"]`);
+};
+
+describe('步骤编辑器', () => {
+    it('renders namespaced fields from the catalog and emits edits into the right namespace', async () => {
+        const step = config.pipeline[0]!;
         const wrapper = mount(StepEditor, { props: { definition, modelValue: step, index: 0, count: 1 } });
         expect(wrapper.findAll('input[type=number]')).toHaveLength(2);
         expect(wrapper.find('input[step="0.05"]').attributes('max')).toBe('1');
-        await wrapper.find('[aria-label="模式"]').setValue('b');
-        expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({ providerOptions: { mode: 'b' }, parameters: {} });
-        const long = '中文'.repeat(7000); await wrapper.find('[aria-label="文字"]').setValue(long);
-        expect((wrapper.emitted('update:modelValue')?.at(-1)?.[0] as Step).providerOptions.text).toBe(long);
-        await wrapper.setProps({ modelValue: { ...step, enabled: false } });
-        expect(wrapper.findAll('input[type=number]').every(input => input.attributes('disabled') !== undefined)).toBe(true);
-        expect(resetParameters({ ...config, pipeline: [{ ...step, enabled: false }] }, definition)).toMatchObject({ sourceDir: config.sourceDir, pipeline: [{ id: step.id, enabled: false, providerOptions: { level: 4, rate: .7 } }] });
-        await wrapper.find('[aria-label="处理操作"]').setValue('image-resize');
-        expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({ operation: 'image-resize', parameters: { width: 512 }, enabled: false });
+        expect(wrapper.text()).toContain('测试工具 参数');
+        await byLabel(wrapper, '模式').setValue('b');
+        expect(lastEmitted(wrapper)).toMatchObject({ providerOptions: { mode: 'b' }, parameters: {} });
+        const long = '中文'.repeat(7000); await byLabel(wrapper, '文字').setValue(long);
+        expect(lastEmitted(wrapper).providerOptions.text).toBe(long);
+        await byLabel(wrapper, '级别').setValue('');
+        expect(lastEmitted(wrapper).providerOptions.level).toBe('');
     });
-    it('filters without losing hidden selection, forbids conflicts/restored, retains checks on refresh and emits hashes for selected files only', async () => {
+
+    it('locks parameters of a disabled step but keeps the combo editable, and retargeting keeps ID and switch', async () => {
+        const step = { ...config.pipeline[0]!, enabled: false };
+        const wrapper = mount(StepEditor, { props: { definition, modelValue: step, index: 0, count: 2 } });
+        expect(wrapper.findAll('.parameters input').every(input => input.attributes('disabled') !== undefined)).toBe(true);
+        expect(wrapper.text()).toContain('已停用的步骤不会执行');
+        await byLabel(wrapper, '操作').setValue('image-resize');
+        expect(lastEmitted(wrapper)).toMatchObject({ id: 'first', operation: 'image-resize', parameters: { width: 512 }, enabled: false });
+        expect(resetStep(definition, step)).toMatchObject({ id: 'first', enabled: false, providerOptions: { level: 4, rate: .7 } });
+    });
+
+    it('offers move/remove only where valid and points missing tools to the tools page', async () => {
+        const wrapper = mount(StepEditor, { props: { definition: { ...definition, providers: [missingProvider()] }, modelValue: config.pipeline[0]!, index: 0, count: 1 } });
+        const button = (text: string) => wrapper.findAll('button').find(item => item.text() === text)!;
+        expect(button('上移').attributes('disabled')).toBeDefined();
+        expect(button('下移').attributes('disabled')).toBeDefined();
+        expect(wrapper.find('.callout.missing').text()).toContain('缺少文件：tool.exe');
+        await button('查看获取方式').trigger('click'); expect(wrapper.emitted('show-tools')).toHaveLength(1);
+        await button('删除步骤').trigger('click'); expect(wrapper.emitted('remove')).toHaveLength(1);
+    });
+});
+
+describe('恢复勾选', () => {
+    it('filters without losing hidden checks, forbids conflicts/restored, keeps checks on recheck and emits hashes only for selected files', async () => {
         const wrapper = mount(RestoreTable, { props: { preview, scope: 'all' } });
         expect(wrapper.find('input[aria-label="恢复 conflict.png"]').attributes('disabled')).toBeDefined();
         expect(wrapper.find('input[aria-label="恢复 done.png"]').attributes('disabled')).toBeDefined();
         expect(wrapper.text()).not.toContain('null B');
         await wrapper.find('input[aria-label="恢复 b.png"]').setValue(false);
         await wrapper.find('input[aria-label="搜索恢复文件"]').setValue('a.png');
-        expect(wrapper.text()).toContain('1 项被筛选隐藏');
+        expect(wrapper.text()).toContain('其中 1 项被筛选隐藏');
         await wrapper.setProps({ preview: { ...preview, files: preview.files.map(row => ({ ...row })) } });
         await wrapper.find('button.primary').trigger('click');
-        const selection = wrapper.emitted('restore')?.[0]?.[0];
-        expect(selection).toEqual([preview.files[0], preview.files[2]].map(({ path, backupHash, targetHash }) => ({ path, backupHash, targetHash })));
+        expect(wrapper.emitted('restore')?.[0]?.[0]).toEqual([preview.files[0], preview.files[2]].map(({ path, backupHash, targetHash }) => ({ path, backupHash, targetHash })));
     });
-    it('continue/retry preselect only their persisted queue and cancelled preview cannot execute', async () => {
+
+    it('state filters narrow the list and bulk selection only touches the filtered rows', async () => {
+        const wrapper = mount(RestoreTable, { props: { preview, scope: 'all' } });
+        await wrapper.findAll('.filter input')[3]!.setValue(true);
+        expect(wrapper.findAll('tbody tr')).toHaveLength(1);
+        await wrapper.findAll('.filter input')[1]!.setValue(true);
+        await wrapper.findAll('button').find(item => item.text() === '取消勾选筛选结果')!.trigger('click');
+        expect(wrapper.find('button.primary').text()).toBe('恢复所选 0 项');
+        expect(wrapper.find('button.primary').attributes('disabled')).toBeDefined();
+    });
+
+    it('continue/retry preselect only their persisted queue and a cancelled check cannot restore', async () => {
         for (const [scope, path] of [['continue', 'a.png'], ['retry', 'b.png']] as const) {
             const wrapper = mount(RestoreTable, { props: { preview, scope } });
             await wrapper.find('button.primary').trigger('click');
             expect((wrapper.emitted('restore')?.[0]?.[0] as { path: string }[]).map(row => row.path)).toEqual([path]);
             await wrapper.setProps({ preview: { ...preview, cancelled: true } });
             expect(wrapper.find('button.primary').attributes('disabled')).toBeDefined();
-            expect(wrapper.findAll('input[type=checkbox]').every(input => input.attributes('disabled') !== undefined)).toBe(true);
+            expect(wrapper.findAll('tbody input[type=checkbox]').every(input => input.attributes('disabled') !== undefined)).toBe(true);
         }
     });
-    it('save-as excludes remembered backup mode, overwrite backup is explicit, and missing paths fail before dispatch', () => {
+});
+
+describe('处理工具页', () => {
+    it('expands missing tools with acquisition details, opens sources by ID and refreshes availability', async () => {
+        const bench = createWorkbench();
+        bench.boot.value = { config, definition: { ...definition, providers: [missingProvider()] }, warnings: [] };
+        vi.mocked(call).mockResolvedValue([{ ...definition.providers[0], availability: { available: true, reason: '' } }]);
+        const wrapper = mount(ToolsView, { global: { provide: { [workbenchKey as symbol]: bench } } });
+        expect(wrapper.find('details').attributes('open')).toBeDefined();
+        expect(wrapper.text()).toContain('缺少文件：tool.exe'); expect(wrapper.text()).toContain('providers/test/');
+        expect(wrapper.find('a').attributes('href')).toBe('https://example.com/download');
+        await wrapper.find('a').trigger('click'); expect(openProviderSource).toHaveBeenCalledWith('test');
+        await wrapper.findAll('button').find(item => item.text() === '刷新依赖状态')!.trigger('click'); await flushPromises();
+        expect(call).toHaveBeenCalledWith('providers');
+        expect(wrapper.text()).not.toContain('缺少文件'); expect(wrapper.text()).toContain('全部 1 个处理工具可用');
+    });
+});
+
+describe('模型', () => {
+    it('save-as excludes remembered backup, overwrite backup is explicit, and missing paths fail before dispatch', () => {
         expect(processingRequest({ ...config, saveMode: 'saveAs' }, 'process')).not.toHaveProperty('backupDir');
         expect(processingRequest(config, 'preview')).toMatchObject({ backupDir: config.backupDir });
-        expect(processingRequest(config, 'preview').pipeline).toEqual(config.pipeline);
-        expect(() => processingRequest({ ...config, sourceDir: '' }, 'process')).toThrow('源');
+        expect(processingRequest({ ...config, backupEnabled: false }, 'preview')).not.toHaveProperty('backupDir');
+        expect(processingRequest({ ...config, sourceDir: '"D:\\带引号"' }, 'preview').folder).toBe('D:\\带引号');
+        expect(() => processingRequest({ ...config, sourceDir: '' }, 'process')).toThrow('来源');
         expect(() => processingRequest({ ...config, backupDir: '' }, 'process')).toThrow('备份');
+        expect(() => processingRequest({ ...config, saveMode: 'saveAs', outputDir: ' ' }, 'process')).toThrow('另存');
+    });
+
+    it('formats size changes with explicit direction and lists only supported combos', () => {
+        expect(sizeChange(2048)).toBe('−2.0 KB');
+        expect(sizeChange(-100)).toBe('+100 B');
+        expect(sizeChange(0)).toBe('0 B');
+        expect(stepChoices(definition).map(item => item.label)).toEqual(['PNG 压缩', 'PNG 图片缩放']);
+        expect(taskStatus(task)).toEqual({ label: '可继续', tone: 'warn' });
+        expect(taskStatus({ ...task, canResume: false, failed: 0 })).toEqual({ label: '已完成', tone: 'ok' });
     });
 });

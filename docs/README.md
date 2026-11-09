@@ -10,7 +10,8 @@
 | --- | --- |
 | [文档管理规范](documentation.md) | 分类、维护责任、更新时机、决策与归档规则 |
 | [总体架构](architecture/overview.md) | 系统边界、进程关系、完整处理流程、设计取舍 |
-| [前端设计](architecture/frontend.md) | Vue 组件、状态、轮询、页面归属、恢复勾选 |
+| [前端设计规范](design/frontend-design.md) | 视觉主张、设计令牌、布局、组件、状态语义、文案词汇、浏览器调试；任何界面改动必读 |
+| [前端架构](architecture/frontend.md) | 源码结构、工作台状态、作业生命周期、请求映射、步骤编辑与恢复勾选 |
 | [后端与框架设计](architecture/backend.md) | Rust 宿主、Node 调度、处理流水线、提供方扩展、安全恢复 |
 | [扩展契约](architecture/extensions.md) | 类型/操作/提供方、参数、版本、生命周期及新增实现示例 |
 | [通信协议](architecture/protocol.md) | Tauri 命令、JSON Lines、操作与作业模式、错误语义 |
@@ -32,10 +33,10 @@
 
 | 改动 | 必读专题 | 首要回归 |
 | --- | --- | --- |
-| 界面交互 | 前端设计、通信协议 | `desktop/tests/*.test.ts`，涉及原生流程时补 E2E |
+| 界面视觉或交互 | 前端设计规范、前端架构、通信协议 | `desktop/tests/*.test.ts`，1220×850 与 840×620 截图；涉及原生流程时补 E2E |
 | 编码器或参数 | 后端设计、扩展契约、持久化 | `contract`、`resize`、`resources`、`compress` |
 | 任务、取消、续跑 | 后端设计、通信协议、持久化 | `batch`、`desktop`、`resume` |
-| 恢复与勾选 | 前端设计、持久化、后端设计 | `restore`、`restore-preview`、组件与原生测试 |
+| 恢复与勾选 | 前端架构、持久化、后端设计 | `restore`、`restore-preview`、组件与原生测试 |
 | 打包或依赖 | 总体架构、开发与验证、桌面 README | 类型检查、release 构建、原生 E2E |
 
 表中核心测试名称对应 `resource-core/tests/<名称>.test.js`。

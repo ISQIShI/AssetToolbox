@@ -4,7 +4,7 @@
 
 产品为 **AssetToolbox 资源工具箱**，面向游戏等资源的压缩、图片与音频处理。沟通、文档、注释、界面及提交说明默认使用简体中文，代码标识符使用英文。
 
-开始前阅读本文件、[文档索引](docs/README.md)、[项目状态](docs/project-status.md)、[总体架构](docs/architecture/overview.md)，检查 `git status` 和最近提交，再追踪对应源码与测试。扩展功能必读[扩展契约](docs/architecture/extensions.md)。不要将规划能力写成已经实现。
+开始前阅读本文件、[文档索引](docs/README.md)、[项目状态](docs/project-status.md)、[总体架构](docs/architecture/overview.md)，检查 `git status` 和最近提交，再追踪对应源码与测试。扩展功能必读[扩展契约](docs/architecture/extensions.md)；界面改动必读[前端设计规范](docs/design/frontend-design.md)。不要将规划能力写成已经实现。
 
 ## 项目结构
 

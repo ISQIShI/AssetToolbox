@@ -1,0 +1,57 @@
+/*
+ * 设计令牌：唯一的颜色、字号、间距来源。组件样式只引用这些变量，不写裸色值。
+ * 规则详见 docs/design/frontend-design.md。
+ */
+:root {
+  /* 中性色：冷灰机壳 + 白色工作面 + 墨色文字 */
+  --canvas: #e6e9ed;        /* 窗口底色、处理线所在的侧栏 */
+  --paper: #ffffff;         /* 编辑区、输入框、选中的站点 */
+  --paper-sunk: #f3f5f7;    /* 编辑区内的分组底色、表头 */
+  --ink: #1f2531;           /* 正文、主按钮、处理线 */
+  --ink-raised: #333b4b;    /* 主按钮悬停 */
+  --ink-2: #545d6e;         /* 次要文字 */
+  --ink-3: #7d8697;         /* 提示、占位、停用 */
+  --rule: #c9cfd8;          /* 控件边框、分区线 */
+  --rule-soft: #dde1e7;     /* 表格行线 */
+
+  /* 状态色：只表达状态，不作装饰 */
+  --focus: #2b50d8;         /* 键盘焦点、选中行 */
+  --focus-wash: #e8edfc;
+  --ok: #17704b;            /* 成功、节省体积 */
+  --ok-wash: #e4f2eb;
+  --warn: #87540b;          /* 可继续、警告、不完整 */
+  --warn-wash: #f8efdf;
+  --danger: #b8322b;        /* 失败、冲突、错误 */
+  --danger-wash: #f8e6e4;
+  --missing: #a80c97;       /* 缺少依赖：沿用游戏引擎“丢失贴图”的品红 */
+  --missing-wash: #fae5f7;
+
+  /* 字体：IBM Plex 负责拉丁字母与数字，中文回退到雅黑 UI */
+  --font-sans: 'IBM Plex Sans', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  --font-mono: 'IBM Plex Mono', Consolas, 'Microsoft YaHei UI', monospace;
+
+  /* 字号：12 / 14 / 16 / 18 / 24 / 36，取自经典排版比例 */
+  --t-small: 12px;
+  --t-body: 14px;
+  --t-lead: 16px;
+  --t-title: 18px;
+  --t-heading: 24px;
+  --t-display: 36px;
+
+  /* 间距：4 的倍数 */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  /* 圆角按层级：控件 4，浮层 6，节点为圆；区域不加圆角 */
+  --r-control: 4px;
+  --r-float: 6px;
+
+  --rail-width: 272px;
+  --bar-height: 52px;
+  --measure: 720px;          /* 编辑区正文最大宽度，约 50 个汉字 */
+}

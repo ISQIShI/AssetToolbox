@@ -23,7 +23,7 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 
 | 入口 | 职责 |
 | --- | --- |
-| `desktop/src/App.vue`、`StepEditor.vue` | 页面、步骤选择和排序、进度、任务与恢复 |
+| `desktop/src/App.vue`、`core/workbench.ts`、`views/`、`components/` | 四个工作区、处理线与步骤编辑、全局作业栏、任务与恢复，见[前端架构](frontend.md) |
 | `desktop/src-tauri/src/main.rs` | 本地宿主、目录对话框、报告打开、退出协作 |
 | `desktop-bridge.js` | action 白名单、单活动作业、工作进程生命周期 |
 | `batch.js` | 预览/处理/续跑/恢复路由、锁、进度、报告 |

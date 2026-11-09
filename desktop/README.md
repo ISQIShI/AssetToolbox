@@ -18,11 +18,11 @@ npm ci
 npm run dev
 ```
 
-`npm run dev:web` 仅用于样式调试，普通浏览器没有原生文件调用。完整流程必须运行 Tauri；源码克隆首次运行前须准备 `runtime/node.exe`，或先构建生成便携布局。
+`npm run dev:web` 仅用于界面调试：普通浏览器没有原生文件调用，开发模式会自动改用模拟核心（样例数据、模拟作业，不读写文件），用法见[前端设计规范](../docs/design/frontend-design.md#在浏览器中调试界面)。完整流程必须运行 Tauri；源码克隆首次运行前须准备 `runtime/node.exe`，或先构建生成便携布局。
 
 ## 源码与构建
 
-`src/App.vue` 管理三个工作区及作业；`StepEditor.vue` 和 `ParameterFields.vue` 根据扩展目录编辑 pipeline；`RestoreTable.vue` 管理恢复勾选。Rust 宿主位于 `src-tauri/src/main.rs`，核心位于相邻 `resource-core/`。
+`src/App.vue` 是窗口外壳；`src/core/workbench.ts` 集中状态与作业生命周期；`src/views/` 是处理、任务、恢复、工具四个工作区；`src/components/` 包括处理线、步骤编辑、参数字段、作业栏和恢复表；`src/styles/tokens.css` 是设计令牌。结构见[前端架构](../docs/architecture/frontend.md)。Rust 宿主位于 `src-tauri/src/main.rs`，核心位于相邻 `resource-core/`。
 
 `npm run build` 执行 TypeScript 检查、Vite 打包、Rust release 构建，并通过 `scripts/portable.mjs` 复制根目录 EXE；运行时缺失才复制当前 Node。脚本使用便携 Node 检查 Sharp 原生依赖，失败时不会发布新根 EXE。它不安装依赖，也不自动生成独立分发压缩包。
 

@@ -35,15 +35,19 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
         await expect.poll(() => browser!.contexts()[0]?.pages().length || 0).toBeGreaterThan(0);
         page = browser.contexts()[0].pages()[0]; page.on('pageerror', error => errors.push(error.message));
-        await expect(page.getByRole('heading', { name: '按步骤处理资源' })).toBeVisible();
-        await expect(page.getByLabel('源文件夹', { exact: true })).toHaveValue(source);
+        await expect(page.getByRole('navigation', { name: '处理顺序' })).toBeVisible();
+        await expect(page.getByLabel('来源文件夹', { exact: true })).toHaveValue(source);
     }
+    const tab = (name: string) => page.getByRole('navigation', { name: '工作区' }).getByRole('button', { name, exact: false });
+    const station = (name: 'source' | 'output' | 'scan') => page.locator(`[data-station="${name}"]`);
+    const button = (name: string) => page.getByRole('button', { name, exact: true });
     let observedJob = '';
     async function started() {
-        await expect.poll(async () => (await page.locator('.job-panel').getAttribute('data-job-id')) || observedJob).not.toBe(observedJob);
-        observedJob = (await page.locator('.job-panel').getAttribute('data-job-id'))!;
+        await expect.poll(async () => (await page.locator('.dock').getAttribute('data-job-id', { timeout: 200 }).catch(() => null)) || observedJob).not.toBe(observedJob);
+        observedJob = (await page.locator('.dock').getAttribute('data-job-id'))!;
     }
-    async function done(alreadyStarted = false) { if (!alreadyStarted) await started(); await expect(page.locator('.job-panel .eyebrow')).not.toHaveText('PROCESSING', { timeout: 30000 }); }
+    async function done(alreadyStarted = false) { if (!alreadyStarted) await started(); await expect(page.locator('.dock')).toHaveAttribute('data-state', 'done', { timeout: 30000 }); }
+    const processedCount = async () => Number((await page.locator('.dock .count').innerText()).split('/')[0].trim());
     async function close() {
         await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('plugin:window|close', { label: 'main' })).catch(cause => { if (!/closed|destroyed/i.test(String(cause))) throw cause; });
         await expect.poll(() => child!.exitCode, { timeout: 15000, message: 'Native close must release the host process: ' + errors.join('; ') }).not.toBeNull();
@@ -51,17 +55,22 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     }
     try {
         await launch();
+        // 工具页：移走真实编码器后显示缺失原因与获取渠道，放回后恢复可用。
         const pngTool = path.join(tool, 'resource-core/providers/pngquant/pngquant.exe');
         fs.renameSync(pngTool, pngTool + '.held');
-        await page.getByRole('button', { name: '刷新依赖状态', exact: true }).click();
+        await tab('工具').click();
+        await button('刷新依赖状态').click();
         const missing = page.locator('[data-provider-id="pngquant"]');
         await expect(missing).toContainText('缺少文件：pngquant.exe');
         await expect(missing.getByRole('link', { name: '打开获取页面' })).toHaveAttribute('href', 'https://pngquant.org/');
         await expect(missing).toContainText('cargo install pngquant');
+        await expect(tab('工具')).toContainText('1');
         await page.screenshot({ path: info.outputPath('missing-provider.png'), fullPage: true });
         fs.renameSync(pngTool + '.held', pngTool);
-        await page.getByRole('button', { name: '刷新依赖状态', exact: true }).click();
+        await button('刷新依赖状态').click();
         await expect(missing).toContainText('可用');
+        await tab('处理').click();
+        await page.locator('.rail [data-step-id="pack"] button').click();
         await expect(page.getByLabel('测试级别', { exact: false })).toHaveValue('6');
         await expect(page.getByLabel('测试文字', { exact: true })).toHaveValue('中文 配置');
         expect(fs.existsSync(path.join(tool, 'resource-core/config'))).toBe(false);
@@ -70,86 +79,102 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         await page.screenshot({ path: info.outputPath('compact.png'), fullPage: true });
         await page.setViewportSize({ width: 1220, height: 850 });
-        await page.getByRole('button', { name: '扫描预览', exact: true }).click();
+        // 扫描预览：结果归入处理线末端，作业栏收起；其他页面不显示。
+        await button('扫描预览').click();
         await expect(page.getByRole('heading', { name: '扫描结果', exact: true })).toBeVisible();
-        await expect(page.locator('.job-panel')).toHaveCount(0);
+        await expect(page.locator('.dock')).toHaveCount(0);
         await page.screenshot({ path: info.outputPath('scan-result.png'), fullPage: true });
-        for (const name of ['任务历史', '备份恢复']) {
-            await page.getByRole('navigation').getByRole('button', { name, exact: false }).click();
-            await expect(page.locator('.job-panel')).toHaveCount(0);
+        for (const name of ['任务', '恢复']) {
+            await tab(name).click();
+            await expect(page.locator('.dock')).toHaveCount(0);
             await expect(page.getByRole('heading', { name: '扫描结果', exact: true })).toHaveCount(0);
-            await page.screenshot({ path: info.outputPath(name === '任务历史' ? 'preview-history.png' : 'preview-restore.png'), fullPage: true });
+            await page.screenshot({ path: info.outputPath(name === '任务' ? 'preview-tasks.png' : 'preview-restore.png'), fullPage: true });
         }
-        await page.getByRole('navigation').getByRole('button', { name: '处理资源', exact: false }).click();
+        await tab('处理').click();
         expect(fs.existsSync(path.join(tool, 'resource-core/config'))).toBe(false);
         expect(fs.existsSync(path.join(tool, 'resource-core/data/tasks'))).toBe(false);
-        await page.getByRole('button', { name: '开始处理', exact: false }).click(); await done();
+        await button('开始处理').click(); await done();
         for (const [relative, original] of originals) expect(fs.readFileSync(path.join(source, relative))).toEqual(original);
         expect(fs.readFileSync(path.join(output, '二级/a.pack')).length).toBe(10);
         expect(fs.readFileSync(path.join(output, '二级/b.pack'))).toEqual(originals.get(path.join('二级/b.pack')));
-        await page.getByRole('button', { name: '关闭任务结果', exact: true }).click();
-        await expect(page.locator('.job-panel')).toHaveCount(0);
+        await button('关闭作业结果').click();
+        await expect(page.locator('.dock')).toHaveCount(0);
+        // 覆盖 + 备份，运行中从其他页面取消。
+        await station('output').click();
         await page.getByLabel('覆盖原文件', { exact: false }).check();
-        await page.getByLabel('启用备份', { exact: false }).check();
-        await page.getByRole('button', { name: '开始处理', exact: false }).click();
+        await page.getByLabel('替换前备份原文件', { exact: false }).check();
+        await button('开始处理').click();
         await started();
-        await expect.poll(async () => { const text = await page.locator('.progress-caption').innerText(); return Number(text.split('/')[0].trim()); }).toBeGreaterThan(0);
-        await page.getByRole('navigation').getByRole('button', { name: '任务历史', exact: false }).click();
-        await page.getByRole('button', { name: '取消任务', exact: true }).click();
-        await page.getByRole('navigation').getByRole('button', { name: '处理资源', exact: false }).click(); await done(true);
-        await page.getByRole('button', { name: '查看任务', exact: true }).click();
-        await expect(page.getByRole('button', { name: '继续未完成', exact: true })).toBeEnabled();
-        await page.getByRole('button', { name: '继续未完成', exact: true }).click(); await done();
+        await expect.poll(processedCount).toBeGreaterThan(0);
+        await tab('任务').click();
+        await button('取消').click();
+        await tab('处理').click(); await done(true);
+        await button('查看任务').click();
+        await expect(button('继续未完成')).toBeEnabled();
+        await button('继续未完成').click(); await done();
         fs.writeFileSync(path.join(module, 'repaired'), '');
-        await page.getByRole('button', { name: '仅重试处理失败项', exact: true }).click(); await done();
+        await button('关闭作业结果').click();
+        await button('重试失败项').click(); await done();
         const calls = fs.readFileSync(path.join(module, 'calls.txt'), 'utf8').trim().split('\n');
         expect(calls.filter(line => line === 'PACK:a')).toHaveLength(2);
         expect(calls.filter(line => line === 'PACK:b')).toHaveLength(3);
+        // 选择性恢复：用户后来编辑过的文件为冲突，不可勾选。
         const conflict = path.join(source, '二级/a.pack'); fs.writeFileSync(conflict, '用户后来编辑的内容');
-        await page.getByRole('button', { name: '预览备份与恢复', exact: true }).click();
-        await expect(page.getByRole('heading', { name: '恢复前预览', exact: true })).toBeVisible();
-        await expect(page.locator('.job-panel')).toHaveCount(0);
+        await button('关闭作业结果').click();
+        await button('检查备份').click();
+        await expect(page.getByRole('region', { name: '恢复前检查结果' })).toBeVisible();
+        await expect(page.locator('.dock')).toHaveCount(0);
         await expect(page.getByLabel(`恢复 二级\\a.pack`, { exact: true })).toBeDisabled();
-        await page.getByRole('button', { name: '取消筛选结果', exact: true }).click();
+        await button('取消勾选筛选结果').click();
         await page.getByLabel(`恢复 二级\\c.pack`, { exact: true }).check();
         await page.getByLabel('搜索恢复文件').fill('b.pack');
-        await expect(page.locator('.table-footer')).toContainText('1 项被筛选隐藏');
+        await expect(page.locator('.restore-table .foot')).toContainText('1 项被筛选隐藏');
         await page.screenshot({ path: info.outputPath('restore.png'), fullPage: true });
-        await page.getByRole('button', { name: '恢复所选 1 项', exact: true }).click(); await done();
+        await button('恢复所选 1 项').click(); await done();
         expect(fs.readFileSync(path.join(source, '二级/c.pack'))).toEqual(originals.get(path.join('二级/c.pack')));
         expect(fs.readFileSync(path.join(source, '二级/b.pack')).length).toBe(10);
         expect(fs.readFileSync(conflict, 'utf8')).toBe('用户后来编辑的内容');
         // 在同一原生应用中新增非压缩步骤，实测另存结果尺寸和透明通道。
-        await page.getByRole('navigation').getByRole('button', { name: '处理资源', exact: false }).click();
+        await button('关闭作业结果').click();
+        await tab('处理').click();
         const imageSource = path.join(root, '图片'), imageOutput = path.join(root, '缩放结果'); fs.mkdirSync(imageSource);
         const sharp = require(path.join(project, 'resource-core/node_modules/sharp'));
         await sharp({ create: { width: 80, height: 40, channels: 4, background: { r: 120, g: 40, b: 200, alpha: 0.5 } } }).png().toFile(path.join(imageSource, '透明.png'));
-        await page.getByLabel('源文件夹', { exact: true }).fill(imageSource);
-        await page.getByLabel('另存为', { exact: false }).check();
+        await station('source').click();
+        await page.getByLabel('来源文件夹', { exact: true }).fill(imageSource);
+        await station('output').click();
+        await page.getByLabel('另存到新文件夹', { exact: false }).check();
         await page.getByLabel('另存文件夹', { exact: true }).fill(imageOutput);
-        await page.getByRole('button', { name: '添加图片缩放', exact: true }).click();
-        const resizeCard = page.locator('.step-card').last();
-        await resizeCard.getByLabel('目标宽度', { exact: true }).fill('20');
-        await resizeCard.getByLabel('目标高度', { exact: true }).fill('20');
-        await resizeCard.getByLabel('上移步骤', { exact: true }).click();
-        await expect(page.locator('.step-card').first().getByLabel('处理操作', { exact: true })).toHaveValue('image-resize');
+        await page.locator('.rail .adder button').click();
+        await button('PNG 图片缩放').click();
+        await expect(page.locator('.editor h2')).toHaveText('PNG 图片缩放');
+        await page.getByLabel('目标宽度', { exact: true }).fill('20');
+        await page.getByLabel('目标高度', { exact: true }).fill('20');
+        await button('上移').click();
+        await expect(page.locator('.rail [data-step-id]').first()).toContainText('PNG 图片缩放');
         await page.screenshot({ path: info.outputPath('resize.png'), fullPage: true });
-        await page.getByRole('button', { name: '开始处理', exact: false }).click(); await done();
+        await button('开始处理').click(); await done();
         const resized = await sharp(path.join(imageOutput, '透明.png')).metadata();
         expect([resized.width, resized.height, resized.hasAlpha]).toEqual([20, 10, true]);
         expect((await sharp(path.join(imageSource, '透明.png')).metadata()).width).toBe(80);
-        await page.locator('.step-card').first().getByLabel('删除步骤', { exact: true }).click();
-        await page.getByLabel('源文件夹', { exact: true }).fill(source);
+        await button('关闭作业结果').click();
+        await page.locator('.rail [data-step-id] button').first().click();
+        await button('删除步骤').click();
+        await station('source').click();
+        await page.getByLabel('来源文件夹', { exact: true }).fill(source);
+        await station('output').click();
         await page.getByLabel('覆盖原文件', { exact: false }).check();
-        await page.getByRole('button', { name: '保存配置', exact: true }).click();
+        await button('保存配置').click();
         await close(); await launch();
+        await station('output').click();
         await expect(page.getByLabel('覆盖原文件', { exact: false })).toBeChecked();
-        await expect(page.getByLabel('启用备份', { exact: false })).toBeChecked();
+        await expect(page.getByLabel('替换前备份原文件', { exact: false })).toBeChecked();
         expect(fs.readFileSync(settingsPath, 'utf8')).toContain('中文 配置');
         expect(errors).toEqual([]);
-        await page.getByRole('button', { name: '开始处理', exact: false }).click();
+        // 运行中关闭窗口：先协作取消，任务保留可继续状态。
+        await button('开始处理').click();
         await started();
-        await expect.poll(async () => Number((await page.locator('.progress-caption').innerText()).split('/')[0].trim())).toBeGreaterThan(0);
+        await expect.poll(processedCount).toBeGreaterThan(0);
         await close();
         const [lastTask] = require(path.join(tool, 'resource-core/tasks.js')).listTasks();
         expect(lastTask.canResume).toBe(true); expect(lastTask.pending).toBeGreaterThan(0);

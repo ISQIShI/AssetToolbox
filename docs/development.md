@@ -19,7 +19,7 @@ npm ci
 npm run dev
 ```
 
-`npm run dev` 通过 Tauri 启动 Vite 及原生窗口。`npm run dev:web` 只提供样式页面，浏览器没有 native API，不是完整业务测试环境。
+`npm run dev` 通过 Tauri 启动 Vite 及原生窗口。`npm run dev:web` 在浏览器中打开界面；没有 native API 时自动使用模拟核心，只用于调整界面，不是业务测试环境，见[前端设计规范](design/frontend-design.md#在浏览器中调试界面)。
 
 全新 Git 克隆不含 `runtime/node.exe` 和根目录 EXE。首次可先执行 `npm run build` 生成便携布局；若先做原生调试，应把已安装且版本满足要求的 Node 可执行文件复制到 `runtime/node.exe`。`portable.mjs` 只在运行时缺失时复制当前 Node，不会自动升级已存在的运行时；替换运行时时同时核对其许可证文件。
 
@@ -48,6 +48,8 @@ npm run dev
 
 这些 overrides 是临时的兼容修复；上游解除旧依赖约束后，移除前必须重跑组件测试、类型检查及 `npm audit`。升级依据见 [Vitest 安全公告](https://github.com/vitest-dev/vitest/security/advisories/GHSA-qxg6-89mg-rqv8)和 [Vitest 4 迁移指南](https://v4.vitest.dev/guide/migration)。
 
+桌面运行依赖新增 `@fontsource/ibm-plex-sans` 与 `@fontsource/ibm-plex-mono`，精确锁定 5.3.0，只提供 OFL 字体文件和 CSS，没有安装脚本；`main.ts` 只引入 latin 子集的所需字重。升级时同步[前端设计规范](design/frontend-design.md#字体)与第三方声明。
+
 `package.json` 的 `allowScripts` 仅批准 `esbuild@0.28.2` 的安装脚本；npm 11.20+ 会据此处理安装脚本许可。新版本提示未许可时，先审阅具体包及脚本，再更新许可，不使用全局放开所有依赖脚本的配置。`whatwg-encoding` 的弃用提示来自 jsdom 26 的传递依赖，不影响当前验证；不要仅为消除提示直接替换其内部实现。
 
 ## 按风险选择验证
@@ -55,7 +57,7 @@ npm run dev
 | 修改范围 | 应执行的验证 |
 | --- | --- |
 | 纯文档 | 链接/命令/字段核对，`git diff --check`；不添加镜像测试 |
-| Vue 交互与模型 | `npm test`、`npm run build:web`；原生 API 或完整流程变化补 E2E |
+| Vue 交互、样式与模型 | `npm test`、`npm run build:web`，按设计规范核对清单截图；原生 API 或完整流程变化补 E2E |
 | Node 业务与文件安全 | 完整核心测试；定位时可先运行单文件 |
 | schema 或配置格式 | 核心套件，动态控件组件测试；新增类型补原生流程 |
 | Rust、桥接、打包、跨进程契约 | 核心测试、组件测试、当前源码 release 构建和原生 E2E |
