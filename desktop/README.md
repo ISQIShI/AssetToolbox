@@ -2,7 +2,7 @@
 
 开发规则见 [AGENTS.md](../AGENTS.md)；架构解析见[前端设计](../docs/architecture/frontend.md)、[后端设计](../docs/architecture/backend.md)和[通信协议](../docs/architecture/protocol.md)。实际环境与验证记录见[项目状态](../docs/project-status.md)。
 
-日常使用：双击工具根目录的 `ResourceCompressor.exe`。前端资源嵌入 EXE；`runtime/node.exe`、`resCompress` 必须与 EXE 一起移动。用户配置、模块配置、任务和报告仍保留原位置。编码器仍由各自模块管理。
+日常使用：双击工具根目录的 `AssetToolbox.exe`。前端资源嵌入 EXE；`runtime/node.exe`、`resource-core` 必须与 EXE 一起移动。配置、任务和报告跟随核心目录保存，升级旧布局见[迁移说明](../docs/decisions/0002-resource-toolbox-layout.md#升级与回退)。编码器仍由各自模块管理。
 
 ## 代码划分
 
@@ -15,11 +15,12 @@ desktop/
   src/api.ts                Tauri 调用和目录选择
   src-tauri/src/main.rs     Rust 宿主与 stdio 桥接
   tests/                    组件测试、真实 WebView2 流程测试
-resCompress/
+resource-core/
   desktop-bridge.js         JSON Lines 协议、工作进程生命周期
   batch.js                  复用的后台任务、状态、取消和报告
   compress.js / restore.js  复用的压缩与安全恢复核心
-  compressors/              自动发现的模块、配置与编码器
+  framework/               处理器发现、schema、参数和进程公共机制
+  processors/              自动发现的模块、配置与编码器
 runtime/node.exe             独立 Node.js 运行时
 ```
 
@@ -47,7 +48,7 @@ npm run build
 
 ```powershell
 # 核心：真实图片/音频、配置兼容、断点、恢复安全、桌面通信
-cd resCompress
+cd resource-core
 npm test
 
 # 前端：动态字段、选择集、取消预览、保存方式
@@ -61,7 +62,7 @@ npm run typecheck
 npm run test:e2e
 ```
 
-原生测试在系统临时目录创建独立工具副本，启动真正的 release EXE，通过 WebView2 的官方 CDP 测试接口操作页面。测试进程设置独立的 RESOURCE_COMPRESSOR_TEST_PORT、WebView 用户目录，并隐藏测试窗口；正常启动不启用这些设置。覆盖旧配置载入、新模块自动生成、只读扫描、预览结果的页面隔离、任务结果关闭、另存、跨页面取消、继续、失败重试、冲突保护、选择性恢复及重开设置；截图保存到 `desktop/test-results`。
+原生测试在系统临时目录创建独立工具副本，启动真正的 release EXE，通过 WebView2 的官方 CDP 测试接口操作页面。测试进程设置独立的 ASSET_TOOLBOX_TEST_PORT、WebView 用户目录，并隐藏测试窗口；正常启动不启用这些设置。覆盖旧配置载入、新模块自动生成、只读扫描、预览结果的页面隔离、任务结果关闭、另存、跨页面取消、继续、失败重试、冲突保护、选择性恢复及重开设置；截图保存到 `desktop/test-results`。
 
 原 WinForms 界面和基于 PowerShell 控件注入的测试不再维护。删除旧启动脚本、参数注入通道及仅验证 PowerShell 入口的测试，保留 Node CLI 的兼容测试与文件安全测试；不为静态样式和低风险文案维护快照测试。
 

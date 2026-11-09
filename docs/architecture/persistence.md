@@ -6,17 +6,19 @@
 
 | 路径 | 生命周期与格式 |
 | --- | --- |
-| `resCompress/config/user-settings.json` | 公共配置 v2：源/输出/备份路径、保存模式、备份开关 |
-| `resCompress/compressors/<id>/user-settings.json` | 模块配置 v1：本模块开关及参数 |
-| `resCompress/user-settings.json` | 兼容旧的扁平 v1 配置，保存新布局后也不删除 |
-| `resCompress/tasks/<id>/task.json` | 持久任务头 v1，固定原始参数与绝对路径 |
+| `resource-core/config/user-settings.json` | 公共配置 v2：源/输出/备份路径、保存模式、备份开关 |
+| `resource-core/processors/<id>/user-settings.json` | 模块配置 v1：本模块开关及参数 |
+| `resource-core/user-settings.json` | 兼容旧的扁平 v1 配置，保存新布局后也不删除 |
+| `resource-core/tasks/<id>/task.json` | 持久任务头 v1，固定原始参数与绝对路径 |
 | 同目录 `events.jsonl` | 追加式事件日志，逐条换行并 fsync |
 | 同目录 `task.lock`、`claim-*.lock` | 执行互斥与取锁协调，正常流程释放 |
-| `resCompress/reports/<时间戳-UUID>/` | 每次写操作的 `report.json` 和 UTF-8 BOM `files.csv` |
+| `resource-core/reports/<时间戳-UUID>/` | 每次写操作的 `report.json` 和 UTF-8 BOM `files.csv` |
 | 用户指定目录下 `backup-<任务id>/` | 按源相对目录保存被替换文件的原始字节 |
 | 系统临时目录 `resource-desktop-*` | `request.json`、`status.json`、`status.next`、`cancel`，不用于持久续压 |
 
 模块定义 `config.js` 是源码；同目录 `user-settings.json` 是用户数据。二者不能混淆。任务和报告包含素材路径，不应作为测试夹具或公开样本直接提交。
+
+旧 `resCompress/` 布局需显式迁移，程序不会在启动时合并两套目录或重写历史文件。路径映射、任务定位与回退见 [ADR 0002](../decisions/0002-resource-toolbox-layout.md#升级与回退)。模块 ID、配置版本及 v1 任务事件保持不变。
 
 ## 配置读取与保存
 

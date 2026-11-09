@@ -1,0 +1,65 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { spawn } = require('node:child_process');
+const { copyTool } = require('./portable');
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+function fixture(t) {
+    const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'desktop-bridge-test-')), tool = copyTool(root);
+    fs.copyFileSync(path.join(__dirname, '../desktop-bridge.js'), path.join(tool, 'resource-core/desktop-bridge.js'));
+    const module = path.join(tool, 'resource-core/processors/extra'); fs.mkdirSync(module);
+    fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '新压缩器', extensions: ['.pack'], enabledKey: 'extraEnabled', defaults: { extraEnabled: true, extraText: '' }, parameters: { extraText: { type: 'text', maxLength: 32767 } } }));
+    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs'),path=require('node:path');module.exports={validate:b=>b.toString().startsWith('PACK:'),compress({input,output,settings}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,180);fs.appendFileSync(path.join(__dirname,'calls.txt'),fs.readFileSync(input).subarray(0,6).toString()+'\\n');fs.writeFileSync(output,'PACK:'+settings.extraText+'small');return {output};}}`);
+    const source = path.join(root, '中文 素材'), backup = path.join(root, '备份'), original = Buffer.from('PACK:x' + 'data'.repeat(30000));
+    fs.mkdirSync(path.join(source, '子目录'), { recursive: true });
+    for (let i = 0; i < 6; i++) fs.writeFileSync(path.join(source, '子目录', i + '.pack'), original);
+    const pending = new Map(); let sequence = 0;
+    const child = spawn(process.execPath, [path.join(tool, 'resource-core/desktop-bridge.js')], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    let stderr = ''; child.stderr.on('data', data => { stderr += data; });
+    const exited = new Promise(resolve => child.once('exit', resolve));
+    require('node:readline').createInterface({ input: child.stdout }).on('line', line => { const response = JSON.parse(line), next = pending.get(response.id); pending.delete(response.id); response.error ? next.reject(new Error(response.error)) : next.resolve(response.result); });
+    child.on('exit', () => { for (const next of pending.values()) next.reject(new Error(stderr || 'bridge exited')); });
+    const rpc = (action, payload = {}) => new Promise((resolve, reject) => { const id = ++sequence; pending.set(id, { resolve, reject }); child.stdin.write(JSON.stringify({ id, action, payload }) + '\n'); });
+    const until = async (id, predicate = state => state.done) => { const deadline = Date.now() + 30000; while (Date.now() < deadline) { const state = await rpc('poll', { id }); if (predicate(state)) return state; await delay(20); } throw new Error('job timed out'); };
+    const run = async request => { const { id } = await rpc('start', request); return until(id); };
+    t.after(async () => { child.stdin.end(); await exited; assert.equal(path.dirname(fs.realpathSync(root)), parent); assert.ok(path.basename(root).startsWith('desktop-bridge-test-')); fs.rmSync(root, { recursive: true, force: true }); });
+    return { root, tool, module, source, backup, original, child, exited, rpc, until, run };
+}
+test('stdio bridge discovers modules, loads legacy config read-only, preserves long Unicode settings and previews without task writes', async t => {
+    const f = fixture(t), saved = { version: 1, sourceDir: f.source, outputDir: '', backupDir: f.backup, saveMode: 'overwrite', backupEnabled: true, extraEnabled: true, extraText: '中文"\\'.repeat(7000) };
+    fs.writeFileSync(path.join(f.tool, 'resource-core/user-settings.json'), '\uFEFF' + JSON.stringify(saved));
+    const initial = await f.rpc('bootstrap'); assert.equal(initial.config.extraText, saved.extraText); assert.ok(initial.definition.modules.find(module => module.id === 'extra'));
+    assert.equal(fs.existsSync(path.join(f.tool, 'resource-core/config')), false);
+    await f.rpc('save', initial.config);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(f.module, 'user-settings.json'))).extraText, saved.extraText);
+    const options = Object.fromEntries(initial.definition.fields.map(field => [field.key, initial.config[field.key]]));
+    const state = await f.run({ mode: 'preview', folder: f.source, options });
+    assert.equal(state.preview.total, 6); assert.equal(fs.existsSync(path.join(f.tool, 'resource-core/tasks')), false); assert.equal(fs.existsSync(path.join(f.tool, 'resource-core/reports')), false);
+    await assert.rejects(f.rpc('start', { mode: 'invalid' }), /无效/);
+});
+test('real asynchronous jobs cancel, resume without repeats, retry failures and selectively restore from the existing journal', async t => {
+    const f = fixture(t), { id } = await f.rpc('start', { mode: 'compress', folder: f.source, backupDir: f.backup });
+    await f.until(id, state => state.processed >= 1);
+    await assert.rejects(f.rpc('start', { mode: 'preview', folder: f.source }), /等待/);
+    await f.rpc('cancel', { id }); const stopped = await f.until(id);
+    assert.equal(stopped.cancelled, true); assert.ok(stopped.task.completed > 0 && stopped.task.completed < 6);
+    const state = await f.run({ mode: 'resume', taskFile: stopped.task.taskFile }); assert.equal(state.task.completed, 6);
+    const calls = fs.readFileSync(path.join(f.module, 'calls.txt'), 'utf8').trim().split('\n'); assert.equal(calls.length, 6);
+    const retried = await f.run({ mode: 'retry', taskFile: state.task.taskFile }); assert.equal(retried.summary.total, 0);
+    const preview = await f.run({ mode: 'restore-preview', taskFile: state.task.taskFile }); assert.equal(preview.preview.recoverable, 6);
+    const selected = preview.preview.files.slice(0, 2).map(({ path, backupHash, targetHash }) => ({ path, backupHash, targetHash }));
+    const restored = await f.run({ mode: 'restore', taskFile: state.task.taskFile, selection: selected }); assert.equal(restored.summary.restored, 2);
+    const next = await f.run({ mode: 'restore-preview', taskFile: state.task.taskFile }); assert.equal(next.preview.restored, 2); assert.equal(next.preview.recoverable, 4);
+    assert.deepEqual(fs.readFileSync(path.join(f.source, selected[0].path)), f.original);
+    const listed = await f.rpc('tasks'); assert.equal(listed[0].canResume, false); assert.equal(listed[0].restored, 2);
+});
+test('closing the native host cancels safely, releases task lock, cleans transient files and leaves a resumable task', async t => {
+    const f = fixture(t), { id } = await f.rpc('start', { mode: 'compress', folder: f.source, backupDir: f.backup });
+    await f.until(id, state => state.processed >= 1);
+    f.child.stdin.end(); await f.exited;
+    const tasks = require(path.join(f.tool, 'resource-core/tasks')), [info] = tasks.listTasks();
+    assert.ok(info.completed > 0 && info.completed < 6); assert.equal(info.canResume, true);
+    const task = tasks.loadTask(info.taskFile), unlock = task.lock(); unlock();
+});

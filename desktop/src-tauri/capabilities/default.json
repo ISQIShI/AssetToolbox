@@ -1,1 +1,1 @@
-{"identifier":"main","description":"本地资源压缩窗口","windows":["main"],"permissions":["core:default","core:window:allow-close","core:window:allow-destroy","dialog:allow-open"]}
+{"identifier":"main","description":"本地资源工具箱窗口","windows":["main"],"permissions":["core:default","core:window:allow-close","core:window:allow-destroy","dialog:allow-open"]}

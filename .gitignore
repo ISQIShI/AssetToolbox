@@ -10,10 +10,17 @@ coverage/
 /.local/
 
 # 便携发布产物；编码器是现有运行依赖，保留版本控制
+/AssetToolbox.exe
 /ResourceCompressor.exe
 /runtime/node.exe
 
 # 用户配置和处理记录，不属于源码
+/resource-core/user-settings.json
+/resource-core/config/user-settings.json
+/resource-core/processors/*/user-settings.json
+/resource-core/tasks/
+/resource-core/reports/
+# 升级前的用户目录也不得被意外提交
 /resCompress/user-settings.json
 /resCompress/config/user-settings.json
 /resCompress/compressors/*/user-settings.json

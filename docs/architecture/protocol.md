@@ -1,6 +1,6 @@
 # 桌面通信协议
 
-协议实现位于 `desktop/src/api.ts`、`desktop/src-tauri/src/main.rs`、`resCompress/desktop-bridge.js` 和 `resCompress/batch.js`。前端类型集中在 `desktop/src/types.ts`，是消费侧声明，不代替 Node 的运行时校验。
+协议实现位于 `desktop/src/api.ts`、`desktop/src-tauri/src/main.rs`、`resource-core/desktop-bridge.js` 和 `resource-core/batch.js`。前端类型集中在 `desktop/src/types.ts`，是消费侧声明，不代替 Node 的运行时校验。
 
 ## Tauri 与 JSON Lines
 

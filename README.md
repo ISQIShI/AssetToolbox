@@ -1,12 +1,16 @@
-# 模块化资源压缩工具
+# AssetToolbox 资源工具箱
+
+面向各种资源，尤其是游戏资源的本地处理工具。长期目标包括压缩、图片调整、音频调整和可组合的批处理能力；当前已实现 PNG/JPG/MP3 压缩、预览、续压、重试与备份恢复，尚未实现图片缩放或音频编辑。
 
 开发与接手请先阅读 [Repository Guidelines](AGENTS.md)、[开发文档索引](docs/README.md)和[当前项目状态](docs/project-status.md)。本页保留面向使用者的操作说明。
 
 在 Windows 上选择文件夹，递归处理已安装模块支持的文件，扩展名不区分大小写。内置支持 `.png`、`.jpg`、`.jpeg`、`.mp3`。桌面界面已迁移到 Tauri 2 + Vue 3 + TypeScript。便携版包含 `runtime/node.exe`，日常使用无需安装 Node.js 或执行 `npm install`；Windows 10/11 需有 WebView2 Runtime。
 
+从旧版升级时，EXE 更名为 `AssetToolbox.exe`，核心目录由 `resCompress/` 改为 `resource-core/`，模块目录由 `compressors/` 改为 `processors/`。请按[目录迁移说明](docs/decisions/0002-resource-toolbox-layout.md#升级与回退)保留配置、任务和报告，并更新快捷方式。
+
 ## 窗口使用与记住配置
 
-双击 `ResourceCompressor.exe`，选择源文件夹、保存方式、启用的文件类型和压缩参数，再点击“开始压缩”。工具自动扫描 `resCompress/compressors` 下的模块目录，根据各自的 `config.js` 生成名称、启用开关和参数界面；模块较多时可滚动查看。PNG、JPG / JPEG、MP3 可以分别启用或关闭，新增模块也适用。
+双击 `AssetToolbox.exe`，选择源文件夹、保存方式、启用的文件类型和压缩参数，再点击“开始压缩”。工具自动扫描 `resource-core/processors` 下的模块目录，根据各自的 `config.js` 生成名称、启用开关和参数界面；模块较多时可滚动查看。PNG、JPG / JPEG、MP3 可以分别启用或关闭，新增模块也适用。
 
 - 首次使用：PNG、JPG 启用，MP3 关闭；采用原有图片参数。MP3 启用后默认沿用旧音乐流程的 ABR 24 kbps。
 - 下次打开：自动恢复上次的源文件夹、另存和备份文件夹、保存方式、备份开关、格式开关和全部压缩参数。
@@ -27,7 +31,7 @@
 - 扫描期间取消不会开始压缩，此时文件总数可能只是已发现数量。
 - 完成后在窗口查看压缩、保留、复制、备份、失败数量和节省空间，点击“打开报告”检查详细结果。
 
-通过窗口发起的每次压缩（包括取消和失败）会在 `resCompress/reports/<时间戳-唯一标识>/` 保存：
+通过窗口发起的每次压缩（包括取消和失败）会在 `resource-core/reports/<时间戳-唯一标识>/` 保存：
 
 - `report.json`：源路径、保存路径、压缩参数、运行时间、汇总和逐文件结果。
 - `files.csv`：相对路径、所属模块、状态、原始/结果字节数、节省空间、复制/备份标记和失败原因。使用 UTF-8 BOM，可用 Excel 打开。
@@ -37,7 +41,7 @@
 命令行直接压缩继续使用控制台输出，不弹运行窗口，也不自动生成报告。Node.js 新增只读预览选项：
 
 ```powershell
-node .\resCompress\compress.js "D:\素材" --preview --output "D:\压缩结果" --mp3-enabled true
+node .\resource-core\compress.js "D:\素材" --preview --output "D:\压缩结果" --mp3-enabled true
 ```
 
 预览输出 JSON；无问题返回 0，发现冲突、缺少工具或其他错误返回 1。核心任务结果的 exitCode 为 0 表示完成、1 表示失败、2 表示取消；同时有失败和取消时为 1。桌面进程退出码只代表应用退出，不代表最后一次任务结果。
@@ -57,7 +61,7 @@ node .\resCompress\compress.js "D:\素材" --preview --output "D:\压缩结果" 
 
 **另存重试**：失败时若已经原样复制，任务会记录该副本的 SHA-256。只有该副本内容仍与记录相同，才允许原子替换为新的压缩结果。用户修改过的副本、其他任务或运行前已有的同名文件均不覆盖；可以手动解决冲突后重试。**覆盖备份**：同一任务的多次续压、重试共用一个备份子目录，保留之前的备份。
 
-断点位于 `resCompress/tasks/<任务标识>/`：
+断点位于 `resource-core/tasks/<任务标识>/`：
 
 - `task.json` 保存原任务参数和绝对路径。
 - `events.jsonl` 保存完整文件清单、逐文件写入意图和完成结果；每条记录刷盘，避免只在整批结束时保存。
@@ -69,10 +73,10 @@ node .\resCompress\compress.js "D:\素材" --preview --output "D:\压缩结果" 
 
 ```powershell
 # 列出任务及其 taskFile 绝对路径
-node .\resCompress\tasks.js --list
+node .\resource-core\tasks.js --list
 # 恢复指定任务：二选一
-node .\resCompress\batch.js --resume "D:\工具\resCompress\tasks\<任务标识>\task.json"
-node .\resCompress\batch.js --retry "D:\工具\resCompress\tasks\<任务标识>\task.json"
+node .\resource-core\batch.js --resume "D:\工具\resource-core\tasks\<任务标识>\task.json"
+node .\resource-core\batch.js --retry "D:\工具\resource-core\tasks\<任务标识>\task.json"
 ```
 
 恢复命令输出 JSON 状态，并保存本次报告。退出码表示本次尝试结果，任务累计的剩余数量见 `task.pending` 和 `task.failed`。
@@ -102,7 +106,7 @@ node .\resCompress\batch.js --retry "D:\工具\resCompress\tasks\<任务标识>\
 - 取消后点“继续上次恢复”，仅处理待恢复项；冲突解决后点“重试恢复失败项”，仅重试失败项。重新打开工具也能从历史任务继续。已经恢复成功的文件即使后来再被修改，也不会被此任务重新写入。
 - **一旦开始恢复，该任务停止续压及压缩失败重试**，防止刚还原的文件被旧任务再次处理。若要重新压缩，请新建任务。恢复前取消或备份/目标根目录检查失败不会停用续压。
 
-恢复记录与压缩断点一起保存在 `resCompress/tasks/`。此前版本创建的完整任务日志无需转换，仍可识别原备份与压缩结果。请保留任务目录以及对应的 `backup-...` 文件夹；任务恢复使用原绝对路径，移动素材或备份后需要放回原路径，或改用下面的导出方式。
+恢复记录与压缩断点一起保存在 `resource-core/tasks/`。此前版本创建的完整任务日志无需转换，仍可识别原备份与压缩结果。请保留任务目录以及对应的 `backup-...` 文件夹；任务恢复使用原绝对路径，移动素材或备份后需要放回原路径，或改用下面的导出方式。
 
 **没有任务记录的旧备份 / 命令行备份**：点击 **“恢复没有任务记录的旧备份”**，选择某一次的 `backup-...` 子文件夹，再选择保存位置，建议使用新的空文件夹。同样先显示预览清单，按勾选范围导出，保持目录结构，不受当前压缩模块或格式开关影响。已有相同内容文件显示为已恢复，不同内容文件显示冲突并保留；可再次预览补全未导出的文件。无任务记录的导出不建立持久任务断点，重新打开时选择相同路径后按内容识别已导出项。备份和导出目录不能相同或互相包含。此方式也适合取出存在原位置冲突的原图，供手动核对。
 
@@ -110,15 +114,15 @@ node .\resCompress\batch.js --retry "D:\工具\resCompress\tasks\<任务标识>\
 
 ```powershell
 # 恢复任务中尚未恢复的备份；失败项单独重试
-node .\resCompress\batch.js --restore "D:\工具\resCompress\tasks\<任务标识>\task.json"
-node .\resCompress\batch.js --restore-retry "D:\工具\resCompress\tasks\<任务标识>\task.json"
+node .\resource-core\batch.js --restore "D:\工具\resource-core\tasks\<任务标识>\task.json"
+node .\resource-core\batch.js --restore-retry "D:\工具\resource-core\tasks\<任务标识>\task.json"
 # 将某次旧备份导出到其他文件夹，不覆盖已有的不同内容文件
-node .\resCompress\batch.js --restore-export "D:\原始备份\backup-<标识>" "D:\恢复副本"
+node .\resource-core\batch.js --restore-export "D:\原始备份\backup-<标识>" "D:\恢复副本"
 # 只读预览（JSON 中 preview.files 列出状态、原因、路径及校验值）
-node .\resCompress\batch.js --restore-preview "D:\工具\resCompress\tasks\<任务标识>\task.json"
-node .\resCompress\batch.js --restore-export-preview "D:\原始备份\backup-<标识>" "D:\恢复副本"
+node .\resource-core\batch.js --restore-preview "D:\工具\resource-core\tasks\<任务标识>\task.json"
+node .\resource-core\batch.js --restore-export-preview "D:\原始备份\backup-<标识>" "D:\恢复副本"
 # 仅恢复清单中的文件；--restore-export 和 --restore-retry 也支持此选项
-node .\resCompress\batch.js --restore "D:\工具\resCompress\tasks\<任务标识>\task.json" --selection "D:\勾选清单.json"
+node .\resource-core\batch.js --restore "D:\工具\resource-core\tasks\<任务标识>\task.json" --selection "D:\勾选清单.json"
 ```
 
 勾选清单是 JSON 数组，每个元素包含预览返回的 `path`、`backupHash`、`targetHash`（目标缺失时为 `null`）；不要手工编造校验值。可直接从 `preview.files` 筛选 `selectable: true` 的行后保存，额外字段会被忽略。空数组不恢复任何文件；非法路径、重复路径、任务范围外路径或缺失校验值会被拒绝。未提供清单时，已有勾选记录的任务沿用该范围；没有勾选记录的旧任务保留原来的整批恢复行为。
@@ -129,40 +133,39 @@ node .\resCompress\batch.js --restore "D:\工具\resCompress\tasks\<任务标识
 
 配置按用途保存，均随工具文件夹一起移动：
 
-- `resCompress/config/user-settings.json`：源文件夹、另存和备份路径、保存方式及备份开关。
-- `resCompress/compressors/png/user-settings.json`：PNG 开关、速度、质量。
-- `resCompress/compressors/jpg/user-settings.json`：JPG / JPEG 开关、质量。
-- `resCompress/compressors/mp3/user-settings.json`：MP3 开关、平均码率。
+- `resource-core/config/user-settings.json`：源文件夹、另存和备份路径、保存方式及备份开关。
+- `resource-core/processors/png/user-settings.json`：PNG 开关、速度、质量。
+- `resource-core/processors/jpg/user-settings.json`：JPG / JPEG 开关、质量。
+- `resource-core/processors/mp3/user-settings.json`：MP3 开关、平均码率。
 
 这些 JSON 文件在点击“开始压缩”后自动生成。各工具目录下的 `config.js` 定义该工具的初始默认值、参数范围和校验规则，界面初值、“恢复默认参数”、命令行及配置读取共用这些定义。移动或复制某个工具的完整目录时，其默认定义和已保存参数一起迁移。
 
 某个工具配置损坏时，只恢复该工具的默认值，其他工具与公共配置不受影响；取消窗口不会改写文件。配置先全部写入临时文件再替换，写入失败时尝试回滚已替换的配置，并提示错误，本次压缩仍可继续。
 
-兼容旧的 `resCompress/user-settings.json`：尚无新公共配置时会读取旧配置，点击“开始压缩”后按新目录结构保存；旧文件保留原样。已有新公共配置后，不再套用旧文件。删除某个工具的 `user-settings.json` 可单独恢复其默认参数；如需重置全部配置，移走全部新配置及旧配置文件。
+兼容旧的 `resource-core/user-settings.json`：尚无新公共配置时会读取旧配置，点击“开始压缩”后按新目录结构保存；旧文件保留原样。已有新公共配置后，不再套用旧文件。删除某个工具的 `user-settings.json` 可单独恢复其默认参数；如需重置全部配置，移走全部新配置及旧配置文件。
 
 ## 文件夹结构
 
 ```text
-压缩工具/
-├─ ResourceCompressor.exe         Tauri 桌面程序（前端已嵌入）
+AssetToolbox/
+├─ AssetToolbox.exe                Tauri 桌面程序（前端已嵌入）
 ├─ runtime/                       内置 node.exe 和 LICENSE-node.txt
 ├─ desktop/                       Vue / TypeScript / Rust 源码与构建配置
 ├─ README.md
-└─ resCompress/
+└─ resource-core/
    ├─ compress.js                  扫描、另存、备份与压缩调度
    ├─ batch.js / desktop-bridge.js  后台任务、桌面通信与报告
    ├─ tasks.js                     断点清单、逐文件日志、恢复与任务锁
    ├─ restore.js                   备份校验、原位置恢复与旧备份导出
    ├─ tasks/                       历史任务断点（运行后生成）
    ├─ reports/                     窗口压缩的逐次报告（运行后生成）
-   ├─ options.js                   汇总各工具的参数定义
+   ├─ framework/                   模块发现、参数 schema、选项与工具进程
    ├─ settings.js                  配置读写与旧配置兼容
    ├─ package.json
    ├─ config/
    │  └─ user-settings.json        公共配置（运行后生成）
-   ├─ compressors/
-   │  ├─ index.js / schema.js      自动发现、模块配置检查
-   │  ├─ process.js / README.md    进程调用、扩展说明
+   ├─ processors/
+   │  ├─ README.md                 当前压缩处理器接口与扩展说明
    │  ├─ _template/               新模块模板（不会自动加载）
    │  ├─ png/
    │  │  ├─ index.js / config.js   PNG 调用与参数定义
@@ -213,39 +216,39 @@ node .\resCompress\batch.js --restore "D:\工具\resCompress\tasks\<任务标识
 未安装全局 Node.js 时，将下列命令中的 `node` 替换为 `.\runtime\node.exe`。命令行未指定的参数使用模块默认值，不读写桌面历史配置；保存方式和目标路径通过参数显式指定。
 
 ```powershell
-node .\resCompress\compress.js "D:\素材"
-node .\resCompress\compress.js "D:\素材" --output "D:\压缩结果" --mp3-enabled true --mp3-bitrate 96
-node .\resCompress\compress.js "D:\素材" --backup "D:\原始备份" --png-enabled false --jpg-enabled false --mp3-enabled true
-node .\resCompress\compress.js "D:\素材" --output "D:\压缩结果" --png-speed 3 --png-quality-min 60 --png-quality-max 90 --jpg-quality 6
+node .\resource-core\compress.js "D:\素材"
+node .\resource-core\compress.js "D:\素材" --output "D:\压缩结果" --mp3-enabled true --mp3-bitrate 96
+node .\resource-core\compress.js "D:\素材" --backup "D:\原始备份" --png-enabled false --jpg-enabled false --mp3-enabled true
+node .\resource-core\compress.js "D:\素材" --output "D:\压缩结果" --png-speed 3 --png-quality-min 60 --png-quality-max 90 --jpg-quality 6
 ```
 
 路径可以是绝对路径，或相对于当前命令行目录的路径；包含空格时请加引号。工具可从其他工作目录启动。
 
-命令行参数也从模块配置自动生成。例如配置键 `exampleQuality` 自动成为 Node.js 的 `--example-quality`。执行 `node .\resCompress\compress.js --help` 可查看当前全部模块的选项。
+命令行参数也从模块配置自动生成。例如配置键 `exampleQuality` 自动成为 Node.js 的 `--example-quality`。执行 `node .\resource-core\compress.js --help` 可查看当前全部模块的选项。
 
 ## 压缩如何实现
 
-Tauri 原生宿主和 Vue + TypeScript 负责窗口，Node.js 负责递归扫描、参数校验、调用压缩器、另存和备份。实际编码由 `resCompress/compressors` 下各工具目录内附带的 Windows 可执行程序完成，无需联网：
+Tauri 原生宿主和 Vue + TypeScript 负责窗口，Node.js 负责递归扫描、参数校验、调用压缩器、另存和备份。实际编码由 `resource-core/processors` 下各工具目录内附带的 Windows 可执行程序完成，无需联网：
 
 | 格式 | 外部工具 | 默认调用参数 | 独立模块 |
 | --- | --- | --- | --- |
-| PNG | `png/pngquant.exe` | `-f --ext .png --speed 3 --quality 50-80 --skip-if-larger <临时输入.png>` | `compressors/png/index.js` |
-| JPG / JPEG | `jpg/JPG-C_v4.0.21.902.exe` | `-m 1 -q 5 -di <临时输入目录>` | `compressors/jpg/index.js` |
-| MP3 | `mp3/lame.exe`（LAME 3.100.1） | `-h --abr 24 --mp3input <临时输入.mp3> <临时输出.mp3>` | `compressors/mp3/index.js` |
+| PNG | `png/pngquant.exe` | `-f --ext .png --speed 3 --quality 50-80 --skip-if-larger <临时输入.png>` | `processors/png/index.js` |
+| JPG / JPEG | `jpg/JPG-C_v4.0.21.902.exe` | `-m 1 -q 5 -di <临时输入目录>` | `processors/jpg/index.js` |
+| MP3 | `mp3/lame.exe`（LAME 3.100.1） | `-h --abr 24 --mp3input <临时输入.mp3> <临时输出.mp3>` | `processors/mp3/index.js` |
 
 自定义设置替换对应的速度、质量或码率值。禁用的格式不调用压缩器，也不要求相应 EXE 存在。每个文件先在独立运行的临时目录中处理，只有输出格式检查通过且体积减小时，才进入另存或覆盖流程。JPG-C 的可执行文件也复制到临时目录，以隔离其日志；除退出码外还检查错误日志。不同子目录的同名文件不会相互覆盖。
 
 ### 模块与扩展
 
-新增压缩器无需修改主程序、注册表或界面：复制 `compressors/_template`，将目录改为小写模块名，填写 `config.js` 和 `index.js`，放入所需 EXE 后重新打开工具即可。
+新增压缩器无需修改主程序、注册表或界面：复制 `processors/_template`，将目录改为小写模块名，填写 `config.js` 和 `index.js`，放入所需 EXE 后重新打开工具即可。
 
-自动生成整数、小数、复选框、下拉选择和文本输入控件，并统一完成参数校验、默认值恢复、命令行传参和历史配置保存。模板、完整字段说明和接口约定见 [压缩器模块开发说明](resCompress/compressors/README.md)。
+自动生成整数、小数、复选框、下拉选择和文本输入控件，并统一完成参数校验、默认值恢复、命令行传参和历史配置保存。模板、完整字段说明和接口约定见 [压缩器模块开发说明](resource-core/processors/README.md)。
 
 只有同时包含 `config.js` 和 `index.js` 的直接子目录才是完整模块；以 `_` 或 `.` 开头的目录、普通资料目录和链接目录不会加载。`order` 控制显示顺序。模块定义错误、重复扩展名或重复参数名会明确报错并停止启动，避免使用错误的压缩器。
 
-移走模块或给目录名加 `_` 可暂时停用，配置文件保持原样；恢复目录名后会恢复其参数。若新压缩器的参数不兼容，可移走该模块的 `user-settings.json`，其他工具的设置保持不变。`settings.js` 的 JavaScript API 接受 `resCompress` 根目录作为可选参数：`loadConfiguration(root)`、`saveConfiguration(config, root)`。
+移走模块或给目录名加 `_` 可暂时停用，配置文件保持原样；恢复目录名后会恢复其参数。若新压缩器的参数不兼容，可移走该模块的 `user-settings.json`，其他工具的设置保持不变。`settings.js` 的 JavaScript API 接受 `resource-core` 根目录作为可选参数：`loadConfiguration(root)`、`saveConfiguration(config, root)`。
 
-桌面入口为 `ResourceCompressor.exe` → `desktop-bridge.js` → `batch.js` → `compress.js` / `restore.js`；命令行直接进入 `compress.js`。PNG、JPG 和 MP3 共用递归处理、保存、备份和任务流程。开始新任务会重新尝试压缩当前文件；继续或重试已有任务会跳过成功项。
+桌面入口为 `AssetToolbox.exe` → `desktop-bridge.js` → `batch.js` → `compress.js` / `restore.js`；命令行直接进入 `compress.js`。PNG、JPG 和 MP3 共用递归处理、保存、备份和任务流程。开始新任务会重新尝试压缩当前文件；继续或重试已有任务会跳过成功项。
 
 旧 `start.bat`、`start.ps1`、Cocos 构建/缓存/ZIP 脚本、旧临时目录、依赖及日志归档已删除。日常使用只需启动 EXE，或为它创建快捷方式。当前配置、模块设置、任务断点、报告和原始备份继续保留；清理不改变它们的格式。
 
@@ -254,10 +257,10 @@ Tauri 原生宿主和 Vue + TypeScript 负责窗口，Node.js 负责递归扫描
 - **Tauri 2 / Rust**：使用系统 WebView2；启动内置 Node.js，通过标准输入输出的 JSON Lines 调用受限操作。应用不监听本地网络端口，也不向前端开放通用命令执行。
 - **Vue 3 + TypeScript / Vite**：压缩、任务历史、备份恢复三个工作区；模块卡片和五类参数控件由原模块 schema 自动生成。恢复列表支持搜索、状态筛选、批量勾选、分页与隐藏选中项提示。
 - **Node.js 核心**：原压缩、断点、备份、恢复、校验和报告代码继续使用；同步编码器运行在独立工作进程中。取消以文件为边界，退出应用时也等待安全停止。
-- **便携目录**：移动时一并保留 EXE、`runtime`、`resCompress`。不把设置移到系统用户目录，模块配置仍跟随模块；任务记录中的素材路径仍为原绝对路径。
+- **便携目录**：移动时一并保留 EXE、`runtime`、`resource-core`。不把设置移到系统用户目录，模块配置仍跟随模块；任务记录中的素材路径仍为原绝对路径。
 - **兼容格式**：旧单文件 v1 配置、公共 v2 / 模块 v1 配置、v1 任务头与原事件日志、恢复勾选记录和旧备份均继续读取。只读浏览不会触发迁移；保存配置沿用已有拆分写入逻辑。现有编码器为 Windows EXE，本版仍面向 Windows。
 
-新增压缩器仍只需在 `resCompress/compressors/<id>` 添加 `config.js`、`index.js` 和工具文件，重启应用即可发现；无需修改 Rust、TypeScript 或页面代码。模块加载错误时会显示原因，任务历史和备份恢复仍可使用。
+新增压缩器仍只需在 `resource-core/processors/<id>` 添加 `config.js`、`index.js` 和工具文件，重启应用即可发现；无需修改 Rust、TypeScript 或页面代码。模块加载错误时会显示原因，任务历史和备份恢复仍可使用。
 
 开发、构建和原生窗口测试详见 [desktop/README.md](desktop/README.md)。旧 WinForms 主界面、进度窗口、恢复窗口及相应控件注入测试已经移除。旧 PowerShell 启动入口及其参数注入通道、对应测试也已移除；命令行仍可使用 Node CLI。
 
@@ -266,8 +269,8 @@ Tauri 原生宿主和 Vue + TypeScript 负责窗口，Node.js 负责递归扫描
 ## 验证
 
 ```powershell
-node --test resCompress/tests/*.test.js
-# 或进入 resCompress 后运行 npm test
+node --test resource-core/tests/*.test.js
+# 或进入 resource-core 后运行 npm test
 ```
 
 测试在系统临时目录生成图片和音频，调用真实压缩器，验证输出解码、目录结构、另存、备份、原文件保护、格式开关与配置恢复。还会临时添加新模块，验证自动发现、所有控件类型、动态命令行参数、冲突检查与停用恢复，以及只读预览、安全取消、进度事件、JSON/CSV 报告、重开续压、失败重试、断点故障和并发恢复。备份恢复测试覆盖逐字节还原、旧任务日志兼容、取消续恢复、仅重试失败、损坏备份、修改冲突、缺失文件、链接保护、恢复期间修改、进程中断及旧备份导出。桌面桥接测试、Vue 组件测试和原生 Tauri/WebView2 流程测试覆盖预览完成后的页面隔离、运行中跨页取消、结果关闭及预览计数；全部使用隔离副本和生成样本，不修改真实工具的历史配置或用户素材。删除依赖已移除 WinForms 控件和源代码字符串替换的测试，保留配置兼容、真实编码器、文件安全、断点和恢复的有效回归。

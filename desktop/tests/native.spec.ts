@@ -8,28 +8,28 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 const require = createRequire(import.meta.url);
 const project = fileURLToPath(new URL('../../', import.meta.url));
-const { copyTool } = require(path.join(project, 'resCompress/tests/portable.js'));
+const { copyTool } = require(path.join(project, 'resource-core/tests/portable.js'));
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function freePort(): Promise<number> { const server = createServer(); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const port = (server.address() as { port: number }).port; await new Promise<void>(resolve => server.close(() => resolve())); return port; }
 test('native portable app: config + dynamic modules + save-as + cancel/resume/retry + selective restore + relaunch', async ({}, info) => {
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'compress-native-test-'));
     const tool = copyTool(root), source = path.join(root, '中文 素材'), backup = path.join(root, '原图备份'), output = path.join(root, '另存 结果');
     fs.mkdirSync(path.join(tool, 'runtime')); fs.copyFileSync(path.join(project, 'runtime/node.exe'), path.join(tool, 'runtime/node.exe'));
-    fs.copyFileSync(path.join(project, 'ResourceCompressor.exe'), path.join(tool, 'ResourceCompressor.exe'));
-    fs.copyFileSync(path.join(project, 'resCompress/desktop-bridge.js'), path.join(tool, 'resCompress/desktop-bridge.js'));
-    const module = path.join(tool, 'resCompress/compressors/extra'); fs.mkdirSync(module);
+    fs.copyFileSync(path.join(project, 'AssetToolbox.exe'), path.join(tool, 'AssetToolbox.exe'));
+    fs.copyFileSync(path.join(project, 'resource-core/desktop-bridge.js'), path.join(tool, 'resource-core/desktop-bridge.js'));
+    const module = path.join(tool, 'resource-core/processors/extra'); fs.mkdirSync(module);
     fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '扩展测试模块', order: 5, extensions: ['.pack'], enabledKey: 'extraEnabled', defaults: { extraEnabled: true, extraLevel: 3, extraMode: 'fast', extraText: '原参数' }, limits: { extraLevel: { label: '测试级别', min: 1, max: 9 } }, parameters: { extraMode: { label: '测试模式', type: 'enum', choices: ['fast', 'best'] }, extraText: { label: '测试文字', type: 'text', maxLength: 32767 } } }));
     fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs'),path=require('node:path');module.exports={validate:b=>b.toString().startsWith('PACK:'),compress({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,500);const bytes=fs.readFileSync(input);fs.appendFileSync(path.join(__dirname,'calls.txt'),bytes.subarray(0,6)+'\\n');if(bytes.toString().startsWith('PACK:b')&&!fs.existsSync(path.join(__dirname,'repaired')))throw Error('模拟编码失败');fs.writeFileSync(output,bytes.subarray(0,10));return{output};}}`);
     fs.mkdirSync(path.join(source, '二级'), { recursive: true });
     const originals = new Map<string, Buffer>();
     for (const name of ['a', 'b', 'c', 'd', 'e', 'f']) { const data = Buffer.from('PACK:' + name + 'x'.repeat(4000)); const relative = path.join('二级', name + '.pack'); originals.set(relative, data); fs.writeFileSync(path.join(source, relative), data); }
     const legacy = { version: 1, sourceDir: source, outputDir: output, backupDir: backup, saveMode: 'saveAs', backupEnabled: true, extraEnabled: true, extraLevel: 6, extraMode: 'best', extraText: '中文 历史配置', pngEnabled: false, jpgEnabled: false, mp3Enabled: false };
-    fs.writeFileSync(path.join(tool, 'resCompress/user-settings.json'), '\uFEFF' + JSON.stringify(legacy));
+    fs.writeFileSync(path.join(tool, 'resource-core/user-settings.json'), '\uFEFF' + JSON.stringify(legacy));
     let child: ChildProcess | undefined, browser: Browser | undefined, page!: Page;
     const errors: string[] = [];
     async function launch() {
         const port = await freePort();
-        child = spawn(path.join(tool, 'ResourceCompressor.exe'), [], { cwd: root, windowsHide: true, stdio: 'ignore', env: { ...process.env, RESOURCE_COMPRESSOR_TEST_PORT: String(port), WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview') } });
+        child = spawn(path.join(tool, 'AssetToolbox.exe'), [], { cwd: root, windowsHide: true, stdio: 'ignore', env: { ...process.env, ASSET_TOOLBOX_TEST_PORT: String(port), WEBVIEW2_USER_DATA_FOLDER: path.join(root, 'webview') } });
         await expect.poll(async () => { try { const response = await fetch(`http://127.0.0.1:${port}/json/version`); return response.ok; } catch { return false; } }, { timeout: 30000 }).toBe(true);
         browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
         await expect.poll(() => browser!.contexts()[0]?.pages().length || 0).toBeGreaterThan(0);
@@ -52,7 +52,7 @@ test('native portable app: config + dynamic modules + save-as + cancel/resume/re
         await launch();
         await expect(page.getByLabel('测试级别', { exact: false })).toHaveValue('6');
         await expect(page.getByLabel('测试文字', { exact: true })).toHaveValue('中文 历史配置');
-        expect(fs.existsSync(path.join(tool, 'resCompress/config'))).toBe(false);
+        expect(fs.existsSync(path.join(tool, 'resource-core/config'))).toBe(false);
         await page.screenshot({ path: info.outputPath('workspace.png'), fullPage: true });
         await page.setViewportSize({ width: 840, height: 620 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -69,8 +69,8 @@ test('native portable app: config + dynamic modules + save-as + cancel/resume/re
             await page.screenshot({ path: info.outputPath(name === '任务历史' ? 'preview-history.png' : 'preview-restore.png'), fullPage: true });
         }
         await page.getByRole('navigation').getByRole('button', { name: '压缩资源', exact: false }).click();
-        expect(fs.existsSync(path.join(tool, 'resCompress/config'))).toBe(false);
-        expect(fs.existsSync(path.join(tool, 'resCompress/tasks'))).toBe(false);
+        expect(fs.existsSync(path.join(tool, 'resource-core/config'))).toBe(false);
+        expect(fs.existsSync(path.join(tool, 'resource-core/tasks'))).toBe(false);
         await page.getByRole('button', { name: '开始压缩', exact: false }).click(); await done();
         for (const [relative, original] of originals) expect(fs.readFileSync(path.join(source, relative))).toEqual(original);
         expect(fs.readFileSync(path.join(output, '二级/a.pack')).length).toBe(10);
@@ -110,13 +110,13 @@ test('native portable app: config + dynamic modules + save-as + cancel/resume/re
         await close(); await launch();
         await expect(page.getByLabel('覆盖原文件', { exact: false })).toBeChecked();
         await expect(page.getByLabel('启用备份', { exact: false })).toBeChecked();
-        expect(fs.readFileSync(path.join(tool, 'resCompress/user-settings.json'), 'utf8')).toContain('中文 历史配置');
+        expect(fs.readFileSync(path.join(tool, 'resource-core/user-settings.json'), 'utf8')).toContain('中文 历史配置');
         expect(errors).toEqual([]);
         await page.getByRole('button', { name: '开始压缩', exact: false }).click();
         await started();
         await expect.poll(async () => Number((await page.locator('.progress-caption').innerText()).split('/')[0].trim())).toBeGreaterThan(0);
         await close();
-        const [lastTask] = require(path.join(tool, 'resCompress/tasks.js')).listTasks();
+        const [lastTask] = require(path.join(tool, 'resource-core/tasks.js')).listTasks();
         expect(lastTask.canResume).toBe(true); expect(lastTask.pending).toBeGreaterThan(0);
     } catch (cause) {
         console.error('Native flow failed:', cause);

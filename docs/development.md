@@ -32,9 +32,9 @@ npm run dev
 | `desktop/` | `npm run build` | Tauri release 构建，不生成安装包；前置执行 build:web，随后复制根目录 EXE |
 | `desktop/` | `npm test` | Vitest + Vue Test Utils + jsdom |
 | `desktop/` | `npm run test:e2e` | Playwright 连接真实 WebView2；先构建当前源码 |
-| `resCompress/` | `npm test` | Node 内置测试框架，不需安装核心 npm 依赖 |
-| 仓库根目录 | `.\runtime\node.exe --test resCompress/tests/*.test.js` | 使用便携 Node 运行同一核心套件 |
-| 仓库根目录 | `.\runtime\node.exe resCompress/compress.js --help` | 查看自动生成的 CLI 参数 |
+| `resource-core/` | `npm test` | Node 内置测试框架，不需安装核心 npm 依赖 |
+| 仓库根目录 | `.\runtime\node.exe --test resource-core/tests/*.test.js` | 使用便携 Node 运行同一核心套件 |
+| 仓库根目录 | `.\runtime\node.exe resource-core/compress.js --help` | 查看自动生成的 CLI 参数 |
 
 原生测试复制工具、生成样本、使用独立 WebView 用户目录和本机随机 CDP 端口；截图位于 `desktop/test-results/`。它使用系统 WebView2，无需另装 Playwright Chromium 浏览器。只对旧 EXE 跑 E2E 不能证明新源码构建正确。
 
@@ -65,7 +65,7 @@ npm run dev
 
 ## 核心测试地图
 
-| 文件名（`resCompress/tests/`） | 重点 |
+| 文件名（`resource-core/tests/`） | 重点 |
 | --- | --- |
 | `compress.test.js` | 图片编码、中文/空格路径、链接、另存、备份、CLI 校验 |
 | `resources.test.js` | MP3 真实编码/解码、格式开关、配置基础行为 |
@@ -97,7 +97,7 @@ npm run dev
 可选正文：原因、行为变化、兼容性与验证。
 ```
 
-scope 可省略。常用类型为 `feat`、`fix`、`docs`、`refactor`、`test`、`build`、`ci`、`perf`、`style`、`chore`、`revert`；范围建议 `ui`、`bridge`、`core`、`tasks`、`restore`、`config`、`compressors`、`docs`、`repo`。新增功能用 feat，缺陷修复用 fix；界面功能变化不属于仅格式调整的 style。
+scope 可省略。常用类型为 `feat`、`fix`、`docs`、`refactor`、`test`、`build`、`ci`、`perf`、`style`、`chore`、`revert`；范围建议 `ui`、`bridge`、`core`、`tasks`、`restore`、`config`、`processors`、`docs`、`repo`。新增功能用 feat，缺陷修复用 fix；界面功能变化不属于仅格式调整的 style。
 
 示例：`fix(restore): 保留预览后被修改的目标文件`、`docs(architecture): 补充任务日志恢复流程`。破坏性变更使用 `!` 或 `BREAKING CHANGE:` 脚注，本项目要求同时写清迁移方式和受影响数据。规范由贡献流程遵守，当前未安装自动提交钩子。
 

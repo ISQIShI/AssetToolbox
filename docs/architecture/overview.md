@@ -1,6 +1,6 @@
 # 总体架构
 
-本项目是面向 Windows 的便携资源压缩工具，支持递归扫描、PNG/JPG/MP3 压缩、另存、覆盖备份、任务续压与选择性恢复。桌面包版本为 `2.0.0`。它使用本机进程和文件通信，没有应用 HTTP 后端、数据库、账户服务或云端处理。
+本项目是面向 Windows 的便携资源处理工具 **AssetToolbox**，主要面向游戏资源，并逐步扩展图片、音频等处理能力。当前支持递归扫描、PNG/JPG/MP3 压缩、另存、覆盖备份、任务续压与选择性恢复；图片调整、音频编辑和多步骤流水线尚未实现。桌面包版本为 `2.0.0`。它使用本机进程和文件通信，没有应用 HTTP 后端、数据库、账户服务或云端处理。
 
 ## 技术层次与源码入口
 
@@ -8,12 +8,13 @@
 | --- | --- | --- |
 | 界面 | `desktop/src/main.ts`、`App.vue` | Vue 3 Composition API、TypeScript、三个工作区与异步作业展示 |
 | 原生宿主 | `desktop/src-tauri/src/main.rs` | Tauri 2、WebView2、目录选择、JSON Lines 桥接、打开报告 |
-| 桌面会话 | `resCompress/desktop-bridge.js` | action 白名单、单作业调度、工作进程与临时文件生命周期 |
-| 批处理编排 | `resCompress/batch.js` | 请求分流、进度、取消、持久任务锁、报告 |
+| 桌面会话 | `resource-core/desktop-bridge.js` | action 白名单、单作业调度、工作进程与临时文件生命周期 |
+| 批处理编排 | `resource-core/batch.js` | 请求分流、进度、取消、持久任务锁、报告 |
 | 业务核心 | `compress.js`、`restore.js`、`tasks.js`、`settings.js` | 编码、文件安全、恢复、事件日志及配置兼容 |
-| 扩展模块 | `resCompress/compressors/` | schema、格式识别、工具参数与编码器适配 |
+| 扩展模块 | `resource-core/processors/` | schema、格式识别、工具参数与编码器适配 |
+| 公共机制 | `resource-core/framework/` | `registry.js` 发现模块，`schema.js`/`options.js` 编译与聚合参数，`process.js` 调用工具 |
 
-以上 Node 文件均位于 `resCompress/`。核心只依赖 Node 标准库；前端 npm 依赖和 Rust crate 分别由 `package-lock.json`、`Cargo.lock` 锁定。Vite 负责前端构建，`vue-tsc` 负责严格类型检查。
+以上 Node 文件均位于 `resource-core/`。核心只依赖 Node 标准库；前端 npm 依赖和 Rust crate 分别由 `package-lock.json`、`Cargo.lock` 锁定。Vite 负责前端构建，`vue-tsc` 负责严格类型检查。
 
 ## 进程关系
 
@@ -35,7 +36,7 @@ flowchart TD
 
 ## 从启动到完成
 
-1. EXE 定位相邻 `resCompress/` 与 `runtime/node.exe`。调试模式还可回退到源码根目录。
+1. EXE 定位相邻 `resource-core/` 与 `runtime/node.exe`。调试模式还可回退到源码根目录。
 2. 前端 `bootstrap` 加载公共/模块配置与动态字段，再通过 `tasks` 获取历史。模块错误不会阻止加载任务及恢复入口。
 3. 新压缩先执行 `normalize`，再尝试 `save`，随后 `start`；预览仅规范化参数，不保存配置。
 4. 桥接进程创建临时请求目录并启动工作进程。工作进程分派预览、压缩、续压、重试或恢复。
@@ -47,7 +48,7 @@ flowchart TD
 
 **作业会话**由桥接层生成 UUID，最多保留当前一个，关联临时 `request.json`、`status.json` 和 `cancel`。开始下一作业或退出桥接进程时清理已结束会话。
 
-**持久任务**由 `tasks.js` 生成“时间戳 + UUID”，保存在 `resCompress/tasks/`。一次压缩任务可对应多次续压、重试和恢复作业；跨启动继续依赖 `taskFile`，不能复用旧会话 ID。扫描预览与旧备份导出不建立持久任务。
+**持久任务**由 `tasks.js` 生成“时间戳 + UUID”，保存在 `resource-core/tasks/`。一次压缩任务可对应多次续压、重试和恢复作业；跨启动继续依赖 `taskFile`，不能复用旧会话 ID。扫描预览与旧备份导出不建立持久任务。
 
 ## 核心边界与设计取舍
 
@@ -60,6 +61,8 @@ flowchart TD
 
 ## 便携发布边界
 
-`npm run build` 将前端嵌入 Rust release EXE，并由 `portable.mjs` 放到项目根目录。移动应用需同时携带 EXE、`runtime/` 和 `resCompress/`，不需要 `node_modules`、`target` 或 `dist`。任务记录中的素材路径仍是绝对路径，移动工具不会自动重定位素材。
+`npm run build` 将前端嵌入 Rust release EXE，并由 `portable.mjs` 放到项目根目录。移动应用需同时携带 EXE、`runtime/` 和 `resource-core/`，不需要 `node_modules`、`target` 或 `dist`。任务记录中的素材路径仍是绝对路径，移动工具不会自动重定位素材。
 
 代码导航：[前端](frontend.md)、[后端](backend.md)、[协议](protocol.md)、[持久化](persistence.md)。设计取舍补录见 [ADR 0001](../decisions/0001-local-process-architecture.md)。
+
+本次职责与目录调整见 [ADR 0002](../decisions/0002-resource-toolbox-layout.md)。未来的多操作模型及 Cordis 选型见[专项评估](../plans/resource-processing-and-cordis.md)，当前仍使用本地目录发现机制。

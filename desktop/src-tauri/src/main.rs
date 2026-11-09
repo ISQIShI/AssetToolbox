@@ -11,18 +11,18 @@ fn hidden(command: &mut Command) -> &mut Command {
 fn tool_root() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let installed = exe.parent().ok_or("无法定位程序目录")?;
-    if installed.join("resCompress/desktop-bridge.js").is_file() { return Ok(installed.to_path_buf()); }
+    if installed.join("resource-core/desktop-bridge.js").is_file() { return Ok(installed.to_path_buf()); }
     #[cfg(debug_assertions)] {
         let development = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        if development.join("resCompress/desktop-bridge.js").is_file() { return development.canonicalize().map_err(|e| e.to_string()); }
+        if development.join("resource-core/desktop-bridge.js").is_file() { return development.canonicalize().map_err(|e| e.to_string()); }
     }
-    Err("请把程序放在包含 resCompress 和 runtime 的工具目录中。".into())
+    Err("请把程序放在包含 resource-core 和 runtime 的工具目录中。".into())
 }
 impl Bridge {
     fn start() -> Result<Self, String> {
         let root = tool_root()?;
         let mut command = Command::new(root.join("runtime/node.exe"));
-        let mut child = hidden(&mut command).arg(root.join("resCompress/desktop-bridge.js")).current_dir(&root)
+        let mut child = hidden(&mut command).arg(root.join("resource-core/desktop-bridge.js")).current_dir(&root)
             .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null())
             .spawn().map_err(|e| format!("无法启动内置 Node.js：{e}"))?;
         let input = child.stdin.take().ok_or("无法建立输入通道")?;
@@ -64,7 +64,7 @@ fn main() {
     let mut context = tauri::generate_context!();
     // WebView2 150+ 的提升权限进程忽略环境中的 Chromium 参数；测试端口须通过原生 API 设置。
     // 仅显式提供本地测试端口时启用，普通启动不监听任何端口。
-    if let Some(port) = std::env::var("RESOURCE_COMPRESSOR_TEST_PORT").ok().and_then(|value| value.parse::<u16>().ok()).filter(|port| *port > 0) {
+    if let Some(port) = std::env::var("ASSET_TOOLBOX_TEST_PORT").or_else(|_| std::env::var("RESOURCE_COMPRESSOR_TEST_PORT")).ok().and_then(|value| value.parse::<u16>().ok()).filter(|port| *port > 0) {
         if let Some(window) = context.config_mut().app.windows.first_mut() {
             window.additional_browser_args = Some(format!("--remote-debugging-port={port} --remote-debugging-address=127.0.0.1"));
             window.visible = false;
@@ -73,5 +73,5 @@ fn main() {
     tauri::Builder::default().plugin(tauri_plugin_dialog::init())
         .manage(Host(Arc::new(Mutex::new(None))))
         .invoke_handler(tauri::generate_handler![core_call, open_report])
-        .run(context).expect("无法启动资源压缩窗口");
+        .run(context).expect("无法启动资源工具箱窗口");
 }

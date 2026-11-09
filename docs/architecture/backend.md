@@ -1,6 +1,6 @@
 # 后端与框架设计
 
-后端由 Rust 原生宿主和多个本地 Node 进程组成。Rust 不执行压缩算法；文件扫描、配置、任务日志、压缩与恢复全部位于 `resCompress/`。流程的主要目标是隔离阻塞编码器、保留原文件并支持中断后的安全继续。
+后端由 Rust 原生宿主和多个本地 Node 进程组成。Rust 不执行压缩算法；文件扫描、配置、任务日志、压缩与恢复全部位于 `resource-core/`。流程的主要目标是隔离阻塞编码器、保留原文件并支持中断后的安全继续。
 
 ## 原生宿主
 
@@ -8,7 +8,7 @@
 
 `core_call` 在 `spawn_blocking` 中持有会话互斥锁，按序发送带递增 ID 的 JSON 并读取对应响应；ID 不匹配、EOF 或错误字段均返回前端错误。桥接进程按需启动，已退出的实例会报错，当前没有自动重连/自动重放请求。
 
-`open_report` 先向桥接层索取当前作业已完成的报告目录，再调用 Explorer。Tauri capability 只配置必要窗口操作与目录选择，CSP 约束页面资源；没有通用 shell API。测试端口必须由 `RESOURCE_COMPRESSOR_TEST_PORT` 显式启用。
+`open_report` 先向桥接层索取当前作业已完成的报告目录，再调用 Explorer。Tauri capability 只配置必要窗口操作与目录选择，CSP 约束页面资源；没有通用 shell API。测试端口必须由 `ASSET_TOOLBOX_TEST_PORT` 显式启用。
 
 ## 桌面桥接与作业编排
 
@@ -36,11 +36,11 @@
 
 ## 模块框架
 
-`compressors/index.js` 扫描直接子目录，忽略 `_`、`.` 开头目录和链接目录；无入口文件的普通目录忽略，只有一个入口文件的不完整模块报错。排序按 `order` 再按 ID；扩展名和参数名冲突会停止加载。
+`framework/registry.js` 扫描直接子目录，忽略 `_`、`.` 开头目录和链接目录；无入口文件的普通目录忽略，只有一个入口文件的不完整模块报错。排序按 `order` 再按 ID；扩展名和参数名冲突会停止加载。
 
-`schema.js` 编译 `config.js`，统一默认值、字段类型、范围、精度、保留名称和自定义校验。`options.js` 聚合 `FIELDS/DEFAULTS/LIMITS`，将 camelCase 转为 CLI 参数，并严格解析模块参数对象。
+`framework/schema.js` 编译 `config.js`，统一默认值、字段类型、范围、精度、保留名称和自定义校验。`framework/options.js` 聚合 `FIELDS/DEFAULTS/LIMITS`，将 camelCase 转为 CLI 参数，并严格解析模块参数对象。注册表导出 `discoverProcessors()`、`processors` 与 `byExtension`，实现目录只存模块自身代码、编码器和配置。
 
-适配器必须提供 `validate(data)`、`compress(context)`，可选 `prepare`、`shouldCompress`、`executableName`。只操作上下文提供的临时文件，不自行写用户目录或启动脱离任务的后台进程。接口与字段详见[模块开发说明](../../resCompress/compressors/README.md)。
+适配器必须提供 `validate(data)`、`compress(context)`，可选 `prepare`、`shouldCompress`、`executableName`。只操作上下文提供的临时文件，不自行写用户目录或启动脱离任务的后台进程。接口与字段详见[模块开发说明](../../resource-core/processors/README.md)。
 
 | 模块 | 编码器与默认行为 |
 | --- | --- |
@@ -49,6 +49,8 @@
 | MP3 | LAME，默认关闭，启用后 ABR 24 kbps；编码结果仍需比原文件小 |
 
 模块自动发现只在进程加载时发生，无热更新；变更模块后需重启应用。恢复代码不依赖模块加载，因此移除编码器后仍可恢复已有备份。
+
+`processors` 是通用组织名称，目前加载器仍限定压缩接口：同扩展名互斥、全局参数命名、结果必须变小。新操作不能直接复用这些限制；操作与格式分离的建议及 Cordis 接入边界见[专项评估](../plans/resource-processing-and-cordis.md)。
 
 ## 续压与重试
 
@@ -68,4 +70,4 @@
 
 文件系统校验和哈希可防常见冲突，但检查与提交之间并非跨进程事务锁；不同任务不应同时操作同一批素材。多文件配置保存有出错回滚，不等于断电原子事务。外部编码器无超时，卡住时安全取消仍需等待当前工具返回。
 
-对应测试位于 `resCompress/tests/`：`compress`/`resources` 覆盖真实编码器，`discovery`/`layout` 覆盖模块与配置，`batch`/`desktop` 覆盖进程协议与取消，`resume`/`restore`/`restore-preview` 覆盖日志、锁、崩溃窗口和文件保护。
+对应测试位于 `resource-core/tests/`：`compress`/`resources` 覆盖真实编码器，`discovery`/`layout` 覆盖模块与配置，`batch`/`desktop` 覆盖进程协议与取消，`resume`/`restore`/`restore-preview` 覆盖日志、锁、崩溃窗口和文件保护。

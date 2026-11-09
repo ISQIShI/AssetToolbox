@@ -4,6 +4,8 @@
 
 本项目以简体中文为主要语言。后续沟通、贡献文档、代码注释、界面文案及提交与 PR 说明默认使用中文。代码标识符、命令、路径和协议字段沿用既有命名，必要时保留英文技术术语。
 
+产品为 **AssetToolbox 资源工具箱**，面向各类资源（重点为游戏资源）的压缩、图片/音频调整等处理需求。当前实现仍以压缩与恢复为主；不得将规划功能描述为已实现。扩展前阅读[职责与插件框架评估](docs/plans/resource-processing-and-cordis.md)，区分资源类型、处理操作和实现提供方。
+
 ## AI 阅读与开发顺序
 
 开始任务前依次阅读本文件、[文档索引](docs/README.md)、[项目状态](docs/project-status.md)和[总体架构](docs/architecture/overview.md)，再按改动范围阅读[前端](docs/architecture/frontend.md)、[后端](docs/architecture/backend.md)、[通信协议](docs/architecture/protocol.md)及[持久化](docs/architecture/persistence.md)。检查 `git status` 和最近提交，再追踪入口、调用方、实现与测试，不凭文档推断代码已具备某功能。
@@ -14,11 +16,12 @@
 
 - `desktop/src/`：Vue 3 组件、TypeScript 模型与 API、CSS。
 - `desktop/src-tauri/`：Rust/Tauri 2 宿主及原生权限，通过 JSON Lines 与 Node 通信。
-- `resCompress/`：CommonJS 压缩、恢复、配置、任务持久化及桌面桥接代码。
-- `resCompress/compressors/`：自动发现的压缩模块，包含 `config.js`、`index.js` 和编码器。新增模块时复制 `_template/`，遵循同级 `README.md`。
-- `resCompress/tests/`、`desktop/tests/`：核心及界面测试。
+- `resource-core/`：CommonJS 压缩、恢复、配置、任务持久化及桌面桥接代码。
+- `resource-core/framework/`：处理器注册、schema、参数聚合及工具进程公共机制。
+- `resource-core/processors/`：自动发现的压缩模块，包含 `config.js`、`index.js` 和编码器。新增模块时复制 `_template/`，遵循同级 `README.md`。
+- `resource-core/tests/`、`desktop/tests/`：核心及界面测试。
 - `docs/`：架构、协议、文档管理、开发流程与接手记录；`docs/decisions/` 保存重要决策。
-- `ResourceCompressor.exe`、`runtime/node.exe`、`resCompress/` 共同组成便携应用；配置、任务和报告随工具保存。
+- `AssetToolbox.exe`、`runtime/node.exe`、`resource-core/` 共同组成便携应用；配置、任务和报告随工具保存。
 
 ## 构建、测试与开发命令
 
@@ -37,9 +40,9 @@
 - `npm test`：运行 Vitest 组件测试。
 - `npm run test:e2e`：通过 Playwright 测试原生 WebView2，须先构建。
 
-在 `resCompress/` 下执行 `npm test`，运行 Node 内置测试框架的核心测试。
+在 `resource-core/` 下执行 `npm test`，运行 Node 内置测试框架的核心测试。
 
-若系统 Node/npm 尚未激活，可在仓库根目录用 `.\runtime\node.exe --test resCompress/tests/*.test.js` 验证核心。完整命令前提与验证矩阵见[开发与验证](docs/development.md)。
+若系统 Node/npm 尚未激活，可在仓库根目录用 `.\runtime\node.exe --test resource-core/tests/*.test.js` 验证核心。完整命令前提与验证矩阵见[开发与验证](docs/development.md)。
 
 ## 代码风格与命名
 
@@ -62,3 +65,5 @@
 ## 文件安全与兼容性
 
 保留既有配置和任务格式、哈希校验、原子写入及按文件边界取消的机制。编码器仅处理临时输入与输出；模块 schema 统一驱动界面与 CLI。预览不保存配置或改写用户素材；恢复空选择不能转换为省略选择。区分临时作业 ID 与持久任务，不绕过任务锁。不要将个人配置、报告、任务日志或测试产物纳入提交。
+
+通用设施使用 resource/processor 命名，压缩专用的 `compress.js`、`compressFolder`、`compress` mode/方法和 `compressed` 日志状态保留准确语义。目录迁移遵循 [ADR 0002](docs/decisions/0002-resource-toolbox-layout.md)，不重命名已持久化的模块 ID 或批量改写历史 JSON。Cordis 尚未接入，后续采用需先完成隔离验证与契约设计。
