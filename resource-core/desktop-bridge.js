@@ -5,7 +5,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 
-const MODES = new Set(['preview', 'process', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export', 'restore-preview', 'restore-export-preview']);
+const MODES = new Set(['preview', 'process', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export', 'restore-preview', 'restore-export-preview', 'dependency-install']);
 function normalizeConfiguration(payload) {
     const config = require('./settings').validateConfiguration(payload);
     for (const key of ['sourceDir', 'outputDir', 'backupDir']) {
@@ -53,6 +53,12 @@ class DesktopBridge {
         if (this.closing) throw new Error('应用正在退出');
         if (this.job && !this.job.exited) throw new Error('请等待当前任务结束');
         if (!request || !MODES.has(request.mode)) throw new Error('无效任务模式');
+        if (request.mode === 'dependency-install') {
+            const catalog = require('./framework/dependencies/catalog.json');
+            if (Object.keys(request).some(key => !['mode', 'providerId'].includes(key)) || typeof request.providerId !== 'string' || !Object.hasOwn(catalog.providers, request.providerId)) throw new Error('依赖安装请求无效，只能指定提供方 ID');
+            const info = require('./framework/dependencies/runtime').management(request.providerId);
+            if (!info.automatic) throw new Error(info.reason);
+        }
         if (['preview', 'process'].includes(request.mode)) {
             if (typeof request.folder !== 'string' || !request.folder.trim()) throw new Error('请选择源文件夹');
             request = { ...request, pipeline: require('./framework/registry').normalizePipeline(request.pipeline) };
@@ -63,7 +69,7 @@ class DesktopBridge {
         try {
             const filename = path.join(directory, 'request.json');
             fs.writeFileSync(filename, JSON.stringify(request), { flag: 'wx' });
-            job.child = spawn(process.execPath, [path.join(__dirname, 'batch.js'), filename], {
+            job.child = spawn(process.execPath, [path.join(__dirname, request.mode === 'dependency-install' ? 'framework/dependencies/worker.js' : 'batch.js'), filename], {
                 cwd: __dirname, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'],
             });
             this.job = job;

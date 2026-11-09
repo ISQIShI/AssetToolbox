@@ -1,4 +1,6 @@
-const sharp = require('sharp');
+const moduleArgument = process.argv.findIndex((value, index) => index >= 2 && value.startsWith('--module='));
+const moduleName = moduleArgument >= 0 ? process.argv.splice(moduleArgument, 1)[0].slice(9) : require('../../framework/dependencies/runtime').sharpModule();
+const sharp = require(moduleName);
 const fs = require('node:fs');
 async function main() {
     if (process.argv[2] === '--check') return;

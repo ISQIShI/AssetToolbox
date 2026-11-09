@@ -10,6 +10,8 @@ const { definition, boot, busy } = bench;
 const list = computed(() => definition.value?.providers || []);
 const ordered = computed(() => [...list.value].sort((a, b) => Number(isMissing(b)) - Number(isMissing(a))));
 const missingCount = computed(() => list.value.filter(isMissing).length);
+const installLabel = (provider: Provider) => ({ install: '获取并安装', update: '更新到核验版本', repair: '修复安装', reinstall: '重新安装' }[provider.dependency?.action || 'install']);
+const dependencyStatus = (provider: Provider) => ({ missing: '尚未安装', unmanaged: '手动安装，未纳入校验', current: '已安装核验版本', update: '有新的核验版本', damaged: '安装文件需要修复' }[provider.dependency?.state || 'missing']);
 
 function supports(provider: Provider) {
     const def = definition.value;
@@ -32,7 +34,7 @@ function supports(provider: Provider) {
         <button type="button" class="button" :disabled="busy" @click="bench.refreshProviders()">刷新依赖状态</button>
       </header>
 
-      <p v-if="missingCount" class="callout missing"><span class="missing-swatch" aria-hidden="true"></span><span>{{ missingCount }} 个工具缺少依赖。按下方说明安装后点击“刷新依赖状态”。</span></p>
+      <p v-if="missingCount" class="callout missing"><span class="missing-swatch" aria-hidden="true"></span><span>{{ missingCount }} 个工具缺少依赖。支持自动安装的工具可直接获取；手动安装后请刷新依赖状态。</span></p>
       <p v-else-if="list.length" class="callout ok">全部 {{ list.length }} 个处理工具可用。</p>
 
       <ul class="providers">
@@ -43,10 +45,25 @@ function supports(provider: Provider) {
               <span class="name">{{ provider.displayName }}</span>
               <span class="what muted">{{ supports(provider) }}</span>
               <span v-if="isMissing(provider)" class="tone missing state"><span class="missing-swatch" aria-hidden="true"></span> 缺少依赖</span>
+              <span v-else-if="provider.dependency?.state === 'update'" class="tone warn state">有核验更新</span>
               <span v-else class="tone ok state">可用</span>
             </summary>
             <div class="body">
               <p v-if="isMissing(provider)" class="tone missing" role="status">{{ provider.availability?.reason }}</p>
+              <section v-if="provider.dependency" class="installation" :aria-label="`${provider.displayName} 依赖管理`">
+                <template v-if="provider.dependency.automatic">
+                  <div class="install-head">
+                    <div>
+                      <strong>{{ dependencyStatus(provider) }}</strong>
+                      <p class="small muted">当前：{{ provider.dependency.installedVersion || '未核验' }}；可安装：{{ provider.dependency.targetVersion }}</p>
+                    </div>
+                    <button type="button" class="button" :class="{ primary: provider.dependency.state !== 'current' }" :disabled="busy" @click="bench.installDependency(provider)">{{ installLabel(provider) }}</button>
+                  </div>
+                  <p class="small muted">下载来源：{{ provider.dependency.sources?.join('、') }}。校验摘要和加载能力后启用，原安装保留。</p>
+                  <p class="small muted">{{ provider.dependency.reason }}</p>
+                </template>
+                <p v-else class="small muted">手动安装：{{ provider.dependency.reason }}</p>
+              </section>
               <template v-if="provider.acquisition">
                 <p>{{ provider.acquisition.instructions }}</p>
                 <p><a :href="provider.acquisition.url" target="_blank" rel="noopener noreferrer" @click.prevent="bench.openSource(provider.id)">打开获取页面</a> <span class="path muted small">{{ provider.acquisition.url }}</span></p>
@@ -114,6 +131,8 @@ summary:hover .name { text-decoration: underline; text-underline-offset: 3px; te
 .what { font-size: var(--t-small); }
 .state { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--t-small); }
 .body { display: grid; gap: var(--s-3); padding: var(--s-4) var(--s-3) var(--s-5); max-width: 76ch; overflow-wrap: anywhere; }
+.installation { display: grid; gap: var(--s-2); padding: var(--s-4); background: var(--paper-sunk); border-left: 2px solid var(--rule); }
+.install-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s-3); }
 a { color: var(--focus); font-weight: 500; }
 .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-1) var(--s-4); margin: 0; font-size: var(--t-small); }
 .facts dt { color: var(--ink-2); }

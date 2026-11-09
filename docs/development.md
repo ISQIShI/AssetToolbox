@@ -40,6 +40,8 @@ Vite 热更新只监听前端相关文件，排除 `src-tauri/`，避免 Windows
 
 原生测试复制工具、生成样本、使用独立 WebView 用户目录和本机随机 CDP 端口；截图位于 `desktop/test-results/`。它使用系统 WebView2，无需另装 Playwright Chromium 浏览器。只对旧 EXE 跑 E2E 不能证明新源码构建正确。
 
+依赖管理验收：`resource-core/` 下 `node --test tests/dependencies.test.js` 使用合成归档测试来源/摘要、路径与解包边界、失败保护和取消；原生 E2E 还从 RareWares/npm registry 真实安装 LAME/Sharp 并更新，必须联网。更换核验清单时同步来源记录与锁文件，不能为测试通过跳过校验。
+
 开发 Node 与便携运行时可以不同：当前开发使用 Node 26.13.0，随附运行时保留 Node 24.19.0。完整核心测试需要先按提供方 provenance.json 安装三个编码器和 LAME 伴随 DLL；缺少真实工具不能当作完整回归通过。核心套件验证开发 Node，原生 E2E 使用工具目录的便携 Node；不要把更新全局 Node 当作更新发布运行时。
 
 ## 依赖安装与安全修复

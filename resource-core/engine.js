@@ -273,7 +273,7 @@ function processFolder(folder, options = {}) {
         const availability = providerAvailability(resourceDefinition);
         if (!availability.available) throw new Error('缺少处理工具或依赖：' + resourceDefinition.id + '：' + availability.reason + (resourceDefinition.acquisition ? '；获取：' + resourceDefinition.acquisition.url : ''));
         if (!resourceDefinition.executableName) continue;
-        const executable = path.join(resourceDefinition.directory, resourceDefinition.executableName);
+        const executable = path.join(require('./framework/dependencies/runtime').runtimeDirectory(resourceDefinition), resourceDefinition.executableName);
         if (!fs.existsSync(executable)) throw new Error('缺少处理工具：' + executable);
         executables.set(resourceDefinition.id, executable);
     }

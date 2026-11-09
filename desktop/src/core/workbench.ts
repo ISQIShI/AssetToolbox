@@ -7,7 +7,7 @@ import { createStep, isMissing, processingRequest, providerOf } from './model';
 import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, RestorePreview, RestoreScope, ScanPreview, Selection, Task } from './types';
 
 export type Page = 'process' | 'tasks' | 'restore' | 'tools';
-export type JobKind = 'preview' | 'process' | 'resume' | 'retry' | 'restore-check' | 'restore';
+export type JobKind = 'preview' | 'process' | 'resume' | 'retry' | 'restore-check' | 'restore' | 'dependency';
 export interface ActiveJob { id: string; kind: JobKind; title: string; state: JobState; cancelRequested: boolean }
 export type RestoreSource = { kind: 'task'; taskFile: string } | { kind: 'export'; backupDir: string; outputDir: string };
 
@@ -92,6 +92,7 @@ export function createWorkbench() {
             job.value = { ...job.value, state };
             if (!state.done) { timer = setTimeout(() => void poll(id), POLL_MS); return; }
             const finished = completion; completion = undefined; finished?.(state);
+            if (job.value.kind === 'dependency') await refreshProviders();
             // 预览类作业的结果直接显示在所属页面，进度条随之收起。
             if (state.preview && (job.value.kind === 'preview' || job.value.kind === 'restore-check')) job.value = undefined;
             try { await refreshTasks(); } catch (cause) { fail(cause); }
@@ -206,12 +207,17 @@ export function createWorkbench() {
     }
 
     async function openSource(id: string) { try { await openProviderSource(id); } catch (cause) { fail(cause); } }
+    async function installDependency(provider: Provider) {
+        if (!provider.dependency?.automatic || busy.value) return;
+        page.value = 'tools';
+        await launch({ mode: 'dependency-install', providerId: provider.id }, 'dependency', `安装 ${provider.displayName}`);
+    }
 
     return {
         page, boot, config, tasks, loading, error, notice, station, scan, scanStale,
         selectedTaskFile, restoreSource, restorePreview, restoreScope, restoreRevision,
         job, submitting, closing, definition, busy, missingProviders, blockedSteps,
-        fail, initialize, refreshTasks, refreshProviders, browse, saveConfig,
+        fail, initialize, refreshTasks, refreshProviders, browse, saveConfig, installDependency,
         launch, cancelJob, dismissJob, openJobReport, requestClose, stop: () => clearTimeout(timer),
         runPipeline, addStep, moveStep, removeStep,
         continueTask, showTask, checkRestore, recheckRestore, restoreSelected, openSource,

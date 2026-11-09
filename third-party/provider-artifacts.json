@@ -1,5 +1,7 @@
 {
   "checkedAt": "2026-11-08",
+  "automaticInstallCheckedAt": "2026-11-09",
+  "automaticInstallCatalog": "resource-core/framework/dependencies/catalog.json",
   "scope": "仅记录本地文件；源码仓库不分发二进制",
   "pngquant": {
     "version": "3.0.3",

@@ -18,4 +18,6 @@ LAME 官方只提供源码，Windows 包来自其 Links 页面指向的第三方
 
 本仓库没有重新发布第三方实现源码，保存许可证文本仅用于署名与审计。Node 运行时另见 [Node 许可合集](runtime/LICENSE-node.txt)。界面字体 IBM Plex Sans 与 IBM Plex Mono（Copyright IBM Corp.，SIL Open Font License 1.1）通过 npm 包 `@fontsource/ibm-plex-sans`、`@fontsource/ibm-plex-mono` 5.3.0 打包进前端产物；随 EXE 分发时须附带 OFL 许可文本（见两包的 `LICENSE`），字体不得单独出售。Vue、Tauri、Vite、Rust crate 等依赖各自按其锁定包的许可证使用；发布编译后的应用前还需生成所含依赖的完整声明，见[分发核对流程](docs/distribution.md)。
 
-项目源码仍保留提供方适配代码；缺少第三方工具时可按前端说明自行获取，或禁用相关步骤。工具不自动下载、不静默接受商业条款，也不以来源不明的镜像替代作者渠道。
+项目源码仍保留提供方适配代码；缺少第三方工具时可按前端说明自行获取，或禁用相关步骤。2026-11-09 起支持用户主动触发 LAME/Sharp 固定核验版本的自动下载，地址与摘要见 `resource-core/framework/dependencies/catalog.json`；LAME ZIP 已重新取样匹配原 SHA-256，Sharp 五个 npm 包按锁文件 SHA-512 验证。保留原包许可证，不静默接受商业条款，不使用来源不明的镜像。
+
+自动下载只从原渠道安装到用户本地，不向 GitHub 上传安装产物；既有完整便携包分发缺口仍未闭合。流程与限制见[依赖管理](docs/architecture/dependencies.md)。

@@ -19,6 +19,17 @@ const providers: Provider[] = [
         fields: [{ key: 'jpegQuality', type: 'integer', default: 90, label: 'JPEG 输出质量', hint: '仅影响 JPEG；PNG 保留透明通道。', min: 1, max: 100, step: 1 }],
         availability: { available: true, reason: '' }, acquisition: acquisition('Sharp / libvips', 'sharp 0.35.5', 'Apache-2.0 AND LGPL-3.0-or-later', 'https://sharp.pixelplumbing.com/install/', '在 resource-core 目录执行 npm ci。') },
 ];
+for (const provider of providers) {
+    const automatic = provider.id === 'lame' || provider.id === 'sharp';
+    provider.dependency = automatic ? {
+        automatic: true, targetVersion: provider.id === 'lame' ? '4.0' : '0.35.5',
+        installedVersion: params.has('updates') ? (provider.id === 'lame' ? '3.100' : '0.34.5') : undefined,
+        state: params.has('updates') ? 'update' : params.has('missing-auto') ? 'missing' : 'unmanaged',
+        action: params.has('updates') ? 'update' : 'install', sources: [provider.id === 'lame' ? 'www.rarewares.org' : 'registry.npmjs.org'],
+        reason: '仅界面模拟，不下载或写入文件。实际安装使用项目核验清单。',
+    } : { automatic: false, reason: '暂无符合当前核验条件的自动下载方案，请按下方渠道手动安装。' };
+    if (automatic && params.has('missing-auto')) provider.availability = { available: false, reason: '尚未安装所需文件' };
+}
 const definition: Definition = {
     apiVersion: 1,
     resourceTypes: [
@@ -75,6 +86,14 @@ function poll(id: string): JobState {
     const progress = Math.min(1, (Date.now() - job.started) / DURATION);
     const processed = Math.round(total * progress);
     const done = progress >= 1 || job.cancelled;
+    if (job.request.mode === 'dependency-install') {
+        const provider = providers.find(item => item.id === job.request.providerId)!;
+        if (done && !job.cancelled) {
+            provider.availability = { available: true, reason: '' };
+            provider.dependency = { ...provider.dependency!, state: 'current', action: 'reinstall', installedVersion: provider.dependency!.targetVersion };
+        }
+        return { done, phase: done ? 'finished' : progress > 0.7 ? 'verifying' : 'downloading', processed: done ? 1 : 0, total: 1, cancelled: job.cancelled, exitCode: job.cancelled ? 2 : 0, current: provider.dependency!.sources?.[0], message: job.cancelled ? '模拟安装已取消。' : done ? '模拟安装完成，未写入文件。' : '模拟下载与校验，不访问外部网络。' };
+    }
     const state: JobState = { done, phase: done ? 'finished' : job.request.mode.startsWith('restore') ? 'restoring' : 'processing', processed, total: progress < 0.1 ? 0 : total, elapsedSeconds: (Date.now() - job.started) / 1000, current: `audio\\loops\\harbor_wind_${processed}.mp3` };
     if (!done) return state;
     if (job.cancelled) { state.cancelled = true; state.exitCode = 2; }

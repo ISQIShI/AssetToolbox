@@ -8,15 +8,16 @@ import { bytes, elapsed, sizeChange } from '../core/model';
 const bench = useWorkbench();
 const { job, closing } = bench;
 
-const phases: Record<string, string> = { starting: '正在启动', scanning: '正在扫描', checking: '正在检查', processing: '正在处理', restoring: '正在恢复', finished: '正在收尾' };
+const phases: Record<string, string> = { starting: '正在启动', scanning: '正在扫描', checking: '正在检查', processing: '正在处理', restoring: '正在恢复', downloading: '正在下载', verifying: '正在校验', installing: '正在安装', finished: '正在收尾' };
 const state = computed(() => job.value!.state);
 const running = computed(() => !state.value.done);
 const percent = computed(() => state.value.total ? Math.min(100, Math.round(state.value.processed / state.value.total * 100)) : 0);
 const restoring = computed(() => state.value.summary?.restored !== undefined);
 const status = computed(() => {
     const value = state.value;
-    if (closing.value) return { label: '正在安全退出，等待当前文件结束', tone: 'warn' };
-    if (!value.done) return job.value!.cancelRequested ? { label: '已请求取消，等待当前文件结束', tone: 'warn' } : { label: phases[value.phase] || value.phase, tone: 'neutral' };
+    const boundary = job.value!.kind === 'dependency' ? '等待依赖检查结束' : '等待当前文件结束';
+    if (closing.value) return { label: `正在安全退出，${boundary}`, tone: 'warn' };
+    if (!value.done) return job.value!.cancelRequested ? { label: `已请求取消，${boundary}`, tone: 'warn' } : { label: phases[value.phase] || value.phase, tone: 'neutral' };
     if (value.cancelled) return { label: '已取消', tone: 'warn' };
     if (value.error) return { label: '未完成', tone: 'danger' };
     if (value.summary?.failed) return { label: `完成，${value.summary.failed} 个失败`, tone: 'danger' };
@@ -68,10 +69,11 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
     </div>
 
     <p v-if="running && state.current" class="current path">{{ state.current }}</p>
+    <p v-if="running && job.kind === 'dependency' && state.message" class="small muted">{{ state.message }}</p>
     <div v-if="!running && (state.error || notes.length || state.cancelled || state.message)" class="details">
       <p v-if="state.error" class="tone danger">{{ state.error }}</p>
       <p v-for="note in notes" :key="note" class="tone warn">{{ note }}</p>
-      <p v-if="state.cancelled" class="muted">{{ state.task ? '已完成的文件已记录，可在“任务”页继续剩余文件。' : '已停止。可重新扫描或检查后再继续。' }}</p>
+      <p v-if="state.cancelled && job.kind !== 'dependency'" class="muted">{{ state.task ? '已完成的文件已记录，可在“任务”页继续剩余文件。' : '已停止。可重新扫描或检查后再继续。' }}</p>
       <p v-if="state.message" class="muted">{{ state.message }}</p>
     </div>
   </section>

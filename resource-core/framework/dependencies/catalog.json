@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "checkedAt": "2026-11-09",
+  "providers": {
+    "lame": {
+      "version": "4.0",
+      "platform": "win32",
+      "arch": "x64",
+      "source": "https://www.rarewares.org/mp3-lame-bundle.php",
+      "artifacts": [
+        {
+          "url": "https://www.rarewares.org/files/mp3/lame-4.0-x64.zip",
+          "integrity": "sha256-ci9DEeJ5XVyFIHalebMYO+63bpAQ2cqx5/nS6G2dCAg=",
+          "format": "zip",
+          "files": {
+            "lame.exe": "04839dd7308fa83e415584353475d605769043da05dd68c9bf60b15cdbef8b02",
+            "libmpg123-0.dll": "018e6833088b3fc7d9a97c3f45abb5f9f947f7c46de4f17fddf423f430fa70fa"
+          }
+        }
+      ]
+    },
+    "sharp": {
+      "version": "0.35.5",
+      "platform": "win32",
+      "arch": "x64",
+      "source": "https://sharp.pixelplumbing.com/install/",
+      "artifacts": [
+        {
+          "url": "https://registry.npmjs.org/sharp/-/sharp-0.35.5.tgz",
+          "integrity": "sha512-Ywn4OnzGukp7CDMrp08RQ50YKmuwG47brZgIVPTvBaaAfQlRlygrRqSrxdCiL9M+LlzLBiJ68IR1QqvzHyjC7g==",
+          "format": "tgz",
+          "target": "node_modules/sharp"
+        },
+        {
+          "url": "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-0.35.5.tgz",
+          "integrity": "sha512-x76eH0vEiHlcMQu8Y8IenntaACtddpT6W0wmXtWrnKcnKI7ME5DdgqhAD6SEWOEl1v2zDvkZDhFA9KnURwpfqg==",
+          "format": "tgz",
+          "target": "node_modules/@img/sharp-win32-x64"
+        },
+        {
+          "url": "https://registry.npmjs.org/@img/colour/-/colour-1.1.0.tgz",
+          "integrity": "sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==",
+          "format": "tgz",
+          "target": "node_modules/@img/colour"
+        },
+        {
+          "url": "https://registry.npmjs.org/detect-libc/-/detect-libc-2.1.2.tgz",
+          "integrity": "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==",
+          "format": "tgz",
+          "target": "node_modules/detect-libc"
+        },
+        {
+          "url": "https://registry.npmjs.org/semver/-/semver-7.8.6.tgz",
+          "integrity": "sha512-9lpSSU4Mly3mrtruwLs1eLK6+gzbzqeBFwRNjIjE+9LuDpWdYctrQlQ3ej1Ilgi7gknpsTRnPoLP8DpCHqHIJw==",
+          "format": "tgz",
+          "target": "node_modules/semver"
+        }
+      ]
+    },
+    "pngquant": {
+      "manual": "官网 Windows 包为 2.17.0，未提供本项目核验的 3.0.3 Windows 构建；请按下方指引使用 Cargo 编译安装。"
+    },
+    "jpg-c": {
+      "manual": "尚未核实稳定下载地址与再分发授权，请按作者渠道手动获取。"
+    }
+  }
+}

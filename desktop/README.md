@@ -6,6 +6,8 @@
 
 GitHub 私有仓库使用 MIT，仅包含项目源码和许可记录；没有第三方 EXE/DLL 或完整便携包。依赖缺失时界面提供官方渠道、安装位置、许可说明和刷新按钮。对外二进制发布见[分发核对](../docs/distribution.md)。
 
+LAME/Sharp 可从“工具”页获取、安装与更新至项目核验版本；下载通过 TLS、摘要、归档和加载校验。受管理副本位于核心 `data/dependencies/`，移动本地目录时需一同携带；不能将用户下载文件直接放入对外分发包。
+
 ## 开发
 
 Windows x64，Node/npm、Rust MSVC、C++ Build Tools/Windows SDK、WebView2 版本以仓库配置及项目状态为准。从仓库根目录：
@@ -26,10 +28,12 @@ npm run dev
 
 `npm run build` 执行 TypeScript 检查、Vite 打包、Rust release 构建，并通过 `scripts/portable.mjs` 复制根目录 EXE；运行时缺失才复制当前 Node。脚本使用便携 Node 检查 Sharp 原生依赖，失败时不会发布新根 EXE。它不安装依赖，也不自动生成独立分发压缩包。
 
-便携布局：`AssetToolbox.exe` + `runtime/` + 完整 `resource-core/`，其中核心 **node_modules 必须携带**；桌面 node_modules、target、dist、测试产物无需分发。核心依赖应在目标 Windows x64 平台安装，不可把其他系统的原生包直接拷入。首次分发不包含个人 data，已使用的便携目录则保留其新格式 data。
+便携布局：`AssetToolbox.exe` + `runtime/` + 完整 `resource-core/`。手动安装的 Sharp 需携带核心 node_modules；自动安装的 Sharp 使用 `data/dependencies/sharp/` 的完整副本。桌面 node_modules、target、dist、测试产物无需携带。核心依赖应在目标 Windows x64 平台安装，不可把其他系统的原生包直接拷入。首次分发不包含个人 data 或未经放行的依赖；已使用的本地便携目录则保留其新格式 data。
 
 ## 验证
 
 桌面目录执行 `npm test`、`npm run typecheck`、`npm run build`、`npm run test:e2e`；核心目录另执行 `npm test`。原生测试复制完整便携核心，生成样本，通过 `ASSET_TOOLBOX_TEST_PORT` 打开仅本机 CDP，使用独立 WebView2 数据目录，不需要下载 Playwright Chromium。
 
 E2E 包含动态提供方、中文路径、步骤排序/删除与真实透明图片缩放、另存、取消、续跑、重试、选择性恢复、重启和运行中关闭。截图在 `test-results/`。必须先构建当前源码，不用旧 EXE 的结果替代验收。实际结果见[项目状态](../docs/project-status.md)。
+
+E2E 还会移走隔离副本的 LAME/Sharp，从前端真实下载并安装，再验证更新和旧目录保留。需能访问 RareWares 与 npm registry；网络或摘要失败应如实报告，不跳过或放宽校验。

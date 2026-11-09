@@ -1,6 +1,6 @@
 # 通信协议
 
-源码：`desktop/src/api.ts`、`types.ts`、`desktop/src-tauri/src/main.rs`、`resource-core/desktop-bridge.js`、`batch.js`。本页描述新契约，不支持旧 compress mode、扁平 options 或 modules 定义。
+源码：`desktop/src/core/api.ts`、`core/types.ts`、`desktop/src-tauri/src/main.rs`、`resource-core/desktop-bridge.js`、`batch.js`、`framework/dependencies/worker.js`。本页描述新契约，不支持旧 compress mode、扁平 options 或 modules 定义。
 
 ## 原生和 JSON Lines
 
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | bootstrap | 空对象 | config、definition、warnings、configError、root、nodeVersion |
 | normalize / save | Configuration | 规范化配置；save 原子保存后返回 |
-| providers | 空对象 | 提供方目录及实时 availability/acquisition，不保存配置 |
+| providers | 空对象 | 提供方目录及实时 availability/acquisition/dependency，不保存配置或下载 |
 | provider-source | `{id}` 提供方 ID | 已登记的 HTTPS 获取地址，未知 ID 拒绝 |
 | tasks | 空对象 | 持久任务摘要数组 |
 | start | JobRequest | `{id}` 临时作业会话 |
@@ -30,6 +30,7 @@ Configuration 的 `schema` 为 `asset-toolbox.settings/1`，含 sourceDir/output
 | restore / restore-retry | taskFile、可选 selection | 恢复或重试恢复 |
 | restore-export-preview | backupDir、outputDir | 检查独立备份及目标 |
 | restore-export | backupDir、outputDir、可选 selection | 导出独立备份 |
+| dependency-install | providerId | 从内置清单安装/更新依赖；只允许 mode 和 providerId 两个字段，不接受 URL/路径/命令 |
 
 桌面恢复总是显式传 selection；省略表示 CLI 默认范围，`[]` 表示空范围，不能互换。每项含相对 path、backupHash、targetHash（目标不存在时 null），执行前重新校验。恢复与任务浏览无需加载提供方。
 
@@ -42,6 +43,10 @@ Configuration 的 `schema` 为 `asset-toolbox.settings/1`，含 sourceDir/output
 ## 状态和错误
 
 JobState 含 phase、done、processed（本次已检查/尝试的文件数）、total、current；可能含 message、error、cancelled、summary、task、preview、reportDirectory、reportWarning、recoveryWarnings。phase 为 starting/scanning/checking/processing/restoring/finished。
+
+依赖作业增加 downloading/verifying/installing 阶段，processed/total 表示已完成包数/总包数，current 为当前下载来源，message 为安装进度或结果；不创建素材任务、报告或 summary。完成后前端刷新 providers，取消仍经 cancel，进程退出后才最终 done。
+
+Provider.dependency 包含 automatic、reason；自动计划还含 targetVersion、checkedAt、sources、可选 installedVersion、state（missing/unmanaged/current/update/damaged）及 action（install/update/repair/reinstall）。更新受当前核验清单约束，见[依赖管理](dependencies.md)。
 
 `summary.processed` 表示实际改变的文件数，与顶层 processed 不同；summary 还有 skipped、failed、copied、backedUp、savedBytes（可负），恢复使用 restored/restoredBytes。处理预览按 `resources` 返回分组，恢复预览按 files 返回文件状态和哈希。任务事件和报告记录 resourceType 与每步状态，不使用旧 module/compressed 字段。
 

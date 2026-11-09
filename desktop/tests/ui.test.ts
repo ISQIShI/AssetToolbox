@@ -94,6 +94,14 @@ describe('恢复勾选', () => {
 });
 
 describe('处理工具页', () => {
+    it('keeps manual guidance without exposing an install button for unsupported providers', () => {
+        const bench = createWorkbench();
+        bench.boot.value = { config, definition: { ...definition, providers: [{ ...missingProvider(), dependency: { automatic: false, reason: '作者渠道尚未核验' } }] }, warnings: [] };
+        const wrapper = mount(ToolsView, { global: { provide: { [workbenchKey as symbol]: bench } } });
+        expect(wrapper.text()).toContain('手动安装：作者渠道尚未核验');
+        expect(wrapper.find('.installation button').exists()).toBe(false);
+        expect(wrapper.find('a').attributes('href')).toBe('https://example.com/download');
+    });
     it('expands missing tools with acquisition details, opens sources by ID and refreshes availability', async () => {
         const bench = createWorkbench();
         bench.boot.value = { config, definition: { ...definition, providers: [missingProvider()] }, warnings: [] };

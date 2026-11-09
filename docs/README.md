@@ -14,6 +14,7 @@
 | [前端架构](architecture/frontend.md) | 源码结构、工作台状态、作业生命周期、请求映射、步骤编辑与恢复勾选 |
 | [后端与框架设计](architecture/backend.md) | Rust 宿主、Node 调度、处理流水线、提供方扩展、安全恢复 |
 | [扩展契约](architecture/extensions.md) | 类型/操作/提供方、参数、版本、生命周期及新增实现示例 |
+| [提供方依赖管理](architecture/dependencies.md) | 固定核验清单、HTTPS/摘要校验、自动安装更新、取消与不可变目录 |
 | [通信协议](architecture/protocol.md) | Tauri 命令、JSON Lines、操作与作业模式、错误语义 |
 | [持久化与版本契约](architecture/persistence.md) | 新 schema、步骤快照、锁、崩溃恢复、报告格式 |
 | [开发与验证](development.md) | 环境、构建、测试矩阵、Git 与 Conventional Commits |
@@ -37,6 +38,6 @@
 | 编码器或参数 | 后端设计、扩展契约、持久化 | `contract`、`resize`、`resources`、`compress` |
 | 任务、取消、续跑 | 后端设计、通信协议、持久化 | `batch`、`desktop`、`resume` |
 | 恢复与勾选 | 前端架构、持久化、后端设计 | `restore`、`restore-preview`、组件与原生测试 |
-| 打包或依赖 | 总体架构、开发与验证、桌面 README | 类型检查、release 构建、原生 E2E |
+| 打包或依赖 | 总体架构、依赖管理、开发与验证、桌面 README | 核心 dependencies、类型检查、release 构建、原生 E2E |
 
 表中核心测试名称对应 `resource-core/tests/<名称>.test.js`。

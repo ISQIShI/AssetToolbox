@@ -9,7 +9,7 @@ coverage/
 *.log
 /.local/
 
-# 便携发布产物；编码器是现有运行依赖，保留版本控制
+# 便携发布产物仅留本地，不纳入源码版本控制
 /AssetToolbox.exe
 /ResourceCompressor.exe
 /runtime/node.exe

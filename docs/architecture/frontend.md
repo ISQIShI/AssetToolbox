@@ -76,6 +76,7 @@ stateDiagram-v2
 | 开始处理 | `normalize` → `save` → `start {mode:'process'}` | 保存失败显示提示，但本次仍处理 |
 | 刷新依赖状态 | `providers` | 只替换目录中的工具列表，不重置配置 |
 | 打开获取页面 | 原生 `open_provider_source({id})` | 前端只传 ID，地址由核心解析 |
+| 获取安装 / 更新 / 修复 / 重装 | `start {mode:'dependency-install', providerId}` | 前端不传地址、摘要或路径；复用作业栏，结束后刷新 providers，保留当前配置 |
 | 继续未完成 / 重试失败项 | `start {mode:'resume'/'retry', taskFile}` | 不使用当前表单 |
 | 检查备份（任务） | `start {mode:'restore-preview', taskFile}` | 继续上次恢复、重试恢复失败项同样请求，只是默认勾选范围不同 |
 | 检查独立备份 | `start {mode:'restore-export-preview', backupDir, outputDir}` | 两个路径都必填 |

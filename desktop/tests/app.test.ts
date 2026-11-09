@@ -29,6 +29,7 @@ beforeEach(() => {
     vi.mocked(call).mockImplementation(async (action, payload) => {
         if (action === 'bootstrap') return { config: structuredClone(config), definition: catalog, warnings: [] } as any;
         if (action === 'tasks') return [task] as any;
+        if (action === 'providers') return structuredClone(catalog.providers) as any;
         if (action === 'start') return { id: 'job-1' } as any;
         if (action === 'poll') return { ...state } as any;
         return payload as any;
@@ -172,4 +173,38 @@ it('checks a standalone backup with both folders', async () => {
     await backup!.setValue('D:\\独立备份'); await target!.setValue('D:\\目标');
     await button('检查独立备份').trigger('click'); await flushPromises();
     expect(call).toHaveBeenCalledWith('start', { mode: 'restore-export-preview', backupDir: 'D:\\独立备份', outputDir: 'D:\\目标' });
+});
+
+it('installs a missing dependency by ID, locks concurrent work and refreshes availability without losing edits', async () => {
+    catalog.providers = [{ ...missingProvider(), dependency: { automatic: true, state: 'missing', action: 'install', targetVersion: '4.0', sources: ['www.rarewares.org'], reason: '核验版本' } }];
+    await mountApp();
+    await wrapper.find('input.path').setValue('D:\\正在编辑');
+    await go('工具');
+    await button('获取并安装').trigger('click'); await flushPromises();
+    expect(call).toHaveBeenCalledWith('start', { mode: 'dependency-install', providerId: 'test' });
+    expect(button('获取并安装').attributes('disabled')).toBeDefined();
+    expect(button('刷新依赖状态').attributes('disabled')).toBeDefined();
+    catalog.providers = [{ ...catalog.providers[0]!, availability: { available: true, reason: '' }, dependency: { automatic: true, state: 'current', action: 'reinstall', installedVersion: '4.0', targetVersion: '4.0', reason: '核验版本' } }];
+    await finish({ message: '依赖已安装', processed: 1, total: 1 });
+    expect(call).toHaveBeenCalledWith('providers');
+    expect(wrapper.text()).toContain('已安装核验版本');
+    expect(button('重新安装').attributes('disabled')).toBeUndefined();
+    await go('处理'); expect((wrapper.find('input.path').element as HTMLInputElement).value).toBe('D:\\正在编辑');
+});
+
+it('offers updates only for managed plans and keeps cancellation/errors visible', async () => {
+    catalog.providers = [{ ...definition.providers[0]!, dependency: { automatic: true, state: 'update', action: 'update', installedVersion: '3.1', targetVersion: '4.0', reason: '核验版本' } }];
+    await mountApp(); await go('工具');
+    expect(wrapper.text()).toContain('有新的核验版本');
+    await button('更新到核验版本').trigger('click'); await flushPromises();
+    await button('取消').trigger('click'); await flushPromises();
+    expect(call).toHaveBeenCalledWith('cancel', { id: 'job-1' });
+    expect(wrapper.find('.dock').text()).toContain('等待依赖检查结束');
+    await finish({ cancelled: true, exitCode: 2, message: '安装已取消，原安装保持不变。' });
+    expect(wrapper.find('.dock').text()).toContain('原安装保持不变');
+    state = { done: false, phase: 'downloading', processed: 0, total: 1 };
+    await button('更新到核验版本').trigger('click'); await flushPromises();
+    await finish({ cancelled: false, exitCode: 1, error: '下载完整性校验失败' });
+    expect(wrapper.find('.dock').text()).toContain('下载完整性校验失败');
+    expect(wrapper.text()).toContain('当前：3.1');
 });

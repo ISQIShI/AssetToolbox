@@ -39,3 +39,5 @@ JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分�
 ## 来源、许可与发布
 
 项目自有源码使用 MIT，第三方许可见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md)。提供方必须登记官方获取渠道、安装说明、版本与许可；缺依赖需在前端可见。对外发布前执行[分发核对](docs/distribution.md)，不能把本地可运行视为允许分发。当前仅发布私有源码仓库，禁止上传第三方 EXE/DLL、node_modules 或包含这些文件的历史备份。
+
+自动安装依赖必读[依赖管理](docs/architecture/dependencies.md)：清单固定版本、来源与摘要，前端仅传提供方 ID；校验后写入独立目录并原子启用，不覆盖手动文件或运行中的依赖，不放宽 TLS、摘要、解包和文件安全断言。

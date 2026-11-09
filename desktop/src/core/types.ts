@@ -5,7 +5,8 @@ export interface ResourceType { id: string; displayName: string; description?: s
 export interface Operation { id: string; displayName: string; description: string; accepts: string[]; resultPolicy: 'smaller-only' | 'valid-output'; fields: Field[]; version: string }
 export interface Acquisition { name: string; version: string; license: string; url: string; source: string; instructions: string; redistribution: string; checkedAt: string }
 export interface Support { resourceType: string; operation: string }
-export interface Provider { id: string; displayName: string; description: string; supports: Support[]; fields: Field[]; version: string; availability?: { available: boolean; reason: string }; acquisition?: Acquisition | null }
+export interface Dependency { automatic: boolean; reason: string; targetVersion?: string; installedVersion?: string; checkedAt?: string; sources?: string[]; state?: 'missing' | 'unmanaged' | 'current' | 'update' | 'damaged'; action?: 'install' | 'update' | 'repair' | 'reinstall' }
+export interface Provider { id: string; displayName: string; description: string; supports: Support[]; fields: Field[]; version: string; availability?: { available: boolean; reason: string }; acquisition?: Acquisition | null; dependency?: Dependency }
 export interface Definition { apiVersion: 1; resourceTypes: ResourceType[]; operations: Operation[]; providers: Provider[] }
 export interface Step { id: string; resourceType: string; operation: string; provider: string; enabled: boolean; parameters: Record<string, Value>; providerOptions: Record<string, Value>; versions?: { resourceType: string; operation: string; provider: string } }
 export interface Configuration { schema: 'asset-toolbox.settings/1'; sourceDir: string; outputDir: string; backupDir: string; saveMode: 'overwrite' | 'saveAs'; backupEnabled: boolean; pipeline: Step[] }
@@ -16,7 +17,7 @@ export interface RestoreFile { path: string; resourceType?: string; state: 'reco
 export interface RestorePreview { source: string; destination: string; total: number; checked: number; recoverable: number; restored: number; conflict: number; cancelled: boolean; files: RestoreFile[] }
 export interface ScanPreview { total: number; checked: number; totalBytes: number; enabledFiles: number; conflicts: number; issues: string[]; resources: { id: string; name: string; enabled: boolean; count: number; bytes: number }[]; cancelled: boolean }
 export interface Selection { path: string; backupHash: string; targetHash: string | null }
-export type JobMode = 'preview' | 'process' | 'resume' | 'retry' | 'restore' | 'restore-retry' | 'restore-export' | 'restore-preview' | 'restore-export-preview';
-export interface JobRequest { mode: JobMode; folder?: string; pipeline?: Step[]; outputDir?: string; backupDir?: string; taskFile?: string; selection?: Selection[] }
+export type JobMode = 'preview' | 'process' | 'resume' | 'retry' | 'restore' | 'restore-retry' | 'restore-export' | 'restore-preview' | 'restore-export-preview' | 'dependency-install';
+export interface JobRequest { mode: JobMode; folder?: string; pipeline?: Step[]; outputDir?: string; backupDir?: string; taskFile?: string; selection?: Selection[]; providerId?: string }
 export interface JobSummary { total: number; processed?: number; skipped: number; failed: number; savedBytes?: number; restored?: number; restoredBytes?: number; copied?: number; backedUp?: number; backupDirectory?: string }
 export interface JobState { done: boolean; phase: string; processed: number; total: number; current?: string; message?: string; error?: string; elapsedSeconds?: number; exitCode?: number; cancelled?: boolean; reportDirectory?: string; reportWarning?: string; recoveryWarnings?: string[]; task?: Task; preview?: RestorePreview | ScanPreview; summary?: JobSummary }

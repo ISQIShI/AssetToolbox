@@ -26,6 +26,9 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     const settingsPath = path.join(tool, 'resource-core/data/settings.json');
     const config = { schema: 'asset-toolbox.settings/1', sourceDir: source, outputDir: output, backupDir: backup, saveMode: 'saveAs', backupEnabled: true, pipeline: [{ id: 'pack', resourceType: 'extra', operation: 'compress', provider: 'extra', enabled: true, parameters: {}, providerOptions: { extraLevel: 6, extraMode: 'best', extraText: '中文 配置' } }] };
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true }); fs.writeFileSync(settingsPath, JSON.stringify(config));
+    // 缺少依赖的全新安装：只移动隔离副本，原项目工具保持不变。
+    fs.renameSync(path.join(tool, 'resource-core/node_modules'), path.join(tool, 'resource-core/node_modules.manual'));
+    for (const name of ['lame.exe', 'libmpg123-0.dll']) fs.renameSync(path.join(tool, 'resource-core/providers/lame', name), path.join(tool, 'resource-core/providers/lame', name + '.manual'));
     let child: ChildProcess | undefined, browser: Browser | undefined, page!: Page;
     const errors: string[] = [];
     async function launch() {
@@ -55,6 +58,34 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     }
     try {
         await launch();
+        // 直接从核验渠道安装，之后的真实缩放使用受管理的 Sharp。
+        await tab('工具').click();
+        await page.screenshot({ path: info.outputPath('dependency-missing.png'), fullPage: true });
+        for (const id of ['lame', 'sharp']) {
+            const provider = page.locator(`[data-provider-id="${id}"]`);
+            await expect(provider).toContainText('缺少依赖');
+            await provider.getByRole('button', { name: '获取并安装', exact: true }).click();
+            await started();
+            if (id === 'lame') await page.screenshot({ path: info.outputPath('dependency-progress.png'), fullPage: true });
+            await done(true);
+            await expect(page.locator('.dock')).toContainText('已安装并通过完整性校验');
+            await expect(provider).toContainText('已安装核验版本');
+            await expect(provider.locator('.state')).toHaveText('可用');
+            await page.getByRole('button', { name: '关闭作业结果' }).click();
+        }
+        await page.screenshot({ path: info.outputPath('installed-dependencies.png'), fullPage: true });
+        // 模拟上一核验清单记录，走更新按钮；旧目录仍可供运行中的快照使用。
+        const recordFile = path.join(tool, 'resource-core/data/dependencies/lame/active.json');
+        const previous = JSON.parse(fs.readFileSync(recordFile, 'utf8'));
+        fs.writeFileSync(recordFile, JSON.stringify({ ...previous, catalogHash: 'previous-approved-catalog' }));
+        await button('刷新依赖状态').click();
+        const lame = page.locator('[data-provider-id="lame"]');
+        if (!(await lame.locator('details').getAttribute('open') !== null)) await lame.locator('summary').click();
+        await lame.getByRole('button', { name: '更新到核验版本', exact: true }).click(); await done();
+        await expect(lame).toContainText('已安装核验版本');
+        expect(JSON.parse(fs.readFileSync(recordFile, 'utf8')).directory).not.toBe(previous.directory);
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/dependencies/lame/installs', previous.directory))).toBe(true);
+        await page.getByRole('button', { name: '关闭作业结果' }).click();
         // 工具页：移走真实编码器后显示缺失原因与获取渠道，放回后恢复可用。
         const pngTool = path.join(tool, 'resource-core/providers/pngquant/pngquant.exe');
         fs.renameSync(pngTool, pngTool + '.held');

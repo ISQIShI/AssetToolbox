@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { compileSchema, normalizeParameters } = require('./schema');
 const { providerAvailability } = require('./availability');
+const { management } = require('./dependencies/runtime');
 
 const identifier = /^[a-z][a-z0-9-]*$/;
 function discover(root, category) {
@@ -74,7 +75,7 @@ function createRegistry(root = path.join(__dirname, '..')) {
             resourceTypes: [...resourceTypes.values()].map(type => ({ ...base(type), kind: type.kind, extensions: type.extensions })),
             operations: [...operations.values()].map(operation => ({ ...base(operation), accepts: operation.accepts, resultPolicy: operation.resultPolicy, fields: operation.schema.fields })),
             providers: [...providers.values()].map(provider => ({ ...base(provider), supports: provider.supports, fields: provider.schema.fields,
-                availability: providerAvailability(provider), acquisition: provider.acquisition || null })) };
+                availability: providerAvailability(provider), acquisition: provider.acquisition || null, dependency: management(provider.id, root) })) };
     }
     return { resourceTypes, operations, providers, byExtension, normalizePipeline, describe };
 }

@@ -30,6 +30,7 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 | `engine.js` | 扫描、有序步骤、结果策略、临时文件、统一提交 |
 | `settings.js`、`tasks.js`、`restore.js` | 原子配置、任务日志、哈希恢复 |
 | `framework/` 与三个扩展目录 | 发现、schema、进程执行及[扩展契约](extensions.md) |
+| `framework/dependencies/` | 核验清单、下载/归档验证、不可变依赖安装与启用记录，见[依赖管理](dependencies.md) |
 
 表中核心入口位于 `resource-core/`。Sharp 为核心唯一直接 npm 依赖；核心、桌面 npm 和 Rust 依赖各有锁文件。完整便携部署包含核心 node_modules，构建脚本通过便携 Node 验证 Sharp 可加载。
 

@@ -12,7 +12,7 @@
 
 所有定义导出 CommonJS 对象，包含 `apiVersion: 1`、`version: '1.0.0'`、`displayName`，可提供 `description`。ID 来自目录名，必须匹配 `[a-z][a-z0-9-]*`。启动时扫描直接子目录；忽略 `_`/`.` 开头目录、目录链接和无入口目录。格式扩展名必须唯一、小写且带点；只有资源类型占有扩展名。注册失败会阻止新处理，但不阻止现有任务恢复。
 
-操作的 `accepts` 是资源 `kind` 数组；提供方 `supports` 是 `{resourceType, operation}` 数组，引用必须存在且匹配种类。重启应用重新加载定义，无热插拔或下载执行机制。
+操作的 `accepts` 是资源 `kind` 数组；提供方 `supports` 是 `{resourceType, operation}` 数组，引用必须存在且匹配种类。重启应用重新加载定义，无插件热插拔；内置提供方的固定依赖可按[依赖管理](dependencies.md)安装，不接受下载扩展代码的请求。
 
 ## 步骤及参数
 
@@ -75,4 +75,6 @@ module.exports = {
 
 提供方可声明 `requiredFiles`（本目录文件名数组），用于可执行文件之外的 DLL 等依赖。可选 `provenance.json` 记录 name/version/license/url/source/instructions/redistribution/checkedAt；url 必须 HTTPS，不能包含凭据。新增外部工具必须登记可操作的官方获取说明。
 
-`describe().providers` 返回 acquisition 和 availability（available/reason）。检查不写配置、不自动下载；Sharp 检查在短生命周期进程中进行。桌面通过 providers action 刷新，只替换目录状态，保留正在编辑的步骤；打开渠道按提供方 ID 从核心取得已登记地址，原生层只打开 HTTPS。实际处理前再次检查依赖。
+`describe().providers` 返回 acquisition、availability（available/reason）及 dependency（自动安装能力、当前/目标版本与状态）。检查不写配置、不自动下载；只有用户点击安装才启动下载作业。Sharp 检查在短生命周期进程中进行。桌面通过 providers action 刷新，只替换目录状态，保留正在编辑的步骤；打开渠道按提供方 ID 从核心取得已登记地址，原生层只打开 HTTPS。实际处理前再次检查依赖。
+
+LAME 优先从受管理目录定位可执行文件，Sharp 的 `prepare()` 固定本次作业的模块路径并通过 `executable` 上下文交给子进程。没有受管理记录时仍可手动安装；记录损坏或版本不匹配时拒绝处理并提示修复或更新。依赖升级改变实现行为时必须同步升级 provider.version。

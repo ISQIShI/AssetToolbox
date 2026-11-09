@@ -8,6 +8,7 @@ Node CommonJS 核心，实现资源处理流水线、任务和安全恢复。当
 | `operations/` | 操作参数、支持种类、结果验收策略 |
 | `providers/` | pngquant、jpg-c、lame、sharp 实现与依赖 |
 | `framework/` | 注册、schema、无 shell 进程执行 |
+| `framework/dependencies/` | 固定清单、下载/解包/摘要验证、独立安装进程与受管理运行时 |
 | `engine.js`、`cli.js` | 扫描、流水线、统一安全提交及直接 CLI |
 | `batch.js`、`desktop-bridge.js` | 持久任务编排、JSON Lines、进度和取消 |
 | `settings.js`、`tasks.js`、`restore.js` | 原子配置、日志/锁、哈希恢复 |
@@ -16,4 +17,6 @@ Node CommonJS 核心，实现资源处理流水线、任务和安全恢复。当
 
 源码仓库不包含第三方 EXE/DLL；获取方式见各提供方 `provenance.json` 及桌面界面。提供方可用性同时检查可执行文件、伴随 DLL 和只读加载检查。
 
-本目录执行 `npm ci` 安装锁定的 Sharp（含平台原生依赖），再执行 `npm test`；`npm run process -- --help` 查看 CLI。发布 Windows x64 便携包必须包含完整生产 `node_modules/` 及三个 EXE，不能只复制 JS。核心配置、任务、报告均使用新 schema，不兼容旧项目格式。
+LAME/Sharp 支持受管理依赖副本，位于 `data/dependencies/`；检查文件完整性后优先使用，没有记录时使用原手动路径。自动安装范围与维护要求见[依赖管理](../docs/architecture/dependencies.md)。
+
+本目录执行 `npm ci` 安装锁定的 Sharp（含平台原生依赖），再执行 `npm test`；`npm run process -- --help` 查看 CLI。本地便携目录需包含所用步骤的完整依赖（手动 node_modules/EXE 或受管理副本），不能只复制 JS；对外分发另须核对许可。核心配置、任务、报告均使用新 schema，不兼容旧项目格式。
