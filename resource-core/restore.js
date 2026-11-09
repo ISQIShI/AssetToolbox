@@ -71,12 +71,12 @@ function assessFile(backup, target, hashes) {
         if (error.code === 'ENOENT') throw new Error('备份文件不存在，请检查备份是否被移动或删除：' + backup);
         throw error;
     }
-    if (hashes && (!/^[a-f0-9]{64}$/.test(hashes.sourceHash || '') || !/^[a-f0-9]{64}$/.test(hashes.expectedHash || ''))) throw new Error('任务缺少有效的原文件或压缩结果校验信息');
+    if (hashes && (!/^[a-f0-9]{64}$/.test(hashes.sourceHash || '') || !/^[a-f0-9]{64}$/.test(hashes.expectedHash || ''))) throw new Error('任务缺少有效的原文件或处理结果校验信息');
     if (hashes && digest(original.data) !== hashes.sourceHash) throw new Error('备份内容与原文件校验值不符，未恢复');
     const current = readFile(target, true);
     const backupHash = digest(original.data), targetHash = current ? digest(current.data) : null;
     if (current && current.data.equals(original.data)) return { original, current, backupHash, targetHash, state: 'restored' };
-    if (current && (!hashes || digest(current.data) !== hashes.expectedHash)) throw new Error('目标文件已被修改或不属于本次压缩结果，已保留；可将备份导出到其他文件夹');
+    if (current && (!hashes || digest(current.data) !== hashes.expectedHash)) throw new Error('目标文件已被修改或不属于本次处理结果，已保留；可将备份导出到其他文件夹');
     return { original, current, backupHash, targetHash, state: 'recoverable' };
 }
 
@@ -110,7 +110,7 @@ function processFiles(entries, roots, options, getHashes) {
     for (const entry of entries) {
         if (options.shouldCancel?.()) { summary.cancelled = true; break; }
         progress(entry);
-        const record = { path: entry.path, module: entry.module || '', status: 'failed', message: '' };
+        const record = { path: entry.path, resourceType: entry.resourceType || '', status: 'failed', message: '' };
         try {
             const backup = relativeFile(roots.backup, entry.path), target = relativeFile(roots.target, entry.path);
             if (within(roots.backup, target)) throw new Error('恢复目标位于备份文件夹中');
@@ -180,7 +180,7 @@ function previewFiles(entries, roots, options, getHashes) {
     for (const entry of entries) {
         if (options.shouldCancel?.()) { preview.cancelled = true; break; }
         options.onProgress?.({ phase: 'checking', processed: preview.checked, total: preview.total, current: entry.path });
-        const file = { path: entry.path, module: entry.module || '', state: 'conflict', selectable: false,
+        const file = { path: entry.path, resourceType: entry.resourceType || '', state: 'conflict', selectable: false,
             queue: entry.restoreRecord?.status === 'failed' ? 'failed' : entry.restoreRecord ? 'completed' : 'pending',
             inLastSelection: entry.inLastSelection !== false, backupBytes: null, currentBytes: null, reason: '' };
         try {
@@ -190,7 +190,7 @@ function previewFiles(entries, roots, options, getHashes) {
             if (file.queue === 'completed' && checked.state !== 'restored') throw new Error('此文件已恢复过，之后又发生变化；保留当前文件，可导出备份另行核对');
             Object.assign(file, { state: checked.state, selectable: checked.state === 'recoverable', backupHash: checked.backupHash,
                 targetHash: checked.targetHash, backupBytes: checked.original.data.length, currentBytes: checked.current?.data.length ?? null,
-                reason: checked.state === 'restored' ? '当前内容与备份一致，无需重复写入' : checked.current ? '备份完整，当前内容匹配本次压缩结果' : '目标缺失，可补回原文件' });
+                reason: checked.state === 'restored' ? '当前内容与备份一致，无需重复写入' : checked.current ? '备份完整，当前内容匹配本次处理结果' : '目标缺失，可补回原文件' });
         } catch (error) { file.reason = error.message; }
         preview[file.state]++; preview.checked++; preview.files.push(file);
     }

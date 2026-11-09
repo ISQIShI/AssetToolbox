@@ -1,33 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import { mount } from '@vue/test-utils';
-import ModuleCard from '../src/ModuleCard.vue';
+import StepEditor from '../src/StepEditor.vue';
+import { config, definition } from './fixtures';
 import RestoreTable from '../src/RestoreTable.vue';
-import { compressionRequest, resetParameters } from '../src/model';
-import type { Configuration, Definition, Module, RestoreFile, RestorePreview } from '../src/types';
-const config: Configuration = { version: 1, sourceDir: 'D:\\中文 素材', saveMode: 'overwrite', outputDir: 'D:\\输出', backupDir: 'D:\\备份', backupEnabled: true, extraEnabled: true, level: 3, rate: .5, flag: false, mode: 'a', text: '长文本' };
-const module: Module = { id: 'extra', displayName: '新压缩器', extensions: ['.pack'], enabledKey: 'extraEnabled', fields: [
-    { key: 'extraEnabled', label: '启用', type: 'boolean', default: true, isEnable: true },
-    { key: 'level', label: '级别', type: 'integer', default: 4, min: 1, max: 9, isEnable: false },
-    { key: 'rate', label: '比例', type: 'number', default: .7, min: 0, max: 1, step: .05, decimalPlaces: 2, isEnable: false },
-    { key: 'flag', label: '额外开关', type: 'boolean', default: false, isEnable: false },
-    { key: 'mode', label: '模式', type: 'enum', default: 'a', choices: [{ label: '快速', value: 'a' }, { label: '最佳', value: 'b' }], isEnable: false },
-    { key: 'text', label: '文字', type: 'text', default: '默认', maxLength: 32767, isEnable: false },
-] };
+import { processingRequest, resetParameters } from '../src/model';
+import type { Step, RestoreFile, RestorePreview } from '../src/types';
 const file = (path: string, state: RestoreFile['state'] = 'recoverable', queue: RestoreFile['queue'] = 'pending', inLastSelection = false): RestoreFile => ({ path, state, queue, inLastSelection, selectable: state === 'recoverable', backupHash: 'a'.repeat(64), targetHash: 'b'.repeat(64), backupBytes: 100, currentBytes: state === 'conflict' ? null : 10, reason: '测试说明' });
 const preview: RestorePreview = { source: 'D:\\备份', destination: 'D:\\源', total: 5, checked: 5, recoverable: 3, restored: 1, conflict: 1, cancelled: false, files: [file('a.png', 'recoverable', 'pending', true), file('b.png', 'recoverable', 'failed', true), file('c.png'), file('done.png', 'restored'), file('conflict.png', 'conflict')] };
 describe('动态模块与恢复交互', () => {
-    it('renders all schema types, emits typed edits, disables module fields, resets parameters without changing enable/path choices', async () => {
-        const wrapper = mount(ModuleCard, { props: { module, modelValue: config } });
+    it('edits namespaced fields, changes operations and preserves enable/path choices when resetting', async () => {
+        const step = config.pipeline[0];
+        const wrapper = mount(StepEditor, { props: { definition, modelValue: step, index: 0, count: 1 } });
         expect(wrapper.findAll('input[type=number]')).toHaveLength(2);
         expect(wrapper.find('input[step="0.05"]').attributes('max')).toBe('1');
-        await wrapper.find('select').setValue('b');
-        expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({ mode: 'b', sourceDir: config.sourceDir });
-        const long = '中文"\\'.repeat(7000); await wrapper.find('input[type=text]').setValue(long);
-        expect((wrapper.emitted('update:modelValue')?.at(-1)?.[0] as Configuration).text).toBe(long);
-        await wrapper.setProps({ modelValue: { ...config, extraEnabled: false } });
+        await wrapper.find('[aria-label="模式"]').setValue('b');
+        expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({ providerOptions: { mode: 'b' }, parameters: {} });
+        const long = '中文'.repeat(7000); await wrapper.find('[aria-label="文字"]').setValue(long);
+        expect((wrapper.emitted('update:modelValue')?.at(-1)?.[0] as Step).providerOptions.text).toBe(long);
+        await wrapper.setProps({ modelValue: { ...step, enabled: false } });
         expect(wrapper.findAll('input[type=number]').every(input => input.attributes('disabled') !== undefined)).toBe(true);
-        const definition: Definition = { fields: module.fields, defaults: {}, modules: [module] };
-        expect(resetParameters({ ...config, extraEnabled: false }, definition)).toMatchObject({ level: 4, rate: .7, extraEnabled: false, sourceDir: config.sourceDir, backupEnabled: true });
+        expect(resetParameters({ ...config, pipeline: [{ ...step, enabled: false }] }, definition)).toMatchObject({ sourceDir: config.sourceDir, pipeline: [{ id: step.id, enabled: false, providerOptions: { level: 4, rate: .7 } }] });
+        await wrapper.find('[aria-label="处理操作"]').setValue('image-resize');
+        expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({ operation: 'image-resize', parameters: { width: 512 }, enabled: false });
     });
     it('filters without losing hidden selection, forbids conflicts/restored, retains checks on refresh and emits hashes for selected files only', async () => {
         const wrapper = mount(RestoreTable, { props: { preview, scope: 'all' } });
@@ -53,10 +47,10 @@ describe('动态模块与恢复交互', () => {
         }
     });
     it('save-as excludes remembered backup mode, overwrite backup is explicit, and missing paths fail before dispatch', () => {
-        expect(compressionRequest({ ...config, saveMode: 'saveAs' }, 'compress')).not.toHaveProperty('backupDir');
-        expect(compressionRequest(config, 'preview')).toMatchObject({ backupDir: config.backupDir });
-        expect(compressionRequest(config, 'preview').options).not.toHaveProperty('version');
-        expect(() => compressionRequest({ ...config, sourceDir: '' }, 'compress')).toThrow('源');
-        expect(() => compressionRequest({ ...config, backupDir: '' }, 'compress')).toThrow('备份');
+        expect(processingRequest({ ...config, saveMode: 'saveAs' }, 'process')).not.toHaveProperty('backupDir');
+        expect(processingRequest(config, 'preview')).toMatchObject({ backupDir: config.backupDir });
+        expect(processingRequest(config, 'preview').pipeline).toEqual(config.pipeline);
+        expect(() => processingRequest({ ...config, sourceDir: '' }, 'process')).toThrow('源');
+        expect(() => processingRequest({ ...config, backupDir: '' }, 'process')).toThrow('备份');
     });
 });

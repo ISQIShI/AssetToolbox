@@ -1,3 +1,4 @@
+import { config, definition } from './fixtures';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import App from '../src/App.vue';
@@ -6,7 +7,7 @@ import type { JobState, ScanPreview } from '../src/types';
 
 vi.mock('../src/api', () => ({ call: vi.fn(), chooseFolder: vi.fn(), openReport: vi.fn() }));
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => ({ onCloseRequested: async () => () => {}, close: vi.fn() }) }));
-const preview: ScanPreview = { total: 35, checked: 35, totalBytes: 7000, enabledFiles: 35, conflicts: 0, issues: [], modules: [], cancelled: false };
+const preview: ScanPreview = { total: 35, checked: 35, totalBytes: 7000, enabledFiles: 35, conflicts: 0, issues: [], resources: [], cancelled: false };
 let wrapper: VueWrapper, state: JobState;
 const button = (text: string) => wrapper.findAll('button').find(item => item.text().includes(text))!;
 async function go(index: number) { await wrapper.findAll('nav button')[index].trigger('click'); await flushPromises(); }
@@ -19,7 +20,7 @@ beforeEach(async () => {
     Element.prototype.scrollIntoView = vi.fn();
     state = { done: false, phase: 'checking', processed: 0, total: 35 };
     vi.mocked(call).mockImplementation(async (action, payload) => {
-        if (action === 'bootstrap') return { config: { version: 1, sourceDir: 'D:\\source', outputDir: '', backupDir: '', saveMode: 'overwrite', backupEnabled: false }, definition: { fields: [], defaults: {}, modules: [{ id: 'extra', displayName: '扩展', fields: [], extensions: ['.pack'], enabledKey: 'extraEnabled' }] }, warnings: [] } as any;
+        if (action === 'bootstrap') return { config: structuredClone(config), definition, warnings: [] } as any;
         if (action === 'tasks') return [] as any;
         if (action === 'start') return { id: 'job-1' } as any;
         if (action === 'poll') return { ...state } as any;
@@ -47,7 +48,7 @@ it('replaces finished scan progress with the scan result only on the compression
 
 it('keeps a running preview cancellable across pages and shows partial results only in its workspace', async () => {
     await button('扫描预览').trigger('click'); await flushPromises(); await go(2);
-    expect(wrapper.find('.job-panel').text()).toContain('压缩预览');
+    expect(wrapper.find('.job-panel').text()).toContain('处理预览');
     await button('取消任务').trigger('click'); await flushPromises();
     expect(call).toHaveBeenCalledWith('cancel', { id: 'job-1' });
     await finish({ processed: 1, cancelled: true, exitCode: 2, preview: { ...preview, checked: 1, cancelled: true } });
@@ -59,7 +60,7 @@ it('keeps a running preview cancellable across pages and shows partial results o
 });
 
 it.each(['compression', 'preview-error'])('scopes and dismisses the completed %s card without deleting persisted data', async kind => {
-    await button(kind === 'compression' ? '开始压缩' : '扫描预览').trigger('click');
+    await button(kind === 'compression' ? '开始处理' : '扫描预览').trigger('click');
     await flushPromises(); await go(1);
     await finish(kind === 'compression' ? { processed: 35 } : { exitCode: 1, error: '无法读取源文件夹' });
     expect(wrapper.find('.job-panel').exists()).toBe(false);

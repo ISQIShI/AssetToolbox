@@ -2,8 +2,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { FIELDS, optionFlag, normalizeOptions, parseOptionValue, optionsFromValues } = require('./framework/options');
-const { byExtension } = require('./framework/registry');
+const { byExtension, providers, operations, normalizePipeline } = require('./framework/registry');
 const { relativeFile, safeSource, digest } = require('./tasks');
 
 function isWithin(parent, child) {
@@ -74,7 +73,7 @@ function collectResources(folder, { exclude = [], extensions = byExtension, shou
 }
 
 function prepareFolder(folder, options) {
-    const settings = normalizeOptions(options);
+    const pipeline = normalizePipeline(options.pipeline);
     if (options.outputDir !== undefined && options.backupDir !== undefined) throw new Error('另存为与覆盖备份不能同时启用');
     const sourceRoot = fs.realpathSync(path.resolve(folder));
     if (!fs.statSync(sourceRoot).isDirectory()) throw new Error('目标不是文件夹：' + sourceRoot);
@@ -87,32 +86,37 @@ function prepareFolder(folder, options) {
         const files = options.fileList.map(relative => {
             const filename = relativeFile(sourceRoot, relative);
             if (excluded.some(directory => isWithin(directory, filename))) throw new Error('任务文件位于输出或备份目录内');
-            if (!byExtension.has(path.extname(filename).toLowerCase())) throw new Error('任务所需压缩器未加载：' + relative);
+            if (!byExtension.has(path.extname(filename).toLowerCase())) throw new Error('任务所需资源类型未加载：' + relative);
             return filename;
         });
         collected = { root: sourceRoot, files };
     } else collected = collectResources(sourceRoot, { exclude: excluded, shouldCancel: options.shouldCancel, onProgress: options.onProgress });
-    return { ...collected, settings, outputRoot, backupRoot };
+    return { ...collected, pipeline, outputRoot, backupRoot };
 }
 
-// 只读预检：不读取文件内容、不启动编码器、不创建输出或备份目录。
+// 只读预检：不读取素材内容、不执行转换；允许提供方启动只读依赖检查进程。
 function scanFolder(folder, options = {}) {
-    const { root, files, settings, outputRoot, backupRoot, cancelled } = prepareFolder(folder, options);
+    const { root, files, pipeline, outputRoot, backupRoot, cancelled } = prepareFolder(folder, options);
     const result = { root, outputRoot, backupRoot, total: files.length, checked: 0, totalBytes: 0, enabledFiles: 0,
-        conflicts: 0, issues: [], modules: [], cancelled: Boolean(cancelled) };
+        conflicts: 0, issues: [], resources: [], cancelled: Boolean(cancelled) };
     const groups = new Map();
     const issue = message => { if (result.issues.length < 30) result.issues.push(message); };
     for (const [index, filename] of files.entries()) {
         if (result.cancelled || options.shouldCancel?.()) { result.cancelled = true; break; }
         const relative = path.relative(root, filename);
         options.onProgress?.({ phase: 'checking', total: files.length, processed: index, current: relative });
-        const processor = byExtension.get(path.extname(filename).toLowerCase());
-        let group = groups.get(processor.id);
+        const resourceDefinition = byExtension.get(path.extname(filename).toLowerCase());
+        let group = groups.get(resourceDefinition.id);
         if (!group) {
-            const enabled = Boolean(processor.isEnabled(settings));
-            group = { id: processor.id, name: processor.config.displayName, enabled, count: 0, bytes: 0 };
-            groups.set(processor.id, group);
-            if (enabled && processor.executableName && !fs.existsSync(path.join(processor.directory, processor.executableName))) issue('缺少压缩器：' + processor.id + '/' + processor.executableName);
+            const steps = pipeline.filter(step => step.enabled && step.resourceType === resourceDefinition.id);
+            const enabled = steps.length > 0;
+            group = { id: resourceDefinition.id, name: resourceDefinition.displayName, enabled, count: 0, bytes: 0 };
+            groups.set(resourceDefinition.id, group);
+            for (const step of steps) {
+                const provider = providers.get(step.provider);
+                if (provider.executableName && !fs.existsSync(path.join(provider.directory, provider.executableName))) issue('缺少处理工具：' + provider.id);
+                try { provider.check?.(); } catch (error) { issue('处理工具不可用：' + provider.id + '：' + error.message); }
+            }
         }
         const bytes = fs.statSync(filename).size;
         group.count++; group.bytes += bytes; result.totalBytes += bytes;
@@ -134,13 +138,8 @@ function scanFolder(folder, options = {}) {
         }
     }
     result.checked = [...groups.values()].reduce((count, group) => count + group.count, 0);
-    result.modules = [...groups.values()];
+    result.resources = [...groups.values()];
     return result;
-}
-
-// 保留旧的文件扫描 API；通用流水线使用 collectResources。
-function collectImages(folder, options = {}) {
-    return collectResources(folder, { ...options, extensions: new Set(['.png', '.jpg', '.jpeg']) });
 }
 
 function ensureDirectory(directory) {
@@ -187,19 +186,19 @@ function writeNewFile(filename, data, mode) {
 
 function assertUnchanged(filename, original) {
     if (fs.lstatSync(filename).isSymbolicLink() || !fs.readFileSync(filename).equals(original)) {
-        throw new Error('原文件在压缩期间发生变化，已取消替换');
+        throw new Error('原文件在处理期间发生变化，已取消替换');
     }
 }
 
-function replaceIfUnchanged(filename, original, compressed, mode) {
+function replaceIfUnchanged(filename, original, processed, mode) {
     // 在原目录中生成替换文件，再重命名，避免写入中断留下半张文件。
-    const replacement = path.join(path.dirname(filename), `.resource-compress-${randomUUID()}.tmp`);
+    const replacement = path.join(path.dirname(filename), `.resource-process-${randomUUID()}.tmp`);
     let created = false;
     try {
         const descriptor = fs.openSync(replacement, 'wx', mode);
         created = true;
         try {
-            fs.writeFileSync(descriptor, compressed);
+            fs.writeFileSync(descriptor, processed);
             fs.fsyncSync(descriptor);
         } finally {
             fs.closeSync(descriptor);
@@ -211,75 +210,90 @@ function replaceIfUnchanged(filename, original, compressed, mode) {
     }
 }
 
-function compressResource(filename, workDirectory, executables, settings) {
-    const processor = byExtension.get(path.extname(filename).toLowerCase());
+function processResource(filename, workDirectory, executables, pipeline) {
+    const type = byExtension.get(path.extname(filename).toLowerCase());
     if (fs.lstatSync(filename).isSymbolicLink()) throw new Error('文件已变为符号链接，已取消处理');
-    const original = fs.readFileSync(filename);
-    const mode = fs.statSync(filename).mode;
-    const unchanged = { original, output: original, mode, changed: false };
-    // 禁用类型不调用工具、不要求对应 EXE；另存时原样复制。
-    if (!processor.isEnabled(settings)) return { ...unchanged, reason: '该格式未启用压缩' };
-    const input = path.join(workDirectory, 'input', 'resource' + processor.extensions[0]);
-    const output = path.join(workDirectory, 'output' + processor.extensions[0]);
+    const original = fs.readFileSync(filename), mode = fs.statSync(filename).mode;
+    const steps = pipeline.filter(step => step.enabled && step.resourceType === type.id), stepResults = [];
+    const unchanged = { original, output: original, mode, changed: false, stepResults };
+    if (!steps.length) return { ...unchanged, reason: '该资源未配置启用的处理步骤' };
+    const input = path.join(workDirectory, 'input', 'resource' + type.extensions[0]);
+    const output = path.join(workDirectory, 'output' + type.extensions[0]);
+    let current = original;
     try {
-        if (!processor.validate(original)) throw new Error('文件内容不是有效的 ' + processor.id.toUpperCase() + ' 格式');
-        fs.writeFileSync(input, original);
-        const result = processor.compress({ executable: executables.get(processor.id), input, output, workDirectory, settings });
-        if (result.skipped) return unchanged;
-        const compressed = fs.readFileSync(result.output);
-        if (!processor.validate(compressed)) throw new Error('压缩结果无效，保留原文件');
-        if (compressed.length >= original.length) return unchanged;
-        return { original, output: compressed, mode, changed: true };
+        if (!type.validate(current)) throw new Error('文件内容不是有效的 ' + type.displayName + ' 格式');
+        for (const step of steps) {
+            const provider = providers.get(step.provider), operation = operations.get(step.operation);
+            fs.writeFileSync(input, current);
+            if (fs.existsSync(output)) fs.unlinkSync(output);
+            const result = provider.execute({ executable: executables.get(provider.id), input, output, workDirectory,
+                parameters: step.parameters, providerOptions: step.providerOptions, resourceType: type.id });
+            if (result?.then) throw new Error('execute 必须同步返回；异步库须通过工作进程适配');
+            if (result?.skipped) { stepResults.push({ id: step.id, operation: step.operation, provider: step.provider, status: 'skipped', inputBytes: current.length, outputBytes: current.length }); continue; }
+            if (typeof result?.output !== 'string' || !isWithin(workDirectory, path.resolve(result.output)) || !isWithin(workDirectory, fs.realpathSync(result.output)) || fs.lstatSync(result.output).isSymbolicLink() || !fs.statSync(result.output).isFile()) throw new Error('提供方输出必须是工作目录内的普通文件');
+            const next = fs.readFileSync(result.output);
+            if (!type.validate(next)) throw new Error('处理结果格式无效，保留原文件');
+            const accepted = operation.resultPolicy === 'valid-output' || next.length < current.length;
+            stepResults.push({ id: step.id, operation: step.operation, provider: step.provider, status: accepted ? 'processed' : 'skipped',
+                inputBytes: current.length, outputBytes: accepted ? next.length : current.length, ...(result.metadata ? { metadata: result.metadata } : {}) });
+            if (accepted) current = next;
+        }
+        return { original, output: current, mode, changed: !current.equals(original), stepResults };
     } catch (error) {
+        const failed = steps[stepResults.length];
+        if (failed) stepResults.push({ id: failed.id, operation: failed.operation, provider: failed.provider, status: 'failed', message: error.message.replaceAll(input, filename) });
         return { ...unchanged, error: new Error(error.message.replaceAll(input, filename)) };
     } finally {
         for (const temporary of [input, output]) if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
     }
 }
 
-function compressFolder(folder, options = {}) {
+function processFolder(folder, options = {}) {
     const { log = console.log, onProgress = () => {}, onFile = () => {}, shouldCancel = () => false } = options;
     // 参数校验必须早于扫描和文件写入；界面/API/命令行使用相同规则。
     const started = Date.now();
-    const { root, files, settings, outputRoot, backupRoot, cancelled } = prepareFolder(folder, options);
-    const summary = { total: files.length, compressed: 0, skipped: 0, failed: 0, savedBytes: 0, copied: 0, backedUp: 0, backupDirectory: null };
+    const { root, files, pipeline, outputRoot, backupRoot, cancelled } = prepareFolder(folder, options);
+    const summary = { total: files.length, processed: 0, skipped: 0, failed: 0, savedBytes: 0, copied: 0, backedUp: 0, backupDirectory: null };
     if (cancelled || shouldCancel()) return { ...summary, cancelled: true };
     const backupSession = backupRoot && (options.backupSession || path.join(backupRoot, `backup-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`));
     if (backupSession && (path.dirname(backupSession) !== backupRoot || !path.basename(backupSession).startsWith('backup-'))) throw new Error('备份子目录无效');
     log(`目标文件夹：${root}`);
-    log('压缩参数：' + FIELDS.map(field => `${field.label}=${settings[field.key]}`).join('，'));
+    log('处理步骤：' + pipeline.filter(step => step.enabled).map(step => step.resourceType + '/' + step.operation + '/' + step.provider).join(' → '));
     if (outputRoot) log(`另存为：${outputRoot}（原文件不变，已有同名输出不会被覆盖）`);
     else if (backupRoot) log(`覆盖模式，启用备份：${backupSession}`);
     else log('覆盖模式，未启用备份。');
-    log(`递归扫描完成，共找到 ${files.length} 个支持的文件（${[...byExtension.keys()].join(' / ') || '未发现模块'}）。`);
+    log(`递归扫描完成，共找到 ${files.length} 个支持的文件（${[...byExtension.keys()].join(' / ') || '未发现资源类型'}）。`);
     if (!files.length) return summary;
 
-    const requiredProcessors = [...new Set(files.map(file => byExtension.get(path.extname(file).toLowerCase())))].filter(processor => processor.isEnabled(settings));
+    const present = new Set(files.map(file => byExtension.get(path.extname(file).toLowerCase()).id));
+    const requiredProviders = [...new Set(pipeline.filter(step => step.enabled && present.has(step.resourceType)).map(step => providers.get(step.provider)))];
     const executables = new Map();
-    for (const processor of requiredProcessors) {
-        if (!processor.executableName) continue;
-        const executable = path.join(processor.directory, processor.executableName);
-        if (!fs.existsSync(executable)) throw new Error('缺少压缩器：' + executable);
-        executables.set(processor.id, executable);
+    for (const resourceDefinition of requiredProviders) {
+        resourceDefinition.check?.();
+        if (!resourceDefinition.executableName) continue;
+        const executable = path.join(resourceDefinition.directory, resourceDefinition.executableName);
+        if (!fs.existsSync(executable)) throw new Error('缺少处理工具：' + executable);
+        executables.set(resourceDefinition.id, executable);
     }
 
     const tempRoot = fs.realpathSync(os.tmpdir());
-    const workDirectory = fs.mkdtempSync(path.join(tempRoot, 'asset-toolbox-compress-'));
+    const workDirectory = fs.mkdtempSync(path.join(tempRoot, 'asset-toolbox-process-'));
     try {
         fs.mkdirSync(path.join(workDirectory, 'input'));
-        for (const processor of requiredProcessors) {
-            if (processor.prepare) executables.set(processor.id, processor.prepare({ executable: executables.get(processor.id), workDirectory }));
+        for (const resourceDefinition of requiredProviders) {
+            if (resourceDefinition.prepare) executables.set(resourceDefinition.id, resourceDefinition.prepare({ executable: executables.get(resourceDefinition.id), workDirectory }));
         }
         for (const [index, filename] of files.entries()) {
             if (shouldCancel()) { summary.cancelled = true; break; }
             const relativePath = path.relative(root, filename);
-            const record = { path: relativePath, module: byExtension.get(path.extname(filename).toLowerCase()).id,
+            const record = { path: relativePath, resourceType: byExtension.get(path.extname(filename).toLowerCase()).id,
                 status: 'failed', originalBytes: null, outputBytes: null, savedBytes: 0, copied: false, backedUp: false, message: '' };
-            onProgress({ phase: 'compressing', total: files.length, processed: index, current: relativePath, summary: { ...summary } });
+            onProgress({ phase: 'processing', total: files.length, processed: index, current: relativePath, summary: { ...summary } });
             try {
                 safeSource(root, filename);
                 options.beforeFile?.(relativePath, filename);
-                const result = compressResource(filename, workDirectory, executables, settings);
+                const result = processResource(filename, workDirectory, executables, pipeline);
+                record.steps = result.stepResults;
                 record.originalBytes = result.original.length;
                 record.sourceHash = digest(result.original);
                 const expectedHash = digest(result.output);
@@ -297,7 +311,7 @@ function compressFolder(folder, options = {}) {
                         if (digest(previousOutput) !== ownedHash) throw new Error('之前的失败副本已被修改，未覆盖');
                     }
                 }
-                options.beforeCommit?.({ ...record, status: result.error ? 'failed' : result.changed ? 'compressed' : 'skipped',
+                options.beforeCommit?.({ ...record, status: result.error ? 'failed' : result.changed ? 'processed' : 'skipped',
                     expectedHash, outputHash: outputRoot ? expectedHash : null, outputBytes: result.output.length,
                     savedBytes: result.changed ? result.original.length - result.output.length : 0,
                     copied: Boolean(outputRoot && !result.changed), backedUp: Boolean(backupSession && result.changed && !outputRoot),
@@ -338,14 +352,14 @@ function compressFolder(folder, options = {}) {
                     throw new Error(`${result.error.message}${outputRoot ? '；已将原文件复制到输出目录' : ''}`);
                 }
                 if (result.changed) {
-                    summary.compressed++;
+                    summary.processed++;
                     summary.savedBytes += result.original.length - result.output.length;
-                    record.status = 'compressed'; record.savedBytes = result.original.length - result.output.length;
-                    log(`[${index + 1}/${files.length}] 已压缩${outputRoot ? '并另存' : ''} ${relativePath} (${result.original.length} → ${result.output.length} 字节)`);
+                    record.status = 'processed'; record.savedBytes = result.original.length - result.output.length;
+                    log(`[${index + 1}/${files.length}] 已处理${outputRoot ? '并另存' : ''} ${relativePath} (${result.original.length} → ${result.output.length} 字节)`);
                 } else {
                     summary.skipped++;
-                    record.status = 'skipped'; record.message = result.reason || '无需压缩或未满足质量要求';
-                    log(`[${index + 1}/${files.length}] ${outputRoot ? '已复制原文件' : '保留原文件'} ${relativePath}（${result.reason || '无需压缩或未满足质量要求'}）`);
+                    record.status = 'skipped'; record.message = result.reason || '无需处理或未满足质量要求';
+                    log(`[${index + 1}/${files.length}] ${outputRoot ? '已复制原文件' : '保留原文件'} ${relativePath}（${result.reason || '无需处理或未满足质量要求'}）`);
                 }
             } catch (error) {
                 summary.failed++;
@@ -353,73 +367,20 @@ function compressFolder(folder, options = {}) {
                 log(`[${index + 1}/${files.length}] 失败 ${relativePath}：${error.message}`);
             }
             onFile(record);
-            onProgress({ phase: 'compressing', total: files.length, processed: index + 1, current: relativePath, summary: { ...summary } });
+            onProgress({ phase: 'processing', total: files.length, processed: index + 1, current: relativePath, summary: { ...summary } });
         }
     } finally {
         // 只删除本次创建、且已确认位于系统临时目录下的工作目录。
         const resolvedWorkDirectory = fs.realpathSync(workDirectory);
-        if (path.dirname(resolvedWorkDirectory) !== tempRoot || !path.basename(resolvedWorkDirectory).startsWith('asset-toolbox-compress-')) {
+        if (path.dirname(resolvedWorkDirectory) !== tempRoot || !path.basename(resolvedWorkDirectory).startsWith('asset-toolbox-process-')) {
             throw new Error(`临时目录位置异常，已停止清理：${resolvedWorkDirectory}`);
         }
         fs.rmSync(resolvedWorkDirectory, { recursive: true, force: true });
     }
 
-    log(`${summary.cancelled ? '已取消（保留已完成结果）' : '处理完成'}：压缩 ${summary.compressed}，保留 ${summary.skipped}，复制原文件 ${summary.copied}，备份 ${summary.backedUp}，失败 ${summary.failed}；节省 ${(summary.savedBytes / 1024).toFixed(2)} KB，耗时 ${((Date.now() - started) / 1000).toFixed(1)} 秒。`);
+    log(`${summary.cancelled ? '已取消（保留已完成结果）' : '处理完成'}：处理 ${summary.processed}，保留 ${summary.skipped}，复制原文件 ${summary.copied}，备份 ${summary.backedUp}，失败 ${summary.failed}；节省 ${(summary.savedBytes / 1024).toFixed(2)} KB，耗时 ${((Date.now() - started) / 1000).toFixed(1)} 秒。`);
     if (summary.backupDirectory) log(`原文件备份位置：${summary.backupDirectory}`);
     return summary;
 }
 
-if (require.main === module) {
-    const args = process.argv.slice(2);
-    if (!args.length || args[0] === '--help' || args[0] === '-h') {
-        console.log('用法：node compress.js "源文件夹" [--output "另存目录" | --backup "备份目录"]');
-        console.log('添加 --preview 可只读扫描并输出 JSON 预检结果，不压缩、不保存配置。');
-        console.log('模块参数（自动发现）：');
-        for (const field of FIELDS) {
-            const range = field.type === 'boolean' ? 'true|false' : field.type === 'enum' ? field.choices.map(choice => choice.value).join('|') :
-                field.type === 'text' ? '文本' : field.min + '–' + field.max;
-            console.log('  ' + optionFlag(field.key) + ' ' + range + '（' + field.label + '，默认 ' + field.default + '）' + (field.hint || ''));
-        }
-        process.exitCode = args.length === 1 && ['--help', '-h'].includes(args[0]) ? 0 : 1;
-    } else {
-        try {
-            const options = {};
-            const fieldsByFlag = new Map(FIELDS.map(field => [optionFlag(field.key), field]));
-            const seen = new Set();
-            let hasPayload = false;
-            for (let index = 1; index < args.length;) {
-                const option = args[index++];
-                if (seen.has(option)) throw new Error('重复参数：' + option);
-                seen.add(option);
-                if (option === '--preview') { options.preview = true; continue; }
-                const value = args[index++];
-                const field = fieldsByFlag.get(option);
-                if ((!field && !['--output', '--backup', '--options-base64', '--options-file'].includes(option)) || value === undefined || value.startsWith('--')) {
-                    throw new Error('无效或缺少值的参数：' + option);
-                }
-                if (option === '--options-base64' || option === '--options-file') {
-                    if (hasPayload || [...seen].some(flag => fieldsByFlag.has(flag))) throw new Error('参数载荷不能重复或与单独的模块选项同时使用');
-                    const payload = option === '--options-file' ? fs.readFileSync(value, 'utf8').replace(/^\uFEFF/, '') : Buffer.from(value, 'base64').toString('utf8');
-                    Object.assign(options, optionsFromValues(JSON.parse(payload)));
-                    hasPayload = true;
-                } else if (field) {
-                    if (hasPayload) throw new Error('参数载荷不能与单独的模块选项同时使用');
-                    options[field.key] = parseOptionValue(field, value);
-                } else options[option === '--output' ? 'outputDir' : 'backupDir'] = value;
-            }
-            if (options.preview) {
-                const preview = scanFolder(args[0], options);
-                console.log(JSON.stringify(preview, null, 2));
-                process.exitCode = preview.issues.length ? 1 : 0;
-            } else {
-                const summary = compressFolder(args[0], options);
-                process.exitCode = summary.failed ? 1 : 0;
-            }
-        } catch (error) {
-            console.error('压缩失败：' + error.message);
-            process.exitCode = 1;
-        }
-    }
-}
-
-module.exports = { collectImages, collectResources, scanFolder, compressFolder, prepareFolder };
+module.exports = { collectResources, scanFolder, processFolder, prepareFolder };

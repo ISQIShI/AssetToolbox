@@ -1,0 +1,1 @@
+module.exports = { apiVersion: 1, version: '1.0.0', displayName: 'JPEG', kind: 'image', extensions: [".jpg",".jpeg"], validate: data => data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff };

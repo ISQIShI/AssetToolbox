@@ -1,3 +1,4 @@
+const { compressionPipeline, engineFor, batchFor, installType } = require('./helpers');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -9,9 +10,9 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 function fixture(t) {
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'desktop-bridge-test-')), tool = copyTool(root);
     fs.copyFileSync(path.join(__dirname, '../desktop-bridge.js'), path.join(tool, 'resource-core/desktop-bridge.js'));
-    const module = path.join(tool, 'resource-core/processors/extra'); fs.mkdirSync(module);
-    fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '新压缩器', extensions: ['.pack'], enabledKey: 'extraEnabled', defaults: { extraEnabled: true, extraText: '' }, parameters: { extraText: { type: 'text', maxLength: 32767 } } }));
-    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs'),path=require('node:path');module.exports={validate:b=>b.toString().startsWith('PACK:'),compress({input,output,settings}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,180);fs.appendFileSync(path.join(__dirname,'calls.txt'),fs.readFileSync(input).subarray(0,6).toString()+'\\n');fs.writeFileSync(output,'PACK:'+settings.extraText+'small');return {output};}}`);
+    const module = path.join(tool, 'resource-core/providers/extra'); fs.mkdirSync(module); installType(tool, 'extra');
+    fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '新压缩器', extensions: ['.pack'], enabledKey: 'extraEnabled', defaults: { extraText: '' }, parameters: { extraText: { type: 'text', maxLength: 32767 } } }));
+    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs'),path=require('node:path');module.exports={apiVersion:1,version:'1.0.0',displayName:'测试提供方',supports:[{resourceType:'extra',operation:'compress'}],schema:require('./config'),validate:b=>b.toString().startsWith('PACK:'),execute({input,output,providerOptions}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,180);fs.appendFileSync(path.join(__dirname,'calls.txt'),fs.readFileSync(input).subarray(0,6).toString()+'\\n');fs.writeFileSync(output,'PACK:'+providerOptions.extraText+'small');return {output};}}`);
     const source = path.join(root, '中文 素材'), backup = path.join(root, '备份'), original = Buffer.from('PACK:x' + 'data'.repeat(30000));
     fs.mkdirSync(path.join(source, '子目录'), { recursive: true });
     for (let i = 0; i < 6; i++) fs.writeFileSync(path.join(source, '子目录', i + '.pack'), original);
@@ -21,26 +22,28 @@ function fixture(t) {
     const exited = new Promise(resolve => child.once('exit', resolve));
     require('node:readline').createInterface({ input: child.stdout }).on('line', line => { const response = JSON.parse(line), next = pending.get(response.id); pending.delete(response.id); response.error ? next.reject(new Error(response.error)) : next.resolve(response.result); });
     child.on('exit', () => { for (const next of pending.values()) next.reject(new Error(stderr || 'bridge exited')); });
-    const rpc = (action, payload = {}) => new Promise((resolve, reject) => { const id = ++sequence; pending.set(id, { resolve, reject }); child.stdin.write(JSON.stringify({ id, action, payload }) + '\n'); });
+    const rpc = (action, payload = {}) => new Promise((resolve, reject) => { if (action === 'start' && ['preview','process'].includes(payload.mode)) { const { options, ...rest } = payload; payload = { ...rest, pipeline: compressionPipeline(options, path.join(tool, 'resource-core')) }; } const id = ++sequence; pending.set(id, { resolve, reject }); child.stdin.write(JSON.stringify({ id, action, payload }) + '\n'); });
     const until = async (id, predicate = state => state.done) => { const deadline = Date.now() + 30000; while (Date.now() < deadline) { const state = await rpc('poll', { id }); if (predicate(state)) return state; await delay(20); } throw new Error('job timed out'); };
     const run = async request => { const { id } = await rpc('start', request); return until(id); };
     t.after(async () => { child.stdin.end(); await exited; assert.equal(path.dirname(fs.realpathSync(root)), parent); assert.ok(path.basename(root).startsWith('desktop-bridge-test-')); fs.rmSync(root, { recursive: true, force: true }); });
     return { root, tool, module, source, backup, original, child, exited, rpc, until, run };
 }
-test('stdio bridge discovers modules, loads legacy config read-only, preserves long Unicode settings and previews without task writes', async t => {
-    const f = fixture(t), saved = { version: 1, sourceDir: f.source, outputDir: '', backupDir: f.backup, saveMode: 'overwrite', backupEnabled: true, extraEnabled: true, extraText: '中文"\\'.repeat(7000) };
-    fs.writeFileSync(path.join(f.tool, 'resource-core/user-settings.json'), '\uFEFF' + JSON.stringify(saved));
-    const initial = await f.rpc('bootstrap'); assert.equal(initial.config.extraText, saved.extraText); assert.ok(initial.definition.modules.find(module => module.id === 'extra'));
-    assert.equal(fs.existsSync(path.join(f.tool, 'resource-core/config')), false);
-    await f.rpc('save', initial.config);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(f.module, 'user-settings.json'))).extraText, saved.extraText);
-    const options = Object.fromEntries(initial.definition.fields.map(field => [field.key, initial.config[field.key]]));
-    const state = await f.run({ mode: 'preview', folder: f.source, options });
-    assert.equal(state.preview.total, 6); assert.equal(fs.existsSync(path.join(f.tool, 'resource-core/tasks')), false); assert.equal(fs.existsSync(path.join(f.tool, 'resource-core/reports')), false);
+test('stdio bridge discovers providers and preserves long Unicode configuration with read-only previews', async t => {
+    const f = fixture(t), settings = require(path.join(f.tool, 'resource-core/settings'));
+    const saved = settings.defaultConfiguration(); saved.sourceDir = f.source; saved.backupDir = f.backup;
+    const text = '中文"\\'.repeat(7000); saved.pipeline = compressionPipeline({ extraText: text }, path.join(f.tool, 'resource-core'));
+    settings.saveConfiguration(saved);
+    const filename = path.join(f.tool, 'resource-core/data/settings.json'), before = fs.readFileSync(filename);
+    const initial = await f.rpc('bootstrap'); assert.equal(initial.config.pipeline.find(step => step.resourceType === 'extra').providerOptions.extraText, text);
+    assert.ok(initial.definition.providers.find(provider => provider.id === 'extra')); assert.deepEqual(fs.readFileSync(filename), before);
+    await f.rpc('save', initial.config); assert.deepEqual(settings.loadConfiguration(), initial.config);
+    const state = await f.run({ mode: 'preview', folder: f.source });
+    assert.equal(state.preview.total, 6); assert.equal(fs.existsSync(path.join(f.tool, 'resource-core/data/tasks')), false); assert.equal(fs.existsSync(path.join(f.tool, 'resource-core/data/reports')), false);
     await assert.rejects(f.rpc('start', { mode: 'invalid' }), /无效/);
 });
+
 test('real asynchronous jobs cancel, resume without repeats, retry failures and selectively restore from the existing journal', async t => {
-    const f = fixture(t), { id } = await f.rpc('start', { mode: 'compress', folder: f.source, backupDir: f.backup });
+    const f = fixture(t), { id } = await f.rpc('start', { mode: 'process', folder: f.source, backupDir: f.backup });
     await f.until(id, state => state.processed >= 1);
     await assert.rejects(f.rpc('start', { mode: 'preview', folder: f.source }), /等待/);
     await f.rpc('cancel', { id }); const stopped = await f.until(id);
@@ -56,7 +59,7 @@ test('real asynchronous jobs cancel, resume without repeats, retry failures and 
     const listed = await f.rpc('tasks'); assert.equal(listed[0].canResume, false); assert.equal(listed[0].restored, 2);
 });
 test('closing the native host cancels safely, releases task lock, cleans transient files and leaves a resumable task', async t => {
-    const f = fixture(t), { id } = await f.rpc('start', { mode: 'compress', folder: f.source, backupDir: f.backup });
+    const f = fixture(t), { id } = await f.rpc('start', { mode: 'process', folder: f.source, backupDir: f.backup });
     await f.until(id, state => state.processed >= 1);
     f.child.stdin.end(); await f.exited;
     const tasks = require(path.join(f.tool, 'resource-core/tasks')), [info] = tasks.listTasks();

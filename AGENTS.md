@@ -1,69 +1,37 @@
 # Repository Guidelines
 
-## 项目语言
+## 项目语言与阅读顺序
 
-本项目以简体中文为主要语言。后续沟通、贡献文档、代码注释、界面文案及提交与 PR 说明默认使用中文。代码标识符、命令、路径和协议字段沿用既有命名，必要时保留英文技术术语。
+产品为 **AssetToolbox 资源工具箱**，面向游戏等资源的压缩、图片与音频处理。沟通、文档、注释、界面及提交说明默认使用简体中文，代码标识符使用英文。
 
-产品为 **AssetToolbox 资源工具箱**，面向各类资源（重点为游戏资源）的压缩、图片/音频调整等处理需求。当前实现仍以压缩与恢复为主；不得将规划功能描述为已实现。扩展前阅读[职责与插件框架评估](docs/plans/resource-processing-and-cordis.md)，区分资源类型、处理操作和实现提供方。
+开始前阅读本文件、[文档索引](docs/README.md)、[项目状态](docs/project-status.md)、[总体架构](docs/architecture/overview.md)，检查 `git status` 和最近提交，再追踪对应源码与测试。扩展功能必读[扩展契约](docs/architecture/extensions.md)。不要将规划能力写成已经实现。
 
-## AI 阅读与开发顺序
+## 项目结构
 
-开始任务前依次阅读本文件、[文档索引](docs/README.md)、[项目状态](docs/project-status.md)和[总体架构](docs/architecture/overview.md)，再按改动范围阅读[前端](docs/architecture/frontend.md)、[后端](docs/architecture/backend.md)、[通信协议](docs/architecture/protocol.md)及[持久化](docs/architecture/persistence.md)。检查 `git status` 和最近提交，再追踪入口、调用方、实现与测试，不凭文档推断代码已具备某功能。
+- `desktop/src/`：Vue 3、TypeScript 界面；`desktop/src-tauri/`：Rust/Tauri 2 宿主。
+- `resource-core/`：Node CommonJS 引擎、任务、恢复、配置和桌面桥接。
+- `resource-types/`、`operations/`、`providers/` 位于核心目录内，分别定义格式识别、处理语义、工具实现；`framework/` 负责发现、schema 和进程调用。
+- `resource-core/tests/`、`desktop/tests/`：核心、组件及原生 E2E 测试；`docs/`：架构、流程和决策。
+- `resource-core/data/`：运行时配置、任务、报告，禁止提交。
 
-修改围绕当前需求展开；核对兼容性与文件安全，完成必要验证并同步文档。记录实际通过、失败和未执行项，不把旧 EXE 的运行结果当成新源码构建验证。当前环境限制和后续事项以项目状态为准。
+## 开发命令与风格
 
-## 项目结构与模块组织
+Windows x64 环境按 `.nvmrc`、`rust-toolchain.toml`、`.vsconfig` 配置。先在 `resource-core/` 执行 `npm ci`，再在 `desktop/` 执行 `npm ci`。
 
-- `desktop/src/`：Vue 3 组件、TypeScript 模型与 API、CSS。
-- `desktop/src-tauri/`：Rust/Tauri 2 宿主及原生权限，通过 JSON Lines 与 Node 通信。
-- `resource-core/`：CommonJS 压缩、恢复、配置、任务持久化及桌面桥接代码。
-- `resource-core/framework/`：处理器注册、schema、参数聚合及工具进程公共机制。
-- `resource-core/processors/`：自动发现的压缩模块，包含 `config.js`、`index.js` 和编码器。新增模块时复制 `_template/`，遵循同级 `README.md`。
-- `resource-core/tests/`、`desktop/tests/`：核心及界面测试。
-- `docs/`：架构、协议、文档管理、开发流程与接手记录；`docs/decisions/` 保存重要决策。
-- `AssetToolbox.exe`、`runtime/node.exe`、`resource-core/` 共同组成便携应用；配置、任务和报告随工具保存。
+核心目录：`npm test`。桌面目录：`npm run dev` 启动原生开发；`npm test` 跑组件测试；`npm run typecheck` 检查类型；`npm run build` 构建并校验便携依赖；`npm run test:e2e` 验证刚构建的 EXE。详细前提见[开发指南](docs/development.md)。
 
-## 构建、测试与开发命令
+JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分号。组件用 PascalCase，函数及参数用 camelCase，扩展和步骤 ID 用 `[a-z][a-z0-9-]*`。TypeScript 严格模式；没有独立 lint/格式化工具。
 
-开发环境为 Windows x64，需要 Node.js 22.12+、Rust stable MSVC、Visual Studio C++ Build Tools、Windows SDK 和 WebView2。
+## 扩展与文件安全
 
-开发版本与原生组件以 `.nvmrc`、`rust-toolchain.toml`、`.vsconfig` 为准。先用普通用户终端确认工具可用性；沙箱中的 nvm 检测可能受路径重定向影响。
+新功能遵循“资源类型—处理操作—实现提供方”；参数按步骤分为 `parameters` 与 `providerOptions`。验收策略属于操作，压缩才采用更小规则。提供方只处理临时文件，禁止直接修改素材；全部步骤成功才提交一次。保留哈希、原子替换、任务锁、按文件边界取消、显式恢复选择及冲突保护。
 
-在 `desktop/` 下执行：
+按用户要求，本次为全新项目契约：不读写或迁移旧配置、任务及旧接口；使用新 schema 和 `data/`。不接入 Cordis。后续契约变更必须升级版本并明确拒绝策略，参见 [ADR 0003](docs/decisions/0003-processing-contract.md)。
 
-- `npm ci`：按锁文件安装前端和 Tauri 依赖。
-- `npm run dev`：启动 Vite 和 Tauri 原生窗口。
-- `npm run dev:web`：仅在浏览器中调试样式，不支持原生调用。
-- `npm run build:web`：检查 TypeScript 并打包前端。
-- `npm run typecheck`：独立检查前端、测试及配置的 TypeScript 类型。
-- `npm run build`：构建发布版，并将 EXE 复制到仓库根目录。
-- `npm test`：运行 Vitest 组件测试。
-- `npm run test:e2e`：通过 Playwright 测试原生 WebView2，须先构建。
+## 测试、文档与提交
 
-在 `resource-core/` 下执行 `npm test`，运行 Node 内置测试框架的核心测试。
+核心用 Node 内置测试（`*.test.js`），组件用 Vitest（`*.test.ts`），原生用 Playwright（`*.spec.ts`）。无数值覆盖门槛；覆盖新增行为及文件安全边界，不删除安全断言来通过测试。仅用生成素材和隔离副本，不操作真实用户数据。
 
-若系统 Node/npm 尚未激活，可在仓库根目录用 `.\runtime\node.exe --test resource-core/tests/*.test.js` 验证核心。完整命令前提与验证矩阵见[开发与验证](docs/development.md)。
+遵循[文档管理规范](docs/documentation.md)：行为、协议、格式或依赖变化同步更新对应专题、索引及项目状态，记录实际通过和未执行项。新 EXE 必须重新验证。
 
-## 代码风格与命名
-
-遵循相邻代码：JavaScript、TypeScript、Rust 使用四空格缩进，Vue 模板使用两空格；JavaScript 和 TypeScript 使用单引号与分号。核心保留 CommonJS，前端使用 ES 模块。Vue 组件使用 PascalCase，函数和配置键使用 camelCase，Rust 函数使用 snake_case。模块 ID 遵循 `[a-z][a-z0-9_-]*`。TypeScript 已启用严格检查，尚未配置独立格式化或 lint 工具。
-
-## 测试要求
-
-核心测试命名为 `*.test.js`，组件测试为 `*.test.ts`，原生测试为 `*.spec.ts`。未设置数值覆盖率门槛；应覆盖变更行为，重点检查冲突保护、取消、续压、重试和恢复。使用临时目录、生成样本和隔离的便携副本，不得操作真实用户素材或既有历史记录。原生测试截图保存到 `desktop/test-results/`。
-
-## 提交与 PR 规范
-
-本地默认分支为 `main`。所有新提交必须遵循 Conventional Commits：`<type>(<scope>): <中文描述>`，scope 可省略；类型及范围使用小写英文，如 `fix(restore): 保留已修改的目标文件`。功能用 `feat`、修复用 `fix`、文档用 `docs`；破坏性变更使用 `!` 或 `BREAKING CHANGE:` 并说明迁移。详细类型及示例见[开发与验证](docs/development.md)。
-
-提交前审查暂存差异、执行 `git diff --cached --check`，不纳入忽略的用户数据或生成产物。PR 说明问题与最终行为、关联问题、验证命令及结果、兼容性和文档更新；界面变更附截图。
-
-## 文档维护要求
-
-遵循[文档管理规范](docs/documentation.md)。行为、协议、数据格式、构建命令变化必须在同一提交或 PR 中更新对应文档；新增或移动文档同步索引与链接。重要架构改变使用[决策模板](docs/decisions/template.md)，明确状态、取舍和兼容策略。每次开发交接更新项目状态中的验证结果、未完成事项和下一步，不保存聊天流水或真实用户路径。每项规则只在一个位置完整维护，其余使用链接引用。
-
-## 文件安全与兼容性
-
-保留既有配置和任务格式、哈希校验、原子写入及按文件边界取消的机制。编码器仅处理临时输入与输出；模块 schema 统一驱动界面与 CLI。预览不保存配置或改写用户素材；恢复空选择不能转换为省略选择。区分临时作业 ID 与持久任务，不绕过任务锁。不要将个人配置、报告、任务日志或测试产物纳入提交。
-
-通用设施使用 resource/processor 命名，压缩专用的 `compress.js`、`compressFolder`、`compress` mode/方法和 `compressed` 日志状态保留准确语义。目录迁移遵循 [ADR 0002](docs/decisions/0002-resource-toolbox-layout.md)，不重命名已持久化的模块 ID 或批量改写历史 JSON。Cordis 尚未接入，后续采用需先完成隔离验证与契约设计。
+提交使用 Conventional Commits，例如 `feat(core)!: 实现资源处理流水线`。提交前检查暂存差异及 `git diff --cached --check`；PR 说明最终行为、验证结果、关联问题和文档更新，界面改动附截图。

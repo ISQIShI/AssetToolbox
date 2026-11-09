@@ -1,6 +1,4 @@
-const { runTool, checkExit } = require('../../framework/process');
-
-function validate(data) {
+module.exports = { apiVersion: 1, version: '1.0.0', displayName: 'MP3', kind: 'audio', extensions: [".mp3"], validate: function validate(data) {
     let offset = 0;
     if (data.length >= 10 && data.toString('ascii', 0, 3) === 'ID3') {
         if (data.subarray(6, 10).some(byte => byte >= 128)) return false;
@@ -13,14 +11,4 @@ function validate(data) {
             (data[i + 2] & 0xf0) !== 0xf0 && (data[i + 2] & 0x0c) !== 0x0c) return true;
     }
     return false;
-}
-
-module.exports = {
-    executableName: 'lame.exe',
-    validate,
-    compress({ executable, input, output, workDirectory, settings }) {
-        const result = runTool(executable, ['-h', '--abr', String(settings.mp3Bitrate), '--mp3input', input, output], workDirectory);
-        checkExit(result);
-        return { output };
-    },
-};
+} };

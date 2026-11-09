@@ -1,10 +1,12 @@
-const RESERVED = new Set(('version sourceDir outputDir backupDir saveMode backupEnabled log onProgress onFile shouldCancel beforeFile beforeCommit fileList backupSession reuseBackup replaceOutputs preview help h output backup optionsBase64 optionsFile FolderPath OutputPath BackupPath SaveAs EnableBackup Verbose Debug ErrorAction WarningAction InformationAction ProgressAction ErrorVariable WarningVariable InformationVariable OutVariable OutBuffer PipelineVariable WhatIf Confirm constructor prototype __proto__').toLowerCase().split(' '));
+const RESERVED = new Set(['constructor', 'prototype', '__proto__']);
 
 function text(value, label) {
     if (typeof value !== 'string' || !value.trim() || value.includes('\0')) throw new Error(`${label}必须是非空文本`);
     return value;
 }
-function normalizeModule(config, options = {}) {
+function normalizeParameters(config, options = {}) {
+    if (!options || typeof options !== 'object' || Array.isArray(options)) throw new Error('参数必须为对象');
+    for (const key of Object.keys(options)) if (!config.fields.some(field => field.key === key)) throw new Error('未知参数：' + key);
     const settings = {};
     for (const field of config.fields) {
         const value = options[field.key] === undefined ? field.default : options[field.key];
@@ -28,22 +30,12 @@ function normalizeModule(config, options = {}) {
     return settings;
 }
 
-function compileConfig(input, id) {
-    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('config.js 必须导出配置对象');
+function compileSchema(input = {}) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('schema 必须为对象');
     const config = { ...input };
-    config.displayName = text(input.displayName, 'displayName');
-    config.description = input.description === undefined || input.description === '' ? '' : text(input.description, 'description');
-    config.order = input.order === undefined ? 100 : input.order;
-    if (!Number.isFinite(config.order)) throw new Error('order 必须是数值');
-    if (!Array.isArray(input.extensions) || !input.extensions.length) throw new Error('extensions 必须包含至少一个扩展名');
-    config.extensions = input.extensions.map(extension => {
-        if (typeof extension !== 'string' || !/^\.[a-z0-9]+$/i.test(extension)) throw new Error(`无效扩展名：${extension}`);
-        return extension.toLowerCase();
-    });
-    if (new Set(config.extensions).size !== config.extensions.length) throw new Error('模块内有重复扩展名');
-    if (!input.defaults || typeof input.defaults !== 'object' || Array.isArray(input.defaults)) throw new Error('缺少 defaults');
-    const keys = Object.keys(input.defaults);
-    if (!keys.includes(input.enabledKey) || typeof input.defaults[input.enabledKey] !== 'boolean') throw new Error('enabledKey 必须指向 defaults 中的布尔开关');
+    config.defaults = input.defaults || {};
+    if (typeof config.defaults !== 'object' || Array.isArray(config.defaults)) throw new Error('defaults 必须是对象');
+    const keys = Object.keys(config.defaults);
     if (input.validate !== undefined && typeof input.validate !== 'function') throw new Error('validate 必须是函数');
     const limits = input.limits || {};
     const parameters = input.parameters || {};
@@ -52,12 +44,12 @@ function compileConfig(input, id) {
     }
     config.fields = keys.map(key => {
         if (!/^[a-z][a-zA-Z0-9]*$/.test(key) || RESERVED.has(key.toLowerCase())) throw new Error(`无效或保留的参数名：${key}`);
-        const fallback = input.defaults[key], limit = limits[key], metadata = parameters[key] || {};
-        const isEnable = key === input.enabledKey;
+        const fallback = config.defaults[key], limit = limits[key], metadata = parameters[key] || {};
+
         const type = metadata.type || (typeof fallback === 'boolean' ? 'boolean' : typeof fallback === 'number' ? (Number.isInteger(fallback) ? 'integer' : 'number') : 'text');
-        if (!['integer', 'number', 'boolean', 'enum', 'text'].includes(type) || (isEnable && type !== 'boolean')) throw new Error(`参数 ${key} 的控件类型无效`);
-        const field = { key, type, default: fallback, isEnable,
-            label: text(metadata.label || (limit && limit.label) || (isEnable ? `启用 ${config.displayName}` : key), `${key} label`),
+        if (!['integer', 'number', 'boolean', 'enum', 'text'].includes(type)) throw new Error(`参数 ${key} 的控件类型无效`);
+        const field = { key, type, default: fallback,
+            label: text(metadata.label || (limit && limit.label) || key, `${key} label`),
             hint: metadata.hint === undefined || metadata.hint === '' ? '' : text(metadata.hint, `${key} hint`) };
         if (type === 'integer' || type === 'number') {
             if (!limit || !Number.isFinite(limit.min) || !Number.isFinite(limit.max) || limit.min > limit.max || Math.max(Math.abs(limit.min), Math.abs(limit.max)) > 1e12) throw new Error(`${key} 缺少有效的数值范围（绝对值不能超过 1e12）`);
@@ -82,8 +74,8 @@ function compileConfig(input, id) {
         return field;
     });
     config.limits = Object.fromEntries(config.fields.filter(field => ['integer', 'number'].includes(field.type)).map(field => [field.key, { label: field.label, min: field.min, max: field.max }]));
-    normalizeModule(config, input.defaults);
+    normalizeParameters(config, config.defaults);
     return config;
 }
 
-module.exports = { compileConfig, normalizeModule };
+module.exports = { compileSchema, normalizeParameters };

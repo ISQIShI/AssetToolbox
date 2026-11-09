@@ -1,68 +1,46 @@
 # 总体架构
 
-本项目是面向 Windows 的便携资源处理工具 **AssetToolbox**，主要面向游戏资源，并逐步扩展图片、音频等处理能力。当前支持递归扫描、PNG/JPG/MP3 压缩、另存、覆盖备份、任务续压与选择性恢复；图片调整、音频编辑和多步骤流水线尚未实现。桌面包版本为 `2.0.0`。它使用本机进程和文件通信，没有应用 HTTP 后端、数据库、账户服务或云端处理。
+AssetToolbox 1.0.0 是 Windows 便携资源处理工具，使用 Vue 3/TypeScript、Tauri 2/Rust、Node CommonJS。已支持三种格式压缩与 PNG/JPEG 缩放，处理采用有序步骤。不提供云端服务、账户、数据库或应用 HTTP 后端。
 
-## 技术层次与源码入口
-
-| 层次 | 入口 | 职责 |
-| --- | --- | --- |
-| 界面 | `desktop/src/main.ts`、`App.vue` | Vue 3 Composition API、TypeScript、三个工作区与异步作业展示 |
-| 原生宿主 | `desktop/src-tauri/src/main.rs` | Tauri 2、WebView2、目录选择、JSON Lines 桥接、打开报告 |
-| 桌面会话 | `resource-core/desktop-bridge.js` | action 白名单、单作业调度、工作进程与临时文件生命周期 |
-| 批处理编排 | `resource-core/batch.js` | 请求分流、进度、取消、持久任务锁、报告 |
-| 业务核心 | `compress.js`、`restore.js`、`tasks.js`、`settings.js` | 编码、文件安全、恢复、事件日志及配置兼容 |
-| 扩展模块 | `resource-core/processors/` | schema、格式识别、工具参数与编码器适配 |
-| 公共机制 | `resource-core/framework/` | `registry.js` 发现模块，`schema.js`/`options.js` 编译与聚合参数，`process.js` 调用工具 |
-
-以上 Node 文件均位于 `resource-core/`。核心只依赖 Node 标准库；前端 npm 依赖和 Rust crate 分别由 `package-lock.json`、`Cargo.lock` 锁定。Vite 负责前端构建，`vue-tsc` 负责严格类型检查。
-
-## 进程关系
+## 进程与边界
 
 ```mermaid
 flowchart TD
-    UI[Vue 界面 / WebView2] -->|Tauri invoke| Host[Rust 原生宿主]
-    Host -->|stdin / stdout JSON Lines| Bridge[Node 桌面桥接进程]
-    Bridge -->|启动 batch.js| Worker[独立 Node 工作进程]
-    Bridge -->|读取 status.json / 写入 cancel| Session[临时作业目录]
-    Worker -->|进度快照与取消检查| Session
-    Worker --> Core[压缩 / 恢复 / 任务核心]
-    Core -->|spawnSync| Encoder[PNG / JPG / MP3 编码器]
-    Core --> Files[用户素材 / 输出 / 备份]
-    Core --> Data[配置 / 持久任务 / 报告]
-    CLI[Node 命令行] --> Core
+    UI[Vue / WebView2] -->|Tauri invoke| Host[Rust 宿主]
+    Host -->|JSON Lines| Bridge[Node 桌面会话]
+    Bridge --> Worker[batch.js 工作进程]
+    Worker --> Engine[engine.js 流水线]
+    Engine --> Catalog[类型 / 操作 / 提供方]
+    Engine --> Tool[编码器 / Sharp 子进程]
+    Worker --> Restore[restore.js 恢复服务]
+    Worker --> Data[任务事件 / 报告]
+    Engine --> Files[素材 / 结果 / 备份]
 ```
 
-生产启动不监听网络端口。开发用 Vite 监听 `127.0.0.1:1420`；原生 E2E 显式设置测试变量后，WebView2 才开放本机 CDP 测试端口。Node 核心的同步 IO 和同步编码器放在工作进程内，桥接进程仍能响应轮询与取消。Rust 用 `spawn_blocking` 执行阻塞管道通信，`Mutex` 串行化请求。
+Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回退源码根目录；`spawn_blocking` 与 Mutex 处理阻塞管道。桥接层启动每次作业，读临时 status 文件并响应取消。Node 同步业务运行于工作进程；Sharp 的异步 API 在更短的子进程中执行。生产启动不监听网络端口，E2E 显式启用本机 CDP。
 
-## 从启动到完成
+## 代码职责
 
-1. EXE 定位相邻 `resource-core/` 与 `runtime/node.exe`。调试模式还可回退到源码根目录。
-2. 前端 `bootstrap` 加载公共/模块配置与动态字段，再通过 `tasks` 获取历史。模块错误不会阻止加载任务及恢复入口。
-3. 新压缩先执行 `normalize`，再尝试 `save`，随后 `start`；预览仅规范化参数，不保存配置。
-4. 桥接进程创建临时请求目录并启动工作进程。工作进程分派预览、压缩、续压、重试或恢复。
-5. 压缩任务在完整扫描后固定清单，逐文件记录写入意图、提交结果，并生成本次报告。
-6. 界面按 250 ms 间隔轮询。只有工作进程退出后，桥接层才向界面报告 `done`，防止锁未释放就启动下一次处理。
-7. 取消在扫描期间或文件之间生效。当前文件的编码、校验及提交结束后停止；已完成结果保留。
+| 入口 | 职责 |
+| --- | --- |
+| `desktop/src/App.vue`、`StepEditor.vue` | 页面、步骤选择和排序、进度、任务与恢复 |
+| `desktop/src-tauri/src/main.rs` | 本地宿主、目录对话框、报告打开、退出协作 |
+| `desktop-bridge.js` | action 白名单、单活动作业、工作进程生命周期 |
+| `batch.js` | 预览/处理/续跑/恢复路由、锁、进度、报告 |
+| `engine.js` | 扫描、有序步骤、结果策略、临时文件、统一提交 |
+| `settings.js`、`tasks.js`、`restore.js` | 原子配置、任务日志、哈希恢复 |
+| `framework/` 与三个扩展目录 | 发现、schema、进程执行及[扩展契约](extensions.md) |
 
-## 两类任务标识
+表中核心入口位于 `resource-core/`。Sharp 为核心唯一直接 npm 依赖；核心、桌面 npm 和 Rust 依赖各有锁文件。完整便携部署包含核心 node_modules，构建脚本通过便携 Node 验证 Sharp 可加载。
 
-**作业会话**由桥接层生成 UUID，最多保留当前一个，关联临时 `request.json`、`status.json` 和 `cancel`。开始下一作业或退出桥接进程时清理已结束会话。
+## 数据流与安全
 
-**持久任务**由 `tasks.js` 生成“时间戳 + UUID”，保存在 `resource-core/tasks/`。一次压缩任务可对应多次续压、重试和恢复作业；跨启动继续依赖 `taskFile`，不能复用旧会话 ID。扫描预览与旧备份导出不建立持久任务。
+启动加载目录和配置，配置错误不妨碍任务/恢复入口。前端先 normalize，再保存配置（失败告警但允许本次运行），最后 start。预览不保存配置。批处理扫描后固定任务清单和规范化 pipeline，包括三层版本。
 
-## 核心边界与设计取舍
+每个文件过滤适用步骤，按顺序执行；压缩接受更小输出，缩放接受合法输出。全部步骤成功后才做一次提交：写 intent、校验哈希、备份/排他创建或原子替换、写 result。后续步骤失败丢弃前面产物。续跑和恢复复用任务锁、哈希及事件日志；恢复不加载转换插件。
 
-- 模块 schema 同时驱动界面、CLI、默认值和校验，新增格式无需修改前端或 Rust。
-- 文件改写前验证内容与路径；覆盖备份、日志和输出各有独立生命周期，不承诺整批事务回滚。
-- UI 负责交互限制，Node 负责最终业务校验；TypeScript 接口不是运行时安全边界。
-- 每个桥接实例只运行一个作业；不同实例通过持久任务锁避免同时操作同一任务。锁不是不同任务之间的全局素材锁。
-- 模块是受信任的本地 JavaScript，拥有 Node 权限；自动发现不是插件沙箱。
-- 文件内容与任务日志读入内存，编码串行进行；大文件、大任务性能需要单独测量。恢复表分页只减少 DOM 行数，不减少传输或内存中的完整清单。
+取消仅在扫描和文件边界检查；当前工具不被强杀。界面每 250ms 轮询，进程退出并释放锁后才显示最终 done。资源识别只按扩展名进入清单，再由类型/提供方验证内容；未知格式不复制。
 
-## 便携发布边界
+## 设计边界
 
-`npm run build` 将前端嵌入 Rust release EXE，并由 `portable.mjs` 放到项目根目录。移动应用需同时携带 EXE、`runtime/` 和 `resource-core/`，不需要 `node_modules`、`target` 或 `dist`。任务记录中的素材路径仍是绝对路径，移动工具不会自动重定位素材。
-
-代码导航：[前端](frontend.md)、[后端](backend.md)、[协议](protocol.md)、[持久化](persistence.md)。设计取舍补录见 [ADR 0001](../decisions/0001-local-process-architecture.md)。
-
-本次职责与目录调整见 [ADR 0002](../decisions/0002-resource-toolbox-layout.md)。未来的多操作模型及 Cordis 选型见[专项评估](../plans/resource-processing-and-cordis.md)，当前仍使用本地目录发现机制。
+当前只支持同格式、一入一出、逐文件串行；扩展为可信本地代码，无权限隔离、热重载、依赖注入。没有 Cordis。新数据根和 schema 不兼容历史数据，见[持久化](persistence.md)。后续扩展优先遵循契约，出现生命周期或服务依赖需求后再评估框架收益。

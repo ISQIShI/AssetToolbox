@@ -1,19 +1,18 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { runTool, checkExit } = require('../../framework/process');
-
 module.exports = {
-    executableName: 'JPG-C_v4.0.21.902.exe',
-    // -q 0 也可能改写元数据，直接跳过才能保留原字节。
-    shouldCompress: settings => settings.jpgQuality !== 0,
-    validate: data => data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff,
+    apiVersion: 1, version: '1.0.0', displayName: 'jpg-c',
+    supports: [{ resourceType: 'jpg', operation: 'compress' }],
+    executableName: 'JPG-C_v4.0.21.902.exe', schema: require('./schema'),
     prepare({ executable, workDirectory }) {
         const staged = path.join(workDirectory, 'JPG-C.exe');
         fs.copyFileSync(executable, staged);
         return staged;
     },
-    compress({ executable, input, workDirectory, settings }) {
-        const result = runTool(executable, ['-m', '1', '-q', String(settings.jpgQuality), '-di', path.dirname(input)], workDirectory);
+    execute({ executable, input, workDirectory, providerOptions }) {
+        if (providerOptions.quality === 0) return { skipped: true };
+        const result = runTool(executable, ['-m', '1', '-q', String(providerOptions.quality), '-di', path.dirname(input)], workDirectory);
         // JPG-C 失败也会返回 0，错误日志写在 EXE 所在目录。
         const messages = [];
         for (const name of fs.readdirSync(workDirectory)) {

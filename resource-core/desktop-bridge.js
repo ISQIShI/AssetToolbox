@@ -5,7 +5,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 
-const MODES = new Set(['preview', 'compress', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export', 'restore-preview', 'restore-export-preview']);
+const MODES = new Set(['preview', 'process', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export', 'restore-preview', 'restore-export-preview']);
 function normalizeConfiguration(payload) {
     const config = require('./settings').validateConfiguration(payload);
     for (const key of ['sourceDir', 'outputDir', 'backupDir']) {
@@ -21,12 +21,8 @@ class DesktopBridge {
         let config = null, definition = null, configError = null;
         try {
             const settings = require('./settings');
-            config = settings.loadConfiguration(__dirname, message => warnings.push(message));
-            const { DEFAULTS, FIELDS } = require('./framework/options');
-            definition = { defaults: DEFAULTS, fields: FIELDS, modules: require('./framework/registry').processors.map(processor => ({
-                id: processor.id, displayName: processor.config.displayName, description: processor.config.description,
-                extensions: processor.extensions, enabledKey: processor.config.enabledKey, fields: processor.config.fields,
-            })) };
+            config = settings.loadConfiguration();
+            definition = require('./framework/registry').describe();
         } catch (error) { configError = error.message; }
         return { config, definition, warnings, configError, root: path.dirname(__dirname), nodeVersion: process.version };
     }
@@ -51,9 +47,9 @@ class DesktopBridge {
         if (this.closing) throw new Error('应用正在退出');
         if (this.job && !this.job.exited) throw new Error('请等待当前任务结束');
         if (!request || !MODES.has(request.mode)) throw new Error('无效任务模式');
-        if (['preview', 'compress'].includes(request.mode)) {
+        if (['preview', 'process'].includes(request.mode)) {
             if (typeof request.folder !== 'string' || !request.folder.trim()) throw new Error('请选择源文件夹');
-            request = { ...request, options: require('./framework/options').optionsFromValues(request.options || {}) };
+            request = { ...request, pipeline: require('./framework/registry').normalizePipeline(request.pipeline) };
         }
         this.cleanup();
         const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'resource-desktop-'));

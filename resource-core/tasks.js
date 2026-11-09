@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 
-const TASK_ROOT = path.join(__dirname, 'tasks');
+const TASK_ROOT = path.join(__dirname, 'data', 'tasks');
 const digest = data => createHash('sha256').update(data).digest('hex');
 function relativeFile(root, relative) {
     if (typeof relative !== 'string' || !relative || path.isAbsolute(relative) || /[:\0]/.test(relative) ||
@@ -44,8 +44,8 @@ function processAlive(pid) {
     catch (error) { return error.code !== 'ESRCH'; }
 }
 function validateHeader(header) {
-    if (!header || header.version !== 1 || typeof header.id !== 'string' || typeof header.source !== 'string' || !path.isAbsolute(header.source) ||
-        !header.options || typeof header.options !== 'object' || Array.isArray(header.options)) throw new Error('任务断点格式无效或版本不支持');
+    if (!header || header.schema !== 'asset-toolbox.task/1' || typeof header.id !== 'string' || typeof header.source !== 'string' || !path.isAbsolute(header.source) ||
+        !Array.isArray(header.pipeline) || header.pipeline.some(step => !step || typeof step.id !== 'string' || !step.versions)) throw new Error('任务断点格式无效或版本不支持');
     for (const key of ['outputDir', 'backupDir']) if (header[key] !== null && (typeof header[key] !== 'string' || !path.isAbsolute(header[key]))) throw new Error('任务路径无效：' + key);
     if (header.outputDir && header.backupDir) throw new Error('任务保存方式冲突');
     if (header.backupDir && (typeof header.backupSession !== 'string' || path.dirname(header.backupSession) !== header.backupDir || !path.basename(header.backupSession).startsWith('backup-'))) throw new Error('任务备份位置无效');
@@ -54,8 +54,8 @@ function createTask(plan, root = TASK_ROOT) {
     fs.mkdirSync(root, { recursive: true });
     const id = new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID();
     const directory = path.join(root, id); fs.mkdirSync(directory);
-    const header = { version: 1, id, createdAt: new Date().toISOString(), source: plan.root,
-        outputDir: plan.outputRoot, backupDir: plan.backupRoot, options: plan.settings,
+    const header = { schema: 'asset-toolbox.task/1', id, createdAt: new Date().toISOString(), source: plan.root,
+        outputDir: plan.outputRoot, backupDir: plan.backupRoot, pipeline: plan.pipeline,
         backupSession: plan.backupRoot ? path.join(plan.backupRoot, 'backup-' + id) : null };
     const taskFile = path.join(directory, 'task.json');
     writeDurable(taskFile, JSON.stringify(header, null, 2));
@@ -73,7 +73,7 @@ function loadTask(taskFile) {
             if (scanComplete || !Array.isArray(event.files)) throw new Error('任务扫描记录无效');
             for (const file of event.files) {
                 relativeFile(header.source, file.path);
-                if (entries.has(file.path) || typeof file.module !== 'string' || !file.snapshot || !Number.isFinite(file.snapshot.size) || !Number.isFinite(file.snapshot.mtimeMs)) throw new Error('任务文件清单无效');
+                if (entries.has(file.path) || typeof file.resourceType !== 'string' || !file.snapshot || !Number.isFinite(file.snapshot.size) || !Number.isFinite(file.snapshot.mtimeMs)) throw new Error('任务文件清单无效');
                 entries.set(file.path, { ...file, status: 'pending', ownedOutputHash: null });
             }
             scanComplete = true;
@@ -82,11 +82,11 @@ function loadTask(taskFile) {
             if (!entry || !event.record || event.record.path !== event.path) throw new Error('任务处理记录与文件清单不匹配');
             if (event.type === 'intent') {
                 entry.intent = event.record; entry.status = 'running';
-                // 保留已写入日志的原始/压缩哈希，兼容增加恢复功能前创建的任务。
+                // 提交意图中的哈希用于崩溃后判断文件是否已经完成替换。
                 if (event.record.backedUp) entry.backupRecord = event.record;
             }
             else {
-                if (!['compressed', 'skipped', 'failed', 'pending'].includes(event.record.status)) throw new Error('任务处理状态无效');
+                if (!['processed', 'skipped', 'failed', 'pending'].includes(event.record.status)) throw new Error('任务处理状态无效');
                 entry.record = event.record; entry.status = event.record.status; delete entry.intent;
                 if (event.record.outputHash) entry.ownedOutputHash = event.record.outputHash;
             }
@@ -157,7 +157,7 @@ function loadTask(taskFile) {
         },
         finish(record) { task.append({ type: 'result', path: record.path, record }); },
         info() {
-            const values = [...entries.values()], completed = values.filter(file => ['compressed', 'skipped'].includes(file.status)).length;
+            const values = [...entries.values()], completed = values.filter(file => ['processed', 'skipped'].includes(file.status)).length;
             const failed = values.filter(file => file.status === 'failed').length;
             const pending = values.length - completed - failed;
             const backups = backupEntries(task), restored = backups.filter(file => ['restored', 'already-original'].includes(file.restoreRecord?.status)).length;
@@ -180,10 +180,10 @@ function loadTask(taskFile) {
 function backupEntries(task) {
     if (!task.header.backupSession || task.header.outputDir) return [];
     return [...task.entries.values()].filter(entry => entry.backupRecord &&
-        (entry.record?.backedUp || entry.intent?.backedUp || entry.status === 'compressed' || entry.restoreRecord));
+        (entry.record?.backedUp || entry.intent?.backedUp || entry.status === 'processed' || entry.restoreRecord));
 }
 
-// 有写入意图却没有完成记录：核对磁盘结果，防止退出窗口内已提交的文件被重复压缩。
+// 有写入意图却没有完成记录：核对磁盘结果，防止退出窗口内已提交的文件被重复处理。
 function recoverTask(task) {
     const { header } = task;
     const recovered = [];
@@ -211,16 +211,16 @@ function recoverTask(task) {
                         if (hashFile(backup) !== intent.sourceHash) throw new Error('备份不匹配或已丢失');
                     } catch (error) {
                         record.backedUp = false; record.warning = true;
-                        record.message = '压缩结果已提交，不会重复压缩；原备份需要检查：' + error.message;
+                        record.message = '处理结果已提交，不会重复处理；原备份需要检查：' + error.message;
                     }
                 }
                 // 未确认完成的失败副本不能据相同内容取得所有权；后续重试仍保护已有文件。
                 if (record.status === 'failed' && !entry.ownedOutputHash) { record.outputHash = null; record.copied = false; }
             } else if ((!header.outputDir && current === intent.sourceHash) || (header.outputDir && (current === null || current === entry.ownedOutputHash))) {
                 // 未提交时不自动重试编码，保留为失败项，由“仅重试失败”明确重新尝试。
-                record = { path: entry.path, module: entry.module, status: 'failed', message: '上次进程在提交前中断，请重试此项' };
+                record = { path: entry.path, resourceType: entry.resourceType, status: 'failed', message: '上次进程在提交前中断，请重试此项' };
             } else throw new Error('上次中断的文件与预期结果不一致，已保留现有文件');
-        } catch (error) { record = { path: entry.path, module: entry.module, status: 'failed', message: error.message }; }
+        } catch (error) { record = { path: entry.path, resourceType: entry.resourceType, status: 'failed', message: error.message }; }
         task.finish(record);
         recovered.push(record);
     }

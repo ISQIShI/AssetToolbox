@@ -1,3 +1,4 @@
+const { compressionPipeline, engineFor, batchFor, installType } = require('./helpers');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -13,14 +14,15 @@ function fixture(t, delay = 0) {
         assert.ok(path.basename(root).startsWith('compress-batch-test-'));
         fs.rmSync(root, { recursive: true, force: true });
     });
-    const tool = copyTool(root), module = path.join(tool, 'resource-core/processors/fixture');
-    fs.mkdirSync(module);
+    const tool = copyTool(root), module = path.join(tool, 'resource-core/providers/fixture');
+    fs.mkdirSync(module); installType(tool, 'fixture');
     fs.writeFileSync(path.join(module, 'config.js'), 'module.exports = ' + JSON.stringify({
-        displayName: '批量测试模块', extensions: ['.pack'], enabledKey: 'fixtureEnabled', defaults: { fixtureEnabled: true },
+        displayName: '批量测试模块', extensions: ['.pack'], enabledKey: 'fixtureEnabled', defaults: {},
     }));
     fs.writeFileSync(path.join(module, 'index.js'), `const fs = require('node:fs'); module.exports = {
+        apiVersion:1,version:'1.0.0',displayName:'测试提供方',supports:[{resourceType:'fixture',operation:'compress'}],schema:require('./config'),
         validate: data => data.toString().startsWith('PACK:'),
-        compress({input, output}) {
+        execute({input, output}) {
             Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${delay});
             fs.writeFileSync(output, fs.readFileSync(input).subarray(0, 8)); return {output};
         }
@@ -28,7 +30,7 @@ function fixture(t, delay = 0) {
     const source = path.join(root, '中文 素材'); fs.mkdirSync(path.join(source, '子目录'), { recursive: true });
     const original = Buffer.from('PACK:' + 'test'.repeat(100));
     for (const name of ['a', 'b', 'c', 'd', '=formula']) fs.writeFileSync(path.join(source, '子目录', name + '.PACK'), original);
-    return { root, tool, source, original, core: require(path.join(tool, 'resource-core/compress')), batch: require(path.join(tool, 'resource-core/batch')) };
+    return { root, tool, source, original, core: engineFor(path.join(tool, 'resource-core')), batch: batchFor(path.join(tool, 'resource-core')) };
 }
 function tree(root) {
     return fs.readdirSync(root, { recursive: true }).sort();
@@ -44,7 +46,7 @@ test('preview uses discovered modules, excludes nested destinations and never ch
     const preview = core.scanFolder(source, { outputDir: output });
     assert.equal(preview.total, 5); assert.equal(preview.enabledFiles, 5);
     assert.equal(preview.totalBytes, original.length * 5); assert.equal(preview.conflicts, 1);
-    assert.equal(preview.modules[0].id, 'fixture'); assert.match(preview.issues[0], /a.PACK/);
+    assert.equal(preview.resources[0].id, 'fixture'); assert.match(preview.issues[0], /a.PACK/);
     assert.deepEqual(tree(source), entries); assert.deepEqual(tree(tool), before);
     const absent = path.join(root, '未创建');
     assert.equal(core.scanFolder(source, { backupDir: absent, fixtureEnabled: false }).enabledFiles, 0);
@@ -57,30 +59,30 @@ test('preview finds a blocked parent directory and missing enabled encoder; disa
     const output = path.join(root, 'result'); fs.mkdirSync(output); fs.writeFileSync(path.join(output, '子目录'), 'file');
     assert.equal(core.scanFolder(source, { outputDir: output }).conflicts, 5);
     fs.writeFileSync(path.join(source, 'a.png'), 'fixture');
-    fs.unlinkSync(path.join(tool, 'resource-core/processors/png/pngquant.exe'));
+    fs.unlinkSync(path.join(tool, 'resource-core/providers/pngquant/pngquant.exe'));
     assert.ok(core.scanFolder(source).issues.some(issue => /pngquant/.test(issue)));
     assert.equal(core.scanFolder(source, { pngEnabled: false }).issues.length, 0);
 });
 
 test('safe cancellation finishes one file and its backup; later originals remain untouched', t => {
     const { root, source, original, core } = fixture(t), records = [], events = [];
-    const summary = core.compressFolder(source, { backupDir: path.join(root, 'backup'), log() {},
+    const summary = core.processFolder(source, { backupDir: path.join(root, 'backup'), log() {},
         shouldCancel: () => records.length >= 1, onFile: file => records.push(file), onProgress: event => events.push(event) });
-    assert.equal(summary.cancelled, true); assert.equal(summary.compressed, 1); assert.equal(summary.failed, 0); assert.equal(summary.backedUp, 1);
+    assert.equal(summary.cancelled, true); assert.equal(summary.processed, 1); assert.equal(summary.failed, 0); assert.equal(summary.backedUp, 1);
     const names = core.collectResources(source).files;
     assert.equal(fs.readFileSync(names[0]).length, 8);
     for (const name of names.slice(1)) assert.deepEqual(fs.readFileSync(name), original);
     assert.deepEqual(fs.readFileSync(path.join(summary.backupDirectory, records[0].path)), original);
-    assert.equal(records[0].status, 'compressed'); assert.equal(records[0].backedUp, true);
+    assert.equal(records[0].status, 'processed'); assert.equal(records[0].backedUp, true);
     assert.equal(events.at(-1).processed, 1); assert.equal(events.at(-1).total, 5);
-    assert.equal(tree(source).some(file => file.includes('.resource-compress-')), false);
+    assert.equal(tree(source).some(file => file.includes('.resource-process-')), false);
 });
 
 test('cancellation during scanning never starts compression or creates destinations', t => {
     const { root, source, original, core } = fixture(t); let cancel = false;
     const outputDir = path.join(root, 'output');
-    const summary = core.compressFolder(source, { outputDir, log() {}, shouldCancel: () => cancel, onProgress: () => { cancel = true; } });
-    assert.equal(summary.cancelled, true); assert.equal(summary.compressed, 0); assert.equal(fs.existsSync(outputDir), false);
+    const summary = core.processFolder(source, { outputDir, log() {}, shouldCancel: () => cancel, onProgress: () => { cancel = true; } });
+    assert.equal(summary.cancelled, true); assert.equal(summary.processed, 0); assert.equal(fs.existsSync(outputDir), false);
     for (const file of core.collectResources(source).files) assert.deepEqual(fs.readFileSync(file), original);
 });
 
@@ -90,11 +92,11 @@ test('worker reports successes, failed original copies and conflicts; report CSV
     const outputDir = path.join(root, 'output'); fs.mkdirSync(path.join(outputDir, '子目录'), { recursive: true });
     fs.writeFileSync(path.join(outputDir, '子目录/a.PACK'), 'existing');
     const job = jobDirectory(root), reports = path.join(root, 'reports');
-    const state = batch.runJob({ mode: 'compress', folder: source, outputDir, options: {} }, job, reports);
-    assert.equal(state.done, true); assert.equal(state.exitCode, 1); assert.equal(state.summary.compressed, 4); assert.equal(state.summary.failed, 2);
+    const state = batch.runJob({ mode: 'process', folder: source, outputDir, options: {} }, job, reports);
+    assert.equal(state.done, true); assert.equal(state.exitCode, 1); assert.equal(state.summary.processed, 4); assert.equal(state.summary.failed, 2);
     assert.equal(state.summary.copied, 1); assert.equal(state.processed, 6);
     const report = JSON.parse(fs.readFileSync(path.join(state.reportDirectory, 'report.json')));
-    assert.equal(report.files.length, 6); assert.equal(report.options.fixtureEnabled, true);
+    assert.equal(report.files.length, 6); assert.equal(report.pipeline.find(step => step.resourceType === 'fixture').enabled, true);
     assert.ok(report.files.find(file => file.path === 'broken.pack').copied);
     assert.match(report.files.find(file => file.path === path.join('子目录', 'a.PACK')).message, /已存在/);
     assert.equal(fs.readFileSync(path.join(outputDir, '子目录/a.PACK'), 'utf8'), 'existing');
@@ -110,14 +112,14 @@ test('worker reports successes, failed original copies and conflicts; report CSV
 test('worker reports cancellation and fatal errors, and surfaces report write failures without changing compression results', t => {
     const { root, source, batch } = fixture(t), job = jobDirectory(root), reports = path.join(root, 'reports');
     fs.writeFileSync(path.join(job, 'cancel'), '');
-    const cancelled = batch.runJob({ mode: 'compress', folder: source }, job, reports);
+    const cancelled = batch.runJob({ mode: 'process', folder: source }, job, reports);
     assert.equal(cancelled.exitCode, 2); assert.equal(cancelled.processed, 0);
     assert.equal(JSON.parse(fs.readFileSync(path.join(cancelled.reportDirectory, 'report.json'))).cancelled, true);
     fs.unlinkSync(path.join(job, 'cancel'));
-    const failed = batch.runJob({ mode: 'compress', folder: source, outputDir: source }, job, reports);
+    const failed = batch.runJob({ mode: 'process', folder: source, outputDir: source }, job, reports);
     assert.equal(failed.exitCode, 1); assert.match(failed.error, /不能/); assert.ok(failed.reportDirectory);
     const blocked = path.join(root, 'blocked'); fs.writeFileSync(blocked, 'file');
-    const completed = batch.runJob({ mode: 'compress', folder: source, options: { fixtureEnabled: false } }, job, blocked);
+    const completed = batch.runJob({ mode: 'process', folder: source, options: { fixtureEnabled: false } }, job, blocked);
     assert.equal(completed.exitCode, 0); assert.equal(completed.summary.skipped, 5); assert.match(completed.reportWarning, /报告保存失败/);
 });
 
@@ -128,7 +130,8 @@ test('preview worker and --preview CLI are read-only and preserve caller paramet
     assert.equal(status.processed, 5); assert.equal(status.total, 5); assert.equal(status.preview.checked, 5);
     assert.equal(status.current, '');
     const output = path.join(root, 'not-created');
-    const result = spawnSync(process.execPath, [path.join(tool, 'resource-core/compress.js'), source, '--preview', '--fixture-enabled', 'false', '--output', output], { encoding: 'utf8' });
+    const pipelineFile = path.join(root, 'pipeline.json'); fs.writeFileSync(pipelineFile, JSON.stringify(compressionPipeline({ fixtureEnabled: false }, path.join(tool, 'resource-core'))));
+    const result = spawnSync(process.execPath, [path.join(tool, 'resource-core/cli.js'), source, '--preview', '--pipeline', pipelineFile, '--output', output], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr); assert.equal(JSON.parse(result.stdout).enabledFiles, 0);
     assert.equal(fs.existsSync(output), false); assert.deepEqual(tree(tool), before);
     const empty = path.join(root, 'empty'); fs.mkdirSync(empty);
@@ -165,8 +168,8 @@ test('transient Windows locks on progress status do not fail a completed task', 
         return originalRename(from, to);
     };
     try {
-        const result = batch.runJob({ mode: 'compress', folder: source }, job, path.join(root, 'reports'));
-        assert.equal(result.exitCode, 0); assert.equal(result.summary.compressed, 5); assert.equal(result.task.completed, 5);
+        const result = batch.runJob({ mode: 'process', folder: source }, job, path.join(root, 'reports'));
+        assert.equal(result.exitCode, 0); assert.equal(result.summary.processed, 5); assert.equal(result.task.completed, 5);
         assert.equal(JSON.parse(fs.readFileSync(path.join(job, 'status.json'))).done, true);
     } finally { fs.renameSync = originalRename; }
 });

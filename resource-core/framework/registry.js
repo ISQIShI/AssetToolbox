@@ -1,44 +1,72 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { compileConfig } = require('./schema');
+const { compileSchema, normalizeParameters } = require('./schema');
 
-function discoverProcessors(root = path.join(__dirname, '../processors')) {
-    const processors = [];
-    for (const entry of fs.readdirSync(root, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-        // 只加载直接子目录；_ / . 开头的模板、停用目录，以及链接均不加载。
+const identifier = /^[a-z][a-z0-9-]*$/;
+function discover(root, category) {
+    const directory = path.join(root, category);
+    const result = new Map();
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
         if (!entry.isDirectory() || /^[_.]/.test(entry.name)) continue;
-        const directory = path.join(root, entry.name);
-        const configFile = path.join(directory, 'config.js'), implementationFile = path.join(directory, 'index.js');
-        if (!fs.existsSync(configFile) && !fs.existsSync(implementationFile)) continue;
-        try {
-            if (!/^[a-z][a-z0-9_-]*$/.test(entry.name)) throw new Error('目录名须为小写字母开头，后接小写字母、数字、下划线或连字符');
-            if (!fs.existsSync(configFile) || !fs.existsSync(implementationFile)) throw new Error('模块需要同时提供 config.js 和 index.js');
-            const config = compileConfig(require(configFile), entry.name);
-            const implementation = require(implementationFile);
-            for (const method of ['validate', 'compress']) if (typeof implementation[method] !== 'function') throw new Error(`index.js 缺少 ${method} 方法`);
-            for (const method of ['prepare', 'shouldCompress']) if (implementation[method] !== undefined && typeof implementation[method] !== 'function') throw new Error(`${method} 必须是函数`);
-            if (implementation.executableName !== undefined) {
-                const executable = implementation.executableName;
-                if (typeof executable !== 'string' || !executable || path.basename(executable) !== executable || /[\\/:\0]/.test(executable)) throw new Error('executableName 必须是模块目录内的文件名');
-            }
-            processors.push({ ...implementation, id: entry.name, directory, config, extensions: config.extensions,
-                isEnabled: settings => settings[config.enabledKey] && (!implementation.shouldCompress || implementation.shouldCompress(settings)) });
-        } catch (error) { throw new Error(`处理器模块 ${entry.name} 加载失败：${error.message}`); }
+        const filename = path.join(directory, entry.name, 'index.js');
+        if (!fs.existsSync(filename)) continue;
+        if (!identifier.test(entry.name)) throw new Error('扩展 ID 无效：' + entry.name);
+        const definition = require(filename);
+        if (definition.apiVersion !== 1 || !/^\d+\.\d+\.\d+$/.test(definition.version || '') || typeof definition.displayName !== 'string' || !definition.displayName.trim()) throw new Error('扩展契约无效：' + entry.name);
+        result.set(entry.name, { ...definition, id: entry.name, directory: path.dirname(filename) });
     }
-    processors.sort((a, b) => a.config.order - b.config.order || a.id.localeCompare(b.id));
-    const byExtension = new Map(), parameterOwners = new Map();
-    for (const processor of processors) {
-        for (const extension of processor.extensions) {
-            if (byExtension.has(extension)) throw new Error(`扩展名 ${extension} 同时由 ${byExtension.get(extension).id} 和 ${processor.id} 处理`);
-            byExtension.set(extension, processor);
-        }
-        for (const field of processor.config.fields) {
-            const canonical = field.key.toLowerCase();
-            if (parameterOwners.has(canonical)) throw new Error(`参数名 ${field.key} 在 ${parameterOwners.get(canonical)} 和 ${processor.id} 中重复`);
-            parameterOwners.set(canonical, processor.id);
-        }
-    }
-    return { processors, byExtension };
+    return result;
 }
-
-module.exports = { ...discoverProcessors(), discoverProcessors };
+function createRegistry(root = path.join(__dirname, '..')) {
+    const resourceTypes = discover(root, 'resource-types'), operations = discover(root, 'operations'), providers = discover(root, 'providers');
+    const byExtension = new Map();
+    for (const type of resourceTypes.values()) {
+        if (typeof type.kind !== 'string' || !Array.isArray(type.extensions) || !type.extensions.length || typeof type.validate !== 'function') throw new Error('资源类型定义无效：' + type.id);
+        for (const extension of type.extensions) {
+            if (!/^\.[a-z0-9]+$/.test(extension) || byExtension.has(extension)) throw new Error('扩展名无效或重复：' + extension);
+            byExtension.set(extension, type);
+        }
+    }
+    for (const operation of operations.values()) {
+        if (!['smaller-only', 'valid-output'].includes(operation.resultPolicy) || !Array.isArray(operation.accepts) || !operation.accepts.length) throw new Error('操作定义无效：' + operation.id);
+        operation.schema = compileSchema(operation.schema);
+    }
+    for (const provider of providers.values()) {
+        if (typeof provider.execute !== 'function' || !Array.isArray(provider.supports) || !provider.supports.length) throw new Error('提供方定义无效：' + provider.id);
+        if (provider.prepare !== undefined && typeof provider.prepare !== 'function') throw new Error('prepare 必须为函数');
+        if (provider.check !== undefined && typeof provider.check !== 'function') throw new Error('check 必须为函数');
+        if (provider.executableName !== undefined && (typeof provider.executableName !== 'string' || !provider.executableName || path.basename(provider.executableName) !== provider.executableName || /[\\/:\0]/.test(provider.executableName))) throw new Error('executableName 必须为本目录文件名');
+        const seen = new Set();
+        for (const support of provider.supports) {
+            const type = resourceTypes.get(support.resourceType), operation = operations.get(support.operation), key = `${support.resourceType}/${support.operation}`;
+            if (!type || !operation || !operation.accepts.includes(type.kind) || seen.has(key)) throw new Error('提供方支持关系无效：' + provider.id);
+            seen.add(key);
+        }
+        provider.schema = compileSchema(provider.schema);
+    }
+    function normalizePipeline(input) {
+        if (!Array.isArray(input) || input.length > 64) throw new Error('处理步骤必须为数组，最多 64 项');
+        const seen = new Set();
+        return input.map(step => {
+            if (!step || typeof step !== 'object' || Array.isArray(step) || typeof step.id !== 'string' || !identifier.test(step.id) || seen.has(step.id) || typeof step.enabled !== 'boolean') throw new Error('步骤 ID/开关无效或重复');
+            seen.add(step.id);
+            const allowed = ['id', 'resourceType', 'operation', 'provider', 'enabled', 'parameters', 'providerOptions', 'versions'];
+            if (Object.keys(step).some(key => !allowed.includes(key))) throw new Error('步骤包含未知字段');
+            const type = resourceTypes.get(step.resourceType), operation = operations.get(step.operation), provider = providers.get(step.provider);
+            if (!type || !operation || !provider || !provider.supports.some(s => s.resourceType === type.id && s.operation === operation.id)) throw new Error('资源类型、操作与提供方不匹配：' + step.id);
+            const versions = { resourceType: type.version, operation: operation.version, provider: provider.version };
+            if (step.versions !== undefined && (!step.versions || typeof step.versions !== 'object' || Array.isArray(step.versions) || Object.keys(step.versions).length !== 3 || Object.keys(versions).some(key => step.versions[key] !== versions[key]))) throw new Error('步骤实现版本不匹配：' + step.id);
+            return { id: step.id, resourceType: type.id, operation: operation.id, provider: provider.id, enabled: step.enabled,
+                parameters: normalizeParameters(operation.schema, step.parameters), providerOptions: normalizeParameters(provider.schema, step.providerOptions), versions };
+        });
+    }
+    function describe() {
+        const base = definition => ({ id: definition.id, displayName: definition.displayName, description: definition.description || '', version: definition.version });
+        return { apiVersion: 1,
+            resourceTypes: [...resourceTypes.values()].map(type => ({ ...base(type), kind: type.kind, extensions: type.extensions })),
+            operations: [...operations.values()].map(operation => ({ ...base(operation), accepts: operation.accepts, resultPolicy: operation.resultPolicy, fields: operation.schema.fields })),
+            providers: [...providers.values()].map(provider => ({ ...base(provider), supports: provider.supports, fields: provider.schema.fields })) };
+    }
+    return { resourceTypes, operations, providers, byExtension, normalizePipeline, describe };
+}
+module.exports = { ...createRegistry(), createRegistry };

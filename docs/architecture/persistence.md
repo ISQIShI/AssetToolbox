@@ -1,86 +1,61 @@
-# 持久化与兼容性
+# 持久化与版本契约
 
-项目没有数据库。配置、任务事件、报告和原始备份保存为普通文件；写入规则由 `settings.js`、`tasks.js`、`batch.js`、`compress.js` 和 `restore.js` 共同实现。用户数据不纳入 Git，但移动便携应用时应保留需要继续使用的配置、任务和报告。
+源码：`resource-core/settings.js`、`tasks.js`、`batch.js`、`restore.js`。新项目不读写或迁移历史格式，参见 [ADR 0003](../decisions/0003-processing-contract.md)。
 
-## 文件布局
+## 布局和配置
 
-| 路径 | 生命周期与格式 |
+| 位置（相对 resource-core） | 用途 |
 | --- | --- |
-| `resource-core/config/user-settings.json` | 公共配置 v2：源/输出/备份路径、保存模式、备份开关 |
-| `resource-core/processors/<id>/user-settings.json` | 模块配置 v1：本模块开关及参数 |
-| `resource-core/user-settings.json` | 兼容旧的扁平 v1 配置，保存新布局后也不删除 |
-| `resource-core/tasks/<id>/task.json` | 持久任务头 v1，固定原始参数与绝对路径 |
-| 同目录 `events.jsonl` | 追加式事件日志，逐条换行并 fsync |
-| 同目录 `task.lock`、`claim-*.lock` | 执行互斥与取锁协调，正常流程释放 |
-| `resource-core/reports/<时间戳-UUID>/` | 每次写操作的 `report.json` 和 UTF-8 BOM `files.csv` |
-| 用户指定目录下 `backup-<任务id>/` | 按源相对目录保存被替换文件的原始字节 |
-| 系统临时目录 `resource-desktop-*` | `request.json`、`status.json`、`status.next`、`cancel`，不用于持久续压 |
+| `data/settings.json` | `schema: asset-toolbox.settings/1`，路径、保存方式和完整 pipeline |
+| `data/tasks/<id>/task.json` | `schema: asset-toolbox.task/1`，固定任务头 |
+| `data/tasks/<id>/events.jsonl` | 文件计划、提交及恢复事件 |
+| `data/tasks/<id>/task.lock` 与 claim | PID/token 执行锁 |
+| `data/reports/<id>/report.json`、`files.csv` | `schema: asset-toolbox.report/1` 报告及 CSV |
+| 系统临时 `resource-desktop-*` | request/status/cancel，只属当前会话 |
 
-模块定义 `config.js` 是源码；同目录 `user-settings.json` 是用户数据。二者不能混淆。任务和报告包含素材路径，不应作为测试夹具或公开样本直接提交。
+全部 data、日志和个人路径不提交。缺少设置时只返回默认值，不创建文件；损坏或不支持 schema 时明确报错，不静默退回旧配置。保存先严格校验，再写同目录排他临时文件、fsync、rename；失败清理临时文件并保留旧内容。单文件配置替代原分散设置。
 
-旧 `resCompress/` 布局需显式迁移，程序不会在启动时合并两套目录或重写历史文件。路径映射、任务定位与回退见 [ADR 0002](../decisions/0002-resource-toolbox-layout.md#升级与回退)。模块 ID、配置版本及 v1 任务事件保持不变。
+## 任务头和步骤快照
 
-## 配置读取与保存
+任务头含 id、createdAt、source、outputDir、backupDir、backupSession、pipeline。步骤包含 id、类型/操作/提供方 ID、enabled、两个参数对象及三层 versions。续跑/重试检查精确版本；不加载新界面参数，也不自动适配旧任务。版本由开发者维护，未对代码内容做哈希锁定。
 
-内存配置仍是扁平 `version: 1` 对象。读取优先公共 v2；公共文件不存在才回退旧 v1，再叠加已安装模块自己的 v1 配置。公共文件损坏时公共字段退回默认值并告警；模块配置损坏仅重置该模块。加载、预览和普通关闭不触发迁移。
+plan 每个文件记录相对 path、resourceType、snapshot（size/mtimeMs/ctimeMs）。拒绝绝对路径、空段、`.`/`..`、冒号和空字符；恢复选择还拒绝 Windows 不区分大小写的重复路径。首次完整扫描后清单固定；扫描中取消则下次重扫。
 
-保存先校验完整配置，再为每个模块及公共文件生成临时文件并 fsync，依次 rename，公共配置最后提交作为迁移标志。可捕获错误会反向恢复已经替换的文件，回滚失败返回 `AggregateError`。这提供逐文件安全替换与失败补偿，不提供跨文件断电事务；不能宣称多个配置文件在任何进程中断下都同时更新。
+## 事件和提交
 
-## 任务头与文件条目
-
-任务头保存 `version: 1`、`id`、`createdAt`、`source`、`outputDir`、`backupDir`、`backupSession`、`options`。路径使用规范化后的绝对路径，输出和备份不能同时设置；备份会话须为备份根目录下的 `backup-*` 子目录。
-
-plan 为每个文件记录相对 `path`、所属 `module` 和 `snapshot {size, mtimeMs, ctimeMs}`。路径校验拒绝绝对路径、空段、`.`、`..`、冒号和空字符。选择性恢复还检查 Windows 下忽略大小写的重复路径及 SHA-256 格式。
-
-## 事件模型
-
-| type | 内容与作用 |
+| type | 作用 |
 | --- | --- |
-| `plan` | 完整扫描清单；只接受一次，建立 pending 条目 |
-| `intent` | 提交前记录 sourceHash、expectedHash、输出/备份信息及预期状态；条目变 running |
-| `result` | 文件最终记录，更新状态和已拥有输出哈希，清除 intent |
-| `restore-start` | 标记开始恢复；此后禁止压缩续压与重试 |
-| `restore-selection` | 持久化显式选择范围及预览哈希 |
-| `restore-result` | 保存 `restored`、`already-original` 或 `failed` |
+| plan | 完整清单，仅一次，条目 pending |
+| intent | 写入前刷盘 sourceHash/expectedHash、备份信息及预期记录，条目 running |
+| result | 处理结果 processed/skipped/failed/pending、resourceType、步骤记录及输出哈希 |
+| restore-start | 开始恢复，此后禁止原任务续跑处理 |
+| restore-selection | 固定显式恢复选择及预览哈希 |
+| restore-result | restored/already-original/failed |
 
-压缩状态为 pending → running → compressed/skipped/failed；running 只有在 intent 尚未对应 result 时存在。任务摘要中 completed 只统计 compressed/skipped，failed 独立，其他计入 pending。恢复摘要和压缩摘要分别计算，不能用恢复数量覆盖压缩完成数。
+每个文件的全部转换步骤结束才写一次提交意图；不把中间产物作为已完成文件。步骤记录包含 id、operation、provider、status 及可用的字节数/metadata，失败记录 message。completed 只计 processed/skipped，失败和恢复数量独立统计。
 
 ```mermaid
 sequenceDiagram
-    participant W as batch 工作进程
-    participant J as 任务事件日志
+    participant W as 工作进程
+    participant J as 任务日志
     participant F as 素材与备份
-    W->>J: 取得锁并重读完整日志
+    W->>J: 取得锁并重读
+    W->>W: 全部转换步骤成功
     W->>J: intent + fsync
-    W->>F: 校验、备份、排他创建或替换
+    W->>F: 校验、备份、排他创建或原子替换
     W->>J: result + fsync
-    Note over W,J: 中断后根据 intent 与磁盘哈希恢复状态
 ```
 
-## 锁与日志修复
+## 锁和中断恢复
 
-执行前用 claim 文件登记，再排他创建 `task.lock`，内容为 PID 和随机 token。检测到活跃持有者时拒绝；旧 PID 已退出且锁内容未变化时才回收。持锁后重新加载任务，避免用取锁前的旧内存状态覆盖新日志；释放时仅删除 token 匹配的锁。
+claim 登记后排他取得 PID/token 锁；只在确认进程退出且锁未变化时回收，释放仅删除 token 匹配的锁。持锁后重读任务，避免旧状态覆盖。读取仅重放完整换行事件；半行尾部在持锁后截断，完整坏记录报错。只读历史/预览不修复日志。
 
-加载只重放完整换行记录；崩溃留下的半行尾部忽略，持锁后截断。完整行中的坏 JSON、非法事件、无效路径会报错，不静默丢弃。只读历史浏览和恢复预览不取执行锁，也不修复日志。日志较大时每次重放存在内存与耗时成本，当前无索引、压缩或自动归档。
+只有 intent 的记录根据磁盘哈希判定：目标等于 expectedHash 则补写完成（缺备份警告）；原文件未变、另存目标缺失或仍是原拥有副本则记失败待显式重试；其他内容/链接保留并记失败。另存重试只替换本任务拥有且未被修改的失败副本。
 
-## 中断后的恢复判定
+恢复使用原始备份与已提交目标哈希，不依赖转换提供方。已恢复文件后来被修改视为冲突；写完但恢复事件未落盘时按内容识别完成。不能把空 selection 转成省略或扩展恢复范围。
 
-`recoverTask()` 对只有 intent 的文件核对当前磁盘 SHA-256：
+## 报告和边界
 
-- 当前目标等于 expectedHash：补写完成记录，避免重复编码；如备份丢失，保留完成状态并给出警告。
-- 原文件仍为 sourceHash，或另存目标不存在/仍为此前拥有的副本：记为失败，交给显式重试，不自动重新编码。
-- 当前文件为其他内容或路径含链接：记录失败并保留现状。
+写操作生成报告，预览不生成。报告保存 pipeline 快照、逐文件结果、汇总、起止时间及任务摘要；CSV 为 UTF-8 BOM，引用与公式前缀安全转义。报告失败仅告警，不回滚结果。数据没有自动清理/压缩索引；大日志重放有成本。原子替换是单文件保证，不是整批事务。
 
-另存重试只允许替换已确认拥有且哈希未改变的失败副本。未确认完成的失败复制不能仅凭相同内容取得所有权。
-
-恢复文件写完但 `restore-result` 未落盘时，下次按内容识别已等于原始备份，安全跳过重复写入。已记为恢复成功的文件后来又变化时保留当前内容，预览显示冲突，不重复恢复。
-
-## 报告与兼容要求
-
-`batch.js` 为压缩、续压、重试和恢复写操作生成 report v2；预览不生成报告。报告包含本次请求、参数、起止时间、逐文件结果、汇总，以及适用时的持久任务摘要、选择集或中断恢复记录。只列实际尝试的文件，不能把未处理项补成成功。
-
-CSV 所有单元格加引号，双引号转义，可能被表格软件识别为公式的文本前加单引号。报告保存错误不会回滚素材，也不会抹掉已刷盘的任务日志。当前没有自动清理策略。
-
-修改这些格式必须说明旧数据读取、版本处理、失败恢复与测试方案。不能只提升版本号而不实现迁移；也不能删除旧日志字段或重排事件语义来简化界面。恢复依赖 intent 中已有的原始/结果哈希，因此旧 v1 任务日志仍有恢复价值。
-
-验证入口：`layout.test.js`（配置迁移与回滚）、`resume.test.js`（锁与 intent/result）、`restore.test.js` 和 `restore-preview.test.js`（恢复与选择快照）、`batch.test.js`（报告与状态）。
+验证：contract（原子配置/schema）、resume（锁/崩溃）、resize（步骤快照/版本/恢复）、restore/restore-preview（选择与哈希）、batch（报告）。

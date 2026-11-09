@@ -1,3 +1,4 @@
+const { compressionPipeline, engineFor, batchFor, installType } = require('./helpers');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -7,7 +8,7 @@ const { deflateSync } = require('node:zlib');
 const childProcess = require('node:child_process');
 const { spawnSync } = require('node:child_process');
 const { test } = require('node:test');
-const { collectImages, compressFolder } = require('../compress');
+const { collectResources, processFolder } = engineFor();
 
 const windowsOnly = { skip: process.platform !== 'win32' };
 const projectRoot = path.resolve(__dirname, '../..');
@@ -181,13 +182,13 @@ test('recurses through Chinese/spaced paths and preserves each PNG/JPG/JPEG imag
     const original = new Map(files.map(file => [file, fs.readFileSync(file)]));
     const ignoredNames = ['ignored.txt', 'ignored.png.bak', 'ignored.jpg.txt'];
     for (const name of ignoredNames) fs.copyFileSync(files[0], path.join(selected, name));
-    assert.equal(collectImages(selected).files.length, specs.length);
+    assert.equal(collectResources(selected).files.length, specs.length);
 
     const messages = [];
-    const summary = compressFolder(selected, { log: message => messages.push(message) });
+    const summary = processFolder(selected, { log: message => messages.push(message) });
     assert.equal(summary.total, specs.length);
     assert.equal(summary.failed, 0, messages.join('\n'));
-    assert.equal(summary.compressed + summary.skipped, specs.length);
+    assert.equal(summary.processed + summary.skipped, specs.length);
     assert.ok(files.some(file => /\.png$/i.test(file) && fs.statSync(file).size < original.get(file).length), 'real pngquant should shrink a PNG fixture');
     assert.ok(files.some(file => /\.jpe?g$/i.test(file) && fs.statSync(file).size < original.get(file).length), 'real JPG-C should shrink a JPEG fixture');
     for (const name of ignoredNames) assert.deepEqual(fs.readFileSync(path.join(selected, name)), original.get(files[0]));
@@ -215,8 +216,8 @@ test('does not follow junctions outside the selected folder or into a directory 
     fs.writeFileSync(path.join(outside, 'outside.png'), image);
     fs.symlinkSync(outside, path.join(selected, 'outside-link'), 'junction');
     fs.symlinkSync(selected, path.join(selected, 'cycle-link'), 'junction');
-    assert.deepEqual(collectImages(selected).files, []);
-    assert.equal(compressFolder(selected, { log() {} }).total, 0);
+    assert.deepEqual(collectResources(selected).files, []);
+    assert.equal(processFolder(selected, { log() {} }).total, 0);
     assert.deepEqual(fs.readFileSync(path.join(outside, 'outside.png')), image);
 });
 
@@ -240,29 +241,30 @@ test('preserves fake and corrupt images, then continues to valid PNG and JPEG fi
     invalid.set('04-png-disguised.jpg', disguised);
     fs.writeFileSync(path.join(selected, '04-png-disguised.jpg'), disguised);
     const messages = [];
-    const summary = compressFolder(selected, { log: message => messages.push(message) });
+    const summary = processFolder(selected, { log: message => messages.push(message) });
     assert.equal(summary.total, invalid.size + files.length);
     assert.equal(summary.failed, invalid.size, messages.join('\n'));
-    assert.equal(summary.compressed + summary.skipped, files.length);
+    assert.equal(summary.processed + summary.skipped, files.length);
     for (const [name, bytes] of invalid) assert.deepEqual(fs.readFileSync(path.join(selected, name)), bytes, name);
-    assert.ok(fs.statSync(files[0]).size < jpegBefore.length, 'a corrupt JPEG log must not prevent the later valid JPEG from compressing');
+    assert.ok(fs.statSync(files[0]).size < jpegBefore.length, 'a corrupt JPEG log must not prevent the later valid JPEG from processing');
     assert.equal(inspectImages(selected, files).length, files.length);
     assert.ok(messages.some(message => message.includes('失败 00-corrupt.jpg')), messages.join('\n'));
-    assert.ok(messages.some(message => message.includes('已压缩 zz-valid.jpg')), messages.join('\n'));
-    assert.deepEqual(fs.readdirSync(selected).filter(name => name.endsWith('.log') || name.startsWith('.resource-compress-')), []);
+    assert.ok(messages.some(message => message.includes('已处理 zz-valid.jpg')), messages.join('\n'));
+    assert.deepEqual(fs.readdirSync(selected).filter(name => name.endsWith('.log') || name.startsWith('.resource-process-')), []);
 });
 
 test('empty directories and invalid paths have clear outcomes', windowsOnly, t => {
     const root = temporaryRoot(t);
-    assert.deepEqual(compressFolder(root, { log() {} }), {
-        total: 0, compressed: 0, skipped: 0, failed: 0, savedBytes: 0,
+    assert.deepEqual(processFolder(root, { log() {} }), {
+        total: 0, processed: 0, skipped: 0, failed: 0, savedBytes: 0,
         copied: 0, backedUp: 0, backupDirectory: null,
     });
-    assert.throws(() => compressFolder(path.join(root, 'missing')), { code: 'ENOENT' });
+    assert.throws(() => processFolder(path.join(root, 'missing')), { code: 'ENOENT' });
     const file = path.join(root, 'not-a-directory.txt');
     fs.writeFileSync(file, 'fixture');
-    assert.throws(() => compressFolder(file), /目标不是文件夹/);
-    const result = spawnSync(process.execPath, [path.join(projectRoot, 'resource-core/compress.js'), file], {
+    assert.throws(() => processFolder(file), /目标不是文件夹/);
+    const pipelineFile = path.join(root, 'pipeline.json'); fs.writeFileSync(pipelineFile, JSON.stringify(compressionPipeline()));
+    const result = spawnSync(process.execPath, [path.join(projectRoot, 'resource-core/cli.js'), file, '--pipeline', pipelineFile], {
         cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10000,
     });
     assert.ifError(result.error);
@@ -284,7 +286,7 @@ test('save-as preserves every source hash and relative image path, including sam
     const files = createImages(selected, specs);
     fs.writeFileSync(path.join(selected, 'ignored.txt'), 'Leave non-image files in the source.');
     const before = snapshotFiles(selected);
-    const summary = compressFolder(selected, { outputDir: output, log() {} });
+    const summary = processFolder(selected, { outputDir: output, log() {} });
     assert.equal(summary.total, files.length);
     assert.equal(summary.failed, 0);
     assert.equal(summary.backedUp, 0);
@@ -312,9 +314,9 @@ test('save-as copies unchanged and failed images byte-for-byte while reporting f
     fs.writeFileSync(path.join(selected, 'broken.PNG'), corrupt);
     fs.writeFileSync(path.join(selected, 'fake.JPG'), fake);
     const before = snapshotFiles(selected);
-    const summary = compressFolder(selected, { outputDir: output, log() {} });
+    const summary = processFolder(selected, { outputDir: output, log() {} });
     assert.equal(summary.total, 3);
-    assert.equal(summary.compressed, 0);
+    assert.equal(summary.processed, 0);
     assert.equal(summary.skipped, 1, 'the minimal valid PNG should be kept because it cannot become smaller');
     assert.equal(summary.failed, 2);
     assert.equal(summary.copied, 3);
@@ -339,10 +341,10 @@ test('backup preserves exact originals only for replaced images and keeps earlie
     const tinyBytes = writeTinyPng(tiny);
     const invalid = path.join(selected, 'broken.jpg');
     fs.writeFileSync(invalid, 'invalid JPEG');
-    const summary = compressFolder(selected, { backupDir: backup, log() {} });
+    const summary = processFolder(selected, { backupDir: backup, log() {} });
     assert.equal(summary.failed, 1);
     assert.equal(summary.skipped, 1);
-    assert.equal(summary.compressed, 2);
+    assert.equal(summary.processed, 2);
     assert.equal(summary.backedUp, 2);
     assert.equal(path.dirname(summary.backupDirectory), backup);
     const expected = [];
@@ -358,7 +360,7 @@ test('backup preserves exact originals only for replaced images and keeps earlie
     const firstBackup = snapshotFiles(summary.backupDirectory);
     // Restoring these generated fixtures makes a second replacement deterministic.
     for (const [file, bytes] of originals) fs.writeFileSync(file, bytes);
-    const second = compressFolder(selected, { backupDir: backup, log() {} });
+    const second = processFolder(selected, { backupDir: backup, log() {} });
     assert.equal(second.backedUp, 2);
     assert.notEqual(second.backupDirectory, summary.backupDirectory);
     assert.deepEqual(snapshotFiles(summary.backupDirectory), firstBackup, 'later runs must not replace older backups');
@@ -379,7 +381,7 @@ test('nested output and backup folders are excluded from the source traversal', 
         fs.mkdirSync(path.dirname(sentinel));
         fs.writeFileSync(sentinel, 'invalid image in excluded destination');
         const before = fs.readFileSync(image);
-        const summary = compressFolder(selected, { [mode]: destination, log() {} });
+        const summary = processFolder(selected, { [mode]: destination, log() {} });
         assert.equal(summary.total, 1, mode);
         assert.equal(summary.failed, 0, mode);
         assert.equal(fs.readFileSync(sentinel, 'utf8'), 'invalid image in excluded destination', mode);
@@ -402,10 +404,10 @@ test('rejects source/ancestor destinations, mutually exclusive modes, and non-di
     fs.writeFileSync(occupied, 'existing file');
     for (const mode of ['outputDir', 'backupDir']) {
         for (const destination of [selected, root, occupied]) {
-            assert.throws(() => compressFolder(selected, { [mode]: destination, log() {} }), undefined, `${mode}: ${destination}`);
+            assert.throws(() => processFolder(selected, { [mode]: destination, log() {} }), undefined, `${mode}: ${destination}`);
         }
     }
-    assert.throws(() => compressFolder(selected, {
+    assert.throws(() => processFolder(selected, {
         outputDir: path.join(root, 'output'), backupDir: path.join(root, 'backup'), log() {},
     }));
     assert.deepEqual(snapshotFiles(selected), before);
@@ -426,10 +428,10 @@ test('save-as refuses existing output files and path collisions without modifyin
     fs.writeFileSync(path.join(output, 'existing.jpg'), 'preserve existing output');
     fs.writeFileSync(path.join(output, 'blocked'), 'file blocks subdirectory creation');
     const before = snapshotFiles(selected);
-    const summary = compressFolder(selected, { outputDir: output, log() {} });
+    const summary = processFolder(selected, { outputDir: output, log() {} });
     assert.equal(summary.total, 3);
     assert.equal(summary.failed, 2);
-    assert.equal(summary.compressed, 1);
+    assert.equal(summary.processed, 1);
     assert.deepEqual(snapshotFiles(selected), before);
     assert.equal(fs.readFileSync(path.join(output, 'existing.jpg'), 'utf8'), 'preserve existing output');
     assert.equal(fs.readFileSync(path.join(output, 'blocked'), 'utf8'), 'file blocks subdirectory creation');
@@ -451,18 +453,18 @@ test('resolves explicitly selected junction roots safely and refuses output subd
     const sourceAlias = path.join(root, 'source-link');
     fs.symlinkSync(selected, sourceAlias, 'junction');
     for (const mode of ['outputDir', 'backupDir']) {
-        assert.throws(() => compressFolder(selected, { [mode]: sourceAlias, log() {} }));
+        assert.throws(() => processFolder(selected, { [mode]: sourceAlias, log() {} }));
     }
     const link = path.join(root, 'destination-link');
     fs.symlinkSync(outside, link, 'junction');
-    const safeAliasResult = compressFolder(selected, { outputDir: link, log() {} });
+    const safeAliasResult = processFolder(selected, { outputDir: link, log() {} });
     assert.equal(safeAliasResult.failed, 0);
     assert.ok(fs.existsSync(path.join(outside, 'nested', 'photo.jpg')));
     const outsideBefore = snapshotFiles(outside);
     fs.symlinkSync(outside, path.join(output, 'nested'), 'junction');
-    const summary = compressFolder(selected, { outputDir: output, log() {} });
+    const summary = processFolder(selected, { outputDir: output, log() {} });
     assert.equal(summary.failed, 1);
-    assert.equal(summary.compressed, 0);
+    assert.equal(summary.processed, 0);
     assert.deepEqual(snapshotFiles(outside), outsideBefore);
     assert.deepEqual(snapshotFiles(selected), before);
 });
@@ -490,13 +492,13 @@ test('backup write failure prevents replacement and leaves original bytes intact
     };
     let summary;
     try {
-        summary = compressFolder(selected, { backupDir: backup, log() {} });
+        summary = processFolder(selected, { backupDir: backup, log() {} });
     } finally {
         fs.openSync = openSync;
     }
     assert.equal(injected, true, 'the test must fail the actual backup write');
     assert.equal(summary.failed, 1);
-    assert.equal(summary.compressed, 0);
+    assert.equal(summary.processed, 0);
     assert.equal(summary.backedUp, 0);
     assert.deepEqual(fs.readFileSync(image), before);
 });
@@ -521,7 +523,7 @@ test('implicit defaults and explicit original parameters produce identical image
         [defaults, {}],
         [explicit, { pngSpeed: 3, pngQualityMin: 50, pngQualityMax: 80, jpgQuality: 5 }],
     ]) {
-        const summary = compressFolder(selected, { ...options, outputDir, log() {} });
+        const summary = processFolder(selected, { ...options, outputDir, log() {} });
         assert.equal(summary.total, files.length);
         assert.equal(summary.failed, 0);
     }
@@ -555,13 +557,13 @@ test('custom parameters reach the real processors and preserve save-as paths and
         calls.push({ executable, args: [...args] });
         return spawnSync(executable, args, options);
     });
-    const summary = compressFolder(selected, {
+    const summary = processFolder(selected, {
         pngSpeed: 2, pngQualityMin: 20, pngQualityMax: 75, jpgQuality: 7,
         outputDir: output, log() {},
     });
     mock.mock.restore();
     assert.equal(summary.failed, 0);
-    assert.equal(summary.compressed, files.length);
+    assert.equal(summary.processed, files.length);
     assert.deepEqual(snapshotFiles(selected), before);
     assert.deepEqual(Object.keys(snapshotFiles(output)).sort(), files.map(file => path.relative(selected, file)).sort());
     assert.equal(calls.length, files.length);
@@ -595,14 +597,14 @@ test('accepts compression parameter endpoints and equal PNG quality bounds with 
     for (const [index, options] of boundaryOptions.entries()) {
         const outputDir = path.join(root, `output-${index}`);
         const messages = [];
-        const summary = compressFolder(selected, { ...options, outputDir, log: message => messages.push(message) });
+        const summary = processFolder(selected, { ...options, outputDir, log: message => messages.push(message) });
         assert.equal(summary.total, 2);
         assert.equal(summary.failed, 0, `${JSON.stringify(options)}: ${messages.join('\n')}`);
-        assert.equal(summary.compressed + summary.skipped, 2);
+        assert.equal(summary.processed + summary.skipped, 2);
         const outputFiles = files.map(file => path.join(outputDir, path.relative(selected, file)));
         assert.equal(inspectImages(root, outputFiles).length, files.length);
         if (options.jpgQuality === 0) {
-            assert.equal(hashFile(outputFiles[1]), hashFile(files[1]), 'JPG quality 0 must preserve the uncompressed JPEG');
+            assert.equal(hashFile(outputFiles[1]), hashFile(files[1]), 'JPG quality 0 must preserve the unprocessed JPEG');
         }
     }
     assert.deepEqual(snapshotFiles(selected), before);
@@ -634,7 +636,7 @@ test('invalid compression settings fail before scanning, creating temporary file
             const destination = path.join(root, `invalid-${index}`);
             destinations.push(destination);
             const mode = index % 2 ? 'backupDir' : 'outputDir';
-            assert.throws(() => compressFolder(selected, { ...options, [mode]: destination, log() {} }), error => {
+            assert.throws(() => processFolder(selected, { ...options, [mode]: destination, log() {} }), error => {
                 assert.notEqual(error, unexpected, `${JSON.stringify(options)} reached the filesystem`);
                 assert.match(error.message, /png|jpg|quality|speed|参数|速度|质量/i);
                 return true;
@@ -658,52 +660,31 @@ test('JPG quality zero leaves originals unchanged, creates no backups, and copie
         { name: 'nested/photo.jpg', width: 320, height: 240, color: [30, 180, 30] },
     ]);
     const before = snapshotFiles(selected);
-    const overwrite = compressFolder(selected, { jpgQuality: 0, backupDir: backup, log() {} });
+    const overwrite = processFolder(selected, { jpgQuality: 0, backupDir: backup, log() {} });
     assert.equal(overwrite.failed, 0);
-    assert.equal(overwrite.compressed, 0);
+    assert.equal(overwrite.processed, 0);
     assert.equal(overwrite.skipped, 1);
     assert.equal(overwrite.backedUp, 0);
     assert.equal(overwrite.backupDirectory, null);
     assert.equal(fs.existsSync(backup), false);
     assert.deepEqual(snapshotFiles(selected), before);
-    const saveAs = compressFolder(selected, { jpgQuality: 0, outputDir: output, log() {} });
+    const saveAs = processFolder(selected, { jpgQuality: 0, outputDir: output, log() {} });
     assert.equal(saveAs.failed, 0);
-    assert.equal(saveAs.compressed, 0);
+    assert.equal(saveAs.processed, 0);
     assert.equal(saveAs.skipped, 1);
     assert.equal(saveAs.copied, 1);
     assert.equal(hashFile(path.join(output, 'nested/photo.jpg')), hashFile(file));
     assert.deepEqual(snapshotFiles(selected), before);
 });
 
-test('CLI rejects malformed, missing, repeated, out-of-range, and inconsistent parameters before writing', windowsOnly, t => {
-    const root = temporaryRoot(t);
-    const selected = path.join(root, 'source');
-    fs.mkdirSync(selected);
-    writeTinyPng(path.join(selected, 'tiny.png'));
-    const before = snapshotFiles(selected);
-    const flags = ['--png-speed', '--png-quality-min', '--png-quality-max', '--jpg-quality'];
-    const invalid = [
-        ['--unknown', '3'], ['--png-speed', '0'], ['--png-speed', '12'],
-        ['--png-quality-min', '-1'], ['--png-quality-max', '101'],
-        ['--jpg-quality', '-1'], ['--jpg-quality', '10'],
-        ['--png-quality-min', '90', '--png-quality-max', '20'],
-        ['--png-quality-min', '81'], ['--png-quality-max', '49'],
-    ];
-    for (const flag of flags) {
-        invalid.push([flag], [flag, '3', flag, '3']);
-        for (const value of ['1.5', 'NaN', '1x', 'Infinity', '1e1', '0x5', '', '+3', ' 3', '3\n', '5\r\n']) {
-            invalid.push([flag, value]);
-        }
-    }
-    for (const [index, args] of invalid.entries()) {
-        const output = path.join(root, `output-${index}`);
-        const result = spawnSync(process.execPath, [
-            path.join(projectRoot, 'resource-core/compress.js'), selected, '--output', output, ...args,
-        ], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10000 });
-        assert.ifError(result.error);
-        assert.equal(result.status, 1, `${JSON.stringify(args)}: ${result.stdout}\n${result.stderr}`);
-        assert.ok(result.stderr.trim(), `missing error for ${JSON.stringify(args)}`);
-        assert.equal(fs.existsSync(output), false, JSON.stringify(args));
+test('CLI rejects malformed, missing and repeated arguments without writing', windowsOnly, t => {
+    const root = temporaryRoot(t), selected = path.join(root, 'source'); fs.mkdirSync(selected);
+    writeTinyPng(path.join(selected, 'tiny.png')); const before = snapshotFiles(selected);
+    const valid = path.join(root, 'pipeline.json'); fs.writeFileSync(valid, JSON.stringify(compressionPipeline()));
+    for (const args of [[], ['--pipeline'], ['--pipeline', valid, '--pipeline', valid], ['--unknown','3'], ['--output'], ['--pipeline', 'missing.json']]) {
+        const output = path.join(root, 'output');
+        const result = spawnSync(process.execPath, [path.join(projectRoot, 'resource-core/cli.js'), selected, '--output', output, ...args], { encoding:'utf8' });
+        assert.equal(result.status, 1); assert.ok(result.stderr.trim()); assert.equal(fs.existsSync(output), false);
     }
     assert.deepEqual(snapshotFiles(selected), before);
 });
@@ -719,14 +700,15 @@ test('CLI forwards custom values and preserves save-as originals', windowsOnly, 
     const before = snapshotFiles(selected);
     const options = { pngSpeed: 2, pngQualityMin: 20, pngQualityMax: 75, jpgQuality: 7 };
     const expectedOutput = path.join(root, 'expected');
-    const expectedSummary = compressFolder(selected, { ...options, outputDir: expectedOutput, log() {} });
+    const expectedSummary = processFolder(selected, { ...options, outputDir: expectedOutput, log() {} });
     assert.equal(expectedSummary.failed, 0);
-    assert.equal(expectedSummary.compressed, files.length);
+    assert.equal(expectedSummary.processed, files.length);
     const expectedHashes = snapshotFiles(expectedOutput);
     const cliOutput = path.join(root, 'CLI 输出');
+    const pipelineFile = path.join(root, 'pipeline.json'); fs.writeFileSync(pipelineFile, JSON.stringify(compressionPipeline(options)));
     const cli = spawnSync(process.execPath, [
-        path.join(projectRoot, 'resource-core/compress.js'), selected, '--output', cliOutput,
-        '--png-speed', '2', '--png-quality-min', '20', '--png-quality-max', '75', '--jpg-quality', '7',
+        path.join(projectRoot, 'resource-core/cli.js'), selected, '--output', cliOutput,
+        '--pipeline', pipelineFile,
     ], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 120000 });
     assert.ifError(cli.error);
     assert.equal(cli.status, 0, `${cli.stdout}\n${cli.stderr}`);

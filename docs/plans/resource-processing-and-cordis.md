@@ -1,6 +1,6 @@
 # 资源处理职责扩展与 Cordis 选型评估
 
-状态：评估完成；通用目录与品牌命名已实施，下面的操作模型、Cordis 原型和框架迁移均未实施。
+状态：历史评估：多操作契约现已按 [ADR 0003](../decisions/0003-processing-contract.md) 实现，当前接口见[扩展契约](../architecture/extensions.md)。Cordis 仍未接入；下文描述评估时的旧代码，不作为当前实现说明。
 
 核验日期：2026-11-08。源码基线：`96e478b`；本轮目录变更见 [ADR 0002](../decisions/0002-resource-toolbox-layout.md)。本评估依据本仓库源码、官方源码/文档和论文；没有运行 Cordis 集成基准，工期与效益是工程判断。
 

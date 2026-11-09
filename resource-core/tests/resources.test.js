@@ -1,15 +1,16 @@
+const { compressionPipeline, engineFor, batchFor, installType } = require('./helpers');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const childProcess = require('node:child_process');
-const { compressFolder, collectResources } = require('../compress');
+const { processFolder, collectResources } = engineFor();
 const { defaultConfiguration, loadConfiguration, saveConfiguration } = require('../settings');
-const { processors } = require('../framework/registry');
+const { providers } = require('../framework/registry');
 const realSpawn = childProcess.spawnSync;
 const project = path.resolve(__dirname, '../..');
-const lame = path.join(project, 'resource-core/processors/mp3/lame.exe');
+const lame = path.join(project, 'resource-core/providers/lame/lame.exe');
 const windows = { skip: process.platform !== 'win32' };
 
 function temporary(t) {
@@ -54,37 +55,6 @@ function decodeDuration(root, file) {
     assert.ok(seconds > 1.8 && seconds < 2.2, `audio duration ${seconds}`);
 }
 
-test('configuration defaults, Unicode roundtrip, corrupt fallback and invalid save protection', t => {
-    const root = temporary(t), file = path.join(root, 'config/user-settings.json');
-    const warnings = [];
-    const initial = loadConfiguration(root, message => warnings.push(message));
-    assert.deepEqual(initial, defaultConfiguration());
-    assert.deepEqual([initial.pngSpeed, initial.pngQualityMin, initial.pngQualityMax, initial.jpgQuality, initial.mp3Bitrate], [3, 50, 80, 5, 24]);
-    assert.deepEqual([initial.pngEnabled, initial.jpgEnabled, initial.mp3Enabled], [true, true, false]);
-    assert.equal(warnings.length, 0);
-    const custom = { ...initial, sourceDir: 'D:\\原始 音乐\\素材', outputDir: 'D:\\导出', backupDir: 'D:\\备份',
-        saveMode: 'saveAs', backupEnabled: true, pngSpeed: 11, jpgQuality: 8, mp3Bitrate: 96, pngEnabled: false, mp3Enabled: true };
-    saveConfiguration(custom, root);
-    assert.deepEqual(loadConfiguration(root), custom);
-    const original = fs.readFileSync(file);
-    assert.throws(() => saveConfiguration({ ...custom, mp3Bitrate: 500 }, root));
-    assert.deepEqual(fs.readFileSync(file), original);
-    fs.writeFileSync(file, '{broken json');
-    assert.deepEqual(loadConfiguration(root, message => warnings.push(message)), { ...custom, sourceDir: '', outputDir: '', backupDir: '', saveMode: 'overwrite', backupEnabled: false });
-    assert.equal(warnings.length, 1);
-    assert.equal(fs.readFileSync(file, 'utf8'), '{broken json');
-});
-
-test('three processors expose an independent replaceable interface', () => {
-    assert.deepEqual(processors.map(processor => processor.id), ['png', 'jpg', 'mp3']);
-    for (const processor of processors) {
-        assert.equal(typeof processor.compress, 'function');
-        assert.equal(typeof processor.validate, 'function');
-        assert.equal(typeof processor.isEnabled, 'function');
-        assert.ok(processor.extensions.length > 0);
-    }
-});
-
 test('all disabled types need no executable and copy unchanged on save-as', windows, t => {
     const root = temporary(t), source = path.join(root, '源目录'), output = path.join(root, '输出');
     fs.mkdirSync(source);
@@ -96,9 +66,9 @@ test('all disabled types need no executable and copy unchanged on save-as', wind
     fs.writeFileSync(path.join(source, 'ignored.mp3.bak'), 'ignored');
     const spawn = t.mock.method(childProcess, 'spawnSync', () => { throw new Error('disabled processor must not run'); });
     const options = { pngEnabled: false, jpgEnabled: false, mp3Enabled: false, log() {} };
-    const overwrite = compressFolder(source, { ...options, backupDir: path.join(root, 'backup') });
+    const overwrite = processFolder(source, { ...options, backupDir: path.join(root, 'backup') });
     assert.equal(overwrite.skipped, 4); assert.equal(overwrite.failed, 0); assert.equal(overwrite.backedUp, 0);
-    const exported = compressFolder(source, { ...options, outputDir: output });
+    const exported = processFolder(source, { ...options, outputDir: output });
     assert.equal(exported.copied, 4); assert.equal(exported.failed, 0);
     assert.equal(collectResources(source).files.length, 4);
     assert.equal(spawn.mock.callCount(), 0);
@@ -115,8 +85,8 @@ test('MP3 save-as uses legacy ABR arguments, preserves originals and nested iden
     t.mock.method(childProcess, 'spawnSync', (executable, args, options) => {
         calls.push({ executable, args }); return realSpawn(executable, args, options);
     });
-    const summary = compressFolder(source, { outputDir: output, pngEnabled: false, jpgEnabled: false, mp3Enabled: true, log() {} });
-    assert.equal(summary.total, 3); assert.equal(summary.compressed, 2); assert.equal(summary.copied, 1); assert.equal(summary.failed, 0);
+    const summary = processFolder(source, { outputDir: output, pngEnabled: false, jpgEnabled: false, mp3Enabled: true, log() {} });
+    assert.equal(summary.total, 3); assert.equal(summary.processed, 2); assert.equal(summary.copied, 1); assert.equal(summary.failed, 0);
     assert.equal(calls.length, 2);
     for (const call of calls) {
         assert.equal(path.basename(call.executable), 'lame.exe');
@@ -138,27 +108,27 @@ test('MP3 overwrite backs up exact originals, skips growth and protects source o
     const original = generateMp3(root, file);
     const common = { mp3Enabled: true, backupDir: backup, log() {} };
     // ABR 是平均目标，简单音调不保证更大；补齐有效输出以确定性验证拒绝增大的结果。
-    const mp3 = processors.find(processor => processor.id === 'mp3');
-    const encode = mp3.compress;
-    const growth = t.mock.method(mp3, 'compress', args => {
+    const mp3 = providers.get('lame');
+    const encode = mp3.execute;
+    const growth = t.mock.method(mp3, 'execute', args => {
         const result = encode(args);
         fs.appendFileSync(result.output, Buffer.alloc(original.length));
         return result;
     });
-    const larger = compressFolder(source, { ...common, mp3Bitrate: 320 });
+    const larger = processFolder(source, { ...common, mp3Bitrate: 320 });
     growth.mock.restore();
-    assert.equal(larger.compressed, 0); assert.equal(larger.backedUp, 0); assert.equal(larger.failed, 0);
+    assert.equal(larger.processed, 0); assert.equal(larger.backedUp, 0); assert.equal(larger.failed, 0);
     assert.deepEqual(fs.readFileSync(file), original);
     const open = fs.openSync;
     const failure = t.mock.method(fs, 'openSync', (name, ...args) => {
         if (typeof name === 'string' && name.startsWith(backup + path.sep)) throw new Error('simulated backup failure');
         return open(name, ...args);
     });
-    const failed = compressFolder(source, common);
+    const failed = processFolder(source, common);
     failure.mock.restore();
     assert.equal(failed.failed, 1); assert.deepEqual(fs.readFileSync(file), original);
-    const success = compressFolder(source, common);
-    assert.equal(success.compressed, 1); assert.equal(success.backedUp, 1);
+    const success = processFolder(source, common);
+    assert.equal(success.processed, 1); assert.equal(success.backedUp, 1);
     assert.deepEqual(fs.readFileSync(path.join(success.backupDirectory, 'deep', 'song.mp3')), original);
     assert.ok(fs.statSync(file).size < original.length);
     decodeDuration(root, file);
@@ -170,8 +140,8 @@ test('corrupt MP3 remains unchanged and copies on save-as while valid audio cont
     generateMp3(root, file);
     const corrupt = Buffer.from('ID3\x04\x00\x00\x00\x00\x00\x00');
     fs.writeFileSync(path.join(source, 'a-bad.mp3'), corrupt);
-    const result = compressFolder(source, { outputDir: output, mp3Enabled: true, log() {} });
-    assert.equal(result.failed, 1); assert.equal(result.compressed, 1); assert.equal(result.copied, 1);
+    const result = processFolder(source, { outputDir: output, mp3Enabled: true, log() {} });
+    assert.equal(result.failed, 1); assert.equal(result.processed, 1); assert.equal(result.copied, 1);
     assert.deepEqual(fs.readFileSync(path.join(source, 'a-bad.mp3')), corrupt);
     assert.deepEqual(fs.readFileSync(path.join(output, 'a-bad.mp3')), corrupt);
 });
@@ -179,11 +149,7 @@ test('corrupt MP3 remains unchanged and copies on save-as while valid audio cont
 test('format switches and MP3 bitrate reject invalid API and command-line values before writes', t => {
     const root = temporary(t), output = path.join(root, 'output');
     for (const options of [{ mp3Bitrate: 7 }, { mp3Bitrate: 321 }, { mp3Bitrate: 24.5 }, { mp3Enabled: 'true' }, { pngEnabled: 0 }, { jpgEnabled: null }]) {
-        assert.throws(() => compressFolder(path.join(root, 'missing'), { ...options, outputDir: output, log() {} }));
+        assert.throws(() => processFolder(path.join(root, 'missing'), { ...options, outputDir: output, log() {} }));
         assert.equal(fs.existsSync(output), false);
-    }
-    for (const args of [['--mp3-enabled', 'yes'], ['--png-enabled', '1'], ['--mp3-bitrate', '24.5'], ['--mp3-bitrate', '321']]) {
-        const result = realSpawn(process.execPath, [path.join(project, 'resource-core/compress.js'), root, '--output', output, ...args], { encoding: 'utf8', windowsHide: true });
-        assert.equal(result.status, 1); assert.equal(fs.existsSync(output), false);
     }
 });

@@ -14,7 +14,7 @@ function writeReport(directory, report) {
     const session = path.join(directory, new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID());
     fs.mkdirSync(session);
     fs.writeFileSync(path.join(session, 'report.json'), JSON.stringify(report, null, 2), { flag: 'wx' });
-    const columns = ['path', 'module', 'status', 'originalBytes', 'outputBytes', 'savedBytes', 'copied', 'backedUp', 'message'];
+    const columns = ['path', 'resourceType', 'status', 'originalBytes', 'outputBytes', 'savedBytes', 'copied', 'backedUp', 'message'];
     const headers = ['相对路径', '模块', '状态', '原始字节', '结果字节', '节省字节', '复制原文件', '已备份', '说明'];
     const rows = [headers.map(csvCell).join(','), ...report.files.map(file => columns.map(key => csvCell(file[key])).join(','))];
     fs.writeFileSync(path.join(session, 'files.csv'), '\uFEFF' + rows.join('\r\n') + '\r\n', { flag: 'wx' });
@@ -22,7 +22,7 @@ function writeReport(directory, report) {
 }
 
 // 独立进程执行同步编码器，主窗口通过状态文件读取进度，通过标记文件请求取消。
-function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'reports')) {
+function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data', 'reports')) {
     const started = Date.now(), startedAt = new Date().toISOString(), files = [];
     const statusFile = path.join(jobDirectory, 'status.json');
     let state = { phase: 'starting', done: false, processed: 0, total: 0 }, lastWrite = 0, options, task, unlock;
@@ -45,11 +45,11 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'report
         lastWrite = Date.now();
     };
     const shouldCancel = () => fs.existsSync(path.join(jobDirectory, 'cancel'));
-    const report = { version: 2, startedAt, source: request.folder, mode: request.mode, files };
+    const report = { schema: 'asset-toolbox.report/1', startedAt, source: request.folder, mode: request.mode, files };
     try {
     publish({}, true);
     try {
-        if (!['preview', 'compress', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export', 'restore-preview', 'restore-export-preview'].includes(request.mode)) throw new Error('无效任务模式');
+        if (!['preview', 'process', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export', 'restore-preview', 'restore-export-preview'].includes(request.mode)) throw new Error('无效任务模式');
         if (request.mode.startsWith('restore')) {
             const { restoreTask, exportBackup, previewRestoreTask, previewBackup } = require('./restore');
             const previewOnly = request.mode.endsWith('-preview');
@@ -78,27 +78,27 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'report
                 cancelled: Boolean(summary.cancelled), exitCode: summary.failed ? 1 : summary.cancelled ? 2 : 0 }, true);
             }
         } else {
-        const { optionsFromValues } = require('./framework/options');
-        const { scanFolder, compressFolder, prepareFolder } = require('./compress');
+        const { normalizePipeline } = require('./framework/registry');
+        const { scanFolder, processFolder, prepareFolder } = require('./engine');
         const { createTask, loadTask, recoverTask, snapshot, safeSource } = require('./tasks');
         const { byExtension } = require('./framework/registry');
         if (request.mode === 'resume' || request.mode === 'retry') {
             task = loadTask(request.taskFile);
             unlock = task.lock();
-            if (task.restoreStarted) throw new Error('此任务已开始从备份恢复，不能继续压缩或重试压缩；如需重新压缩，请新建任务');
-            request = { ...request, folder: task.header.source, options: task.header.options,
+            if (task.restoreStarted) throw new Error('此任务已开始从备份恢复，不能继续处理或重试处理；如需重新处理，请新建任务');
+            request = { ...request, folder: task.header.source, pipeline: task.header.pipeline,
                 outputDir: task.header.outputDir, backupDir: task.header.backupDir };
-            const current = prepareFolder(request.folder, { ...request.options, fileList: [],
+            const current = prepareFolder(request.folder, { pipeline: request.pipeline, fileList: [],
                 ...(request.outputDir ? { outputDir: request.outputDir } : {}), ...(request.backupDir ? { backupDir: request.backupDir } : {}) });
             if (current.root !== task.header.source || current.outputRoot !== task.header.outputDir || current.backupRoot !== task.header.backupDir) throw new Error('原任务文件夹的实际位置已改变，已停止恢复');
             report.recoveredFiles = recoverTask(task);
             publish({ recoveryWarnings: report.recoveredFiles.filter(file => file.warning).map(file => file.path + '：' + file.message) }, true);
         }
-        options = optionsFromValues(request.options || {});
+        options = normalizePipeline(request.pipeline);
         report.source = request.folder;
-        report.options = options;
+        report.pipeline = options;
         report.outputDir = request.outputDir || null; report.backupDir = request.backupDir || null;
-        const common = { ...options, shouldCancel, onProgress: update => publish(update) };
+        const common = { pipeline: options, shouldCancel, onProgress: update => publish(update) };
         if (request.outputDir) common.outputDir = request.outputDir;
         if (request.backupDir) common.backupDir = request.backupDir;
         if (request.mode === 'preview') {
@@ -118,7 +118,7 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'report
                     let stamp;
                     try { stamp = snapshot(safeSource(plan.root, filename)); }
                     catch { stamp = { size: -1, mtimeMs: 0, ctimeMs: 0 }; }
-                    pending.push({ path: relative, module: byExtension.get(path.extname(filename).toLowerCase()).id, snapshot: stamp });
+                    pending.push({ path: relative, resourceType: byExtension.get(path.extname(filename).toLowerCase()).id, snapshot: stamp });
                 }
                 cancelled ||= Boolean(plan.cancelled || shouldCancel());
                 if (!cancelled) task.append({ type: 'plan', files: pending });
@@ -126,21 +126,21 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'report
             const selected = [...task.entries.values()].filter(entry => request.mode === 'retry' ? entry.status === 'failed' : entry.status === 'pending');
             const beforeFile = (relative, filename) => {
                 const entry = task.entries.get(relative), info = safeSource(task.header.source, filename);
-                if (byExtension.get(path.extname(filename).toLowerCase())?.id !== entry.module) throw new Error('处理此文件的压缩器已改变，请恢复原模块');
+                if (byExtension.get(path.extname(filename).toLowerCase())?.id !== entry.resourceType) throw new Error('文件对应的资源类型已改变，请恢复原类型定义');
                 if (request.mode !== 'retry' && (info.size !== entry.snapshot.size || info.mtimeMs !== entry.snapshot.mtimeMs || info.ctimeMs !== entry.snapshot.ctimeMs)) {
-                    throw new Error('源文件在建立任务后发生变化，未压缩；确认修改后可仅重试失败项');
+                    throw new Error('源文件在建立任务后发生变化，未处理；确认修改后可仅重试失败项');
                 }
             };
             publish({ task: task.info() }, true);
-            const empty = { total: selected.length, compressed: 0, skipped: 0, failed: 0, savedBytes: 0, copied: 0, backedUp: 0, backupDirectory: null, cancelled: true };
-            const summary = cancelled || shouldCancel() ? empty : compressFolder(request.folder, { ...common,
+            const empty = { total: selected.length, processed: 0, skipped: 0, failed: 0, savedBytes: 0, copied: 0, backedUp: 0, backupDirectory: null, cancelled: true };
+            const summary = cancelled || shouldCancel() ? empty : processFolder(request.folder, { ...common,
                 fileList: selected.map(entry => entry.path), beforeFile, backupSession: task.header.backupSession, reuseBackup: true,
                 replaceOutputs: new Map(selected.filter(entry => entry.ownedOutputHash).map(entry => [entry.path, entry.ownedOutputHash])),
                 beforeCommit: record => task.append({ type: 'intent', path: record.path, record }),
                 log: message => publish({ message }), onFile: file => { task.finish(file); files.push(file); },
             });
             report.summary = summary;
-            publish({ summary, processed: summary.compressed + summary.skipped + summary.failed, total: summary.total,
+            publish({ summary, processed: summary.processed + summary.skipped + summary.failed, total: summary.total,
                 cancelled: Boolean(summary.cancelled), exitCode: summary.failed ? 1 : summary.cancelled ? 2 : 0 }, true);
         }
         }
@@ -150,7 +150,7 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'report
         publish({ error: error.message, exitCode: 1 }, true);
     }
     if (task) { report.task = task.info(); publish({ task: report.task }, true); }
-    if (['compress', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export'].includes(request.mode)) {
+    if (['process', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export'].includes(request.mode)) {
         report.finishedAt = new Date().toISOString();
         report.elapsedSeconds = (Date.now() - started) / 1000;
         report.cancelled = Boolean(state.cancelled);

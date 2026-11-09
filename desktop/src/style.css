@@ -857,3 +857,7 @@ summary {
     animation:none!important;
   }
 }
+
+.step-card .fields + .fields { margin-top: 16px; }
+.step-actions { justify-content: flex-end; margin-top: 18px; }
+.section-heading > .actions { flex-wrap: wrap; justify-content: flex-end; }

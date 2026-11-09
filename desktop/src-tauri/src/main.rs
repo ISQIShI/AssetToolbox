@@ -64,7 +64,7 @@ fn main() {
     let mut context = tauri::generate_context!();
     // WebView2 150+ 的提升权限进程忽略环境中的 Chromium 参数；测试端口须通过原生 API 设置。
     // 仅显式提供本地测试端口时启用，普通启动不监听任何端口。
-    if let Some(port) = std::env::var("ASSET_TOOLBOX_TEST_PORT").or_else(|_| std::env::var("RESOURCE_COMPRESSOR_TEST_PORT")).ok().and_then(|value| value.parse::<u16>().ok()).filter(|port| *port > 0) {
+    if let Some(port) = std::env::var("ASSET_TOOLBOX_TEST_PORT").ok().and_then(|value| value.parse::<u16>().ok()).filter(|port| *port > 0) {
         if let Some(window) = context.config_mut().app.windows.first_mut() {
             window.additional_browser_args = Some(format!("--remote-debugging-port={port} --remote-debugging-address=127.0.0.1"));
             window.visible = false;

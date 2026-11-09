@@ -1,3 +1,4 @@
+const { compressionPipeline, engineFor, batchFor, installType } = require('./helpers');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -13,10 +14,10 @@ function fixture(t) {
         assert.ok(path.basename(root).startsWith('backup-restore-test-'));
         fs.rmSync(root, { recursive: true, force: true });
     });
-    const tool = copyTool(root), module = path.join(tool, 'resource-core/processors/fixture');
-    fs.mkdirSync(module);
-    fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '恢复测试', extensions: ['.pack'], enabledKey: 'fixtureEnabled', defaults: { fixtureEnabled: true } }));
-    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs');module.exports={validate:d=>d.toString().startsWith('PACK:'),compress({input,output}){fs.writeFileSync(output,fs.readFileSync(input).subarray(0,10));return {output};}};`);
+    const tool = copyTool(root), module = path.join(tool, 'resource-core/providers/fixture');
+    fs.mkdirSync(module); installType(tool, 'fixture');
+    fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '恢复测试', extensions: ['.pack'], enabledKey: 'fixtureEnabled', defaults: {} }));
+    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:1,version:'1.0.0',displayName:'测试提供方',supports:[{resourceType:'fixture',operation:'compress'}],schema:require('./config'),validate:d=>d.toString().startsWith('PACK:'),execute({input,output}){fs.writeFileSync(output,fs.readFileSync(input).subarray(0,10));return {output};}};`);
     const source = path.join(root, '原始 素材'), backupDir = path.join(root, '备份');
     fs.mkdirSync(path.join(source, '二级'), { recursive: true });
     const originals = new Map();
@@ -24,7 +25,7 @@ function fixture(t) {
         const relative = path.join('二级', name + '.pack'), data = Buffer.from('PACK:' + name.repeat(200));
         fs.writeFileSync(path.join(source, relative), data); originals.set(relative, data);
     }
-    const batch = require(path.join(tool, 'resource-core/batch')), tasks = require(path.join(tool, 'resource-core/tasks'));
+    const batch = batchFor(path.join(tool, 'resource-core')), tasks = require(path.join(tool, 'resource-core/tasks'));
     const restore = require(path.join(tool, 'resource-core/restore'));
     const run = (request, cancelAfter = Infinity) => {
         const job = fs.mkdtempSync(path.join(root, 'job-')), original = restore.restoreTask;
@@ -38,7 +39,7 @@ function fixture(t) {
         try { return batch.runJob(request, job, path.join(root, 'reports')); }
         finally { restore.restoreTask = original; }
     };
-    const first = run({ mode: 'compress', folder: source, backupDir });
+    const first = run({ mode: 'process', folder: source, backupDir });
     assert.equal(first.exitCode, 0, first.error); assert.equal(first.summary.backedUp, 3);
     const taskFile = first.task.taskFile, backup = tasks.loadTask(taskFile).header.backupSession;
     const recover = (mode = 'restore', cancelAfter = Infinity) => run({ mode, taskFile }, cancelAfter);
@@ -66,8 +67,8 @@ test('existing intent/result journals restore every original byte and keep backu
     assert.equal(f.recover().summary.total, 0); assert.equal(fs.statSync(one).mtimeMs, stamp);
     fs.writeFileSync(one, 'edited after restore');
     assert.equal(f.recover().summary.total, 0); assert.equal(fs.readFileSync(one, 'utf8'), 'edited after restore');
-    assert.match(f.recover('resume').error, /不能继续压缩/);
-    assert.match(f.recover('retry').error, /不能继续压缩/);
+    assert.match(f.recover('resume').error, /不能继续处理/);
+    assert.match(f.recover('retry').error, /不能继续处理/);
 });
 
 test('cancel and reopen continues only pending restore files and preserves already-restored edits', t => {
@@ -82,14 +83,14 @@ test('cancel and reopen continues only pending restore files and preserves alrea
 
 test('changed targets and corrupt or missing backups are reported, and only failed restoration is retried', t => {
     const f = fixture(t), a = path.join(f.source, '二级/a.pack'), b = path.join(f.backup, '二级/b.pack'), c = path.join(f.backup, '二级/c.pack');
-    const compressed = fs.readFileSync(a);
+    const processed = fs.readFileSync(a);
     fs.writeFileSync(a, 'user edit'); fs.writeFileSync(b, 'corrupt'); fs.unlinkSync(c);
     const failed = f.recover();
     assert.equal(failed.summary.failed, 3); assert.equal(failed.task.restoreFailed, 3);
     assert.match(report(failed).files[0].message, /已被修改/);
     assert.equal(fs.readFileSync(a, 'utf8'), 'user edit');
     assert.equal(f.recover().summary.total, 0);
-    fs.writeFileSync(a, compressed); fs.writeFileSync(b, f.originals.get(path.join('二级', 'b.pack'))); fs.writeFileSync(c, f.originals.get(path.join('二级', 'c.pack')));
+    fs.writeFileSync(a, processed); fs.writeFileSync(b, f.originals.get(path.join('二级', 'b.pack'))); fs.writeFileSync(c, f.originals.get(path.join('二级', 'c.pack')));
     const done = f.recover('restore-retry'); assert.equal(done.summary.restored, 3); assert.equal(done.task.restoreFailed, 0); verify(f);
 });
 
@@ -111,7 +112,7 @@ test('an interrupted compression commit with no result can be restored directly'
     fs.writeFileSync(journal, lines.map(JSON.stringify).join('\n') + '\n');
     assert.equal(f.tasks.loadTask(f.taskFile).info().pending, 3);
     const done = f.recover(); assert.equal(done.summary.restored, 3); verify(f);
-    assert.match(f.recover('resume').error, /不能继续压缩/);
+    assert.match(f.recover('resume').error, /不能继续处理/);
 });
 
 test('checkpoint failure after replacing a file resumes by detecting original bytes, without another replacement', t => {
@@ -128,7 +129,7 @@ test('checkpoint failure after replacing a file resumes by detecting original by
     assert.equal(fs.statSync(a).mtimeMs, stamp); verify(f);
 });
 
-test('checkpoint failure before restoration leaves compressed files untouched and resumable', t => {
+test('checkpoint failure before restoration leaves processed files untouched and resumable', t => {
     const f = fixture(t), load = f.tasks.loadTask, before = fs.readFileSync(path.join(f.source, '二级/a.pack'));
     f.tasks.loadTask = (...args) => {
         const task = load(...args), append = task.append;
@@ -149,7 +150,7 @@ test('restoration respects the compression task lock', t => {
 
 test('restoration works with all processors removed in a fresh process', t => {
     const f = fixture(t);
-    fs.renameSync(path.join(f.tool, 'resource-core/processors'), path.join(f.tool, 'resource-core/disabled-processors'));
+    fs.renameSync(path.join(f.tool, 'resource-core/providers'), path.join(f.tool, 'resource-core/disabled-processors'));
     const result = spawnSync(process.execPath, [path.join(f.tool, 'resource-core/batch.js'), '--restore', f.taskFile], { encoding: 'utf8', windowsHide: true });
     assert.equal(result.status, 0, result.stdout + result.stderr); assert.equal(JSON.parse(result.stdout).summary.restored, 3); verify(f);
 });
@@ -228,7 +229,7 @@ test('export refuses overlapping directories and links; task without backups has
     fs.symlinkSync(empty, path.join(f.backup, 'linked'), 'junction');
     const output = path.join(f.root, 'export');
     assert.equal(f.restore.exportBackup(f.backup, output).failed, 1); assert.equal(fs.existsSync(path.join(output, 'linked')), false);
-    const first = f.run({ mode: 'compress', folder: f.source, options: { fixtureEnabled: false } });
+    const first = f.run({ mode: 'process', folder: f.source, options: { fixtureEnabled: false } });
     assert.equal(first.task.canRestore, false);
     assert.match(f.run({ mode: 'restore', taskFile: first.task.taskFile }).error, /没有可恢复/);
 });
@@ -266,12 +267,12 @@ try {
     }
     const input = path.join(f.root, 'input.wav'); fs.writeFileSync(input, wav);
     const music = path.join(source, '主题.mp3');
-    const audioResult = spawnSync(path.join(f.tool, 'resource-core/processors/mp3/lame.exe'), ['-b', '192', input, music], { windowsHide: true, encoding: 'utf8', timeout: 30000 });
+    const audioResult = spawnSync(path.join(f.tool, 'resource-core/providers/lame/lame.exe'), ['-b', '192', input, music], { windowsHide: true, encoding: 'utf8', timeout: 30000 });
     assert.equal(audioResult.status, 0, audioResult.stderr);
     const originals = fs.readdirSync(source).map(name => [name, fs.readFileSync(path.join(source, name))]);
-    const compressed = f.run({ mode: 'compress', folder: source, backupDir: path.join(f.root, 'real-backup'), options: { mp3Enabled: true } });
-    assert.equal(compressed.summary.compressed, 3, JSON.stringify(report(compressed)));
-    const done = f.run({ mode: 'restore', taskFile: compressed.task.taskFile });
+    const processed = f.run({ mode: 'process', folder: source, backupDir: path.join(f.root, 'real-backup'), options: { mp3Enabled: true } });
+    assert.equal(processed.summary.processed, 3, JSON.stringify(report(processed)));
+    const done = f.run({ mode: 'restore', taskFile: processed.task.taskFile });
     assert.equal(done.summary.restored, 3, JSON.stringify(report(done)));
     for (const [name, data] of originals) assert.deepEqual(fs.readFileSync(path.join(source, name)), data);
 });

@@ -15,6 +15,7 @@ coverage/
 /runtime/node.exe
 
 # 用户配置和处理记录，不属于源码
+/resource-core/data/
 /resource-core/user-settings.json
 /resource-core/config/user-settings.json
 /resource-core/processors/*/user-settings.json

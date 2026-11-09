@@ -12,7 +12,7 @@
 
 受限沙箱可能重定向 LocalAppData，造成 nvm 误报“未安装/未激活”。先在普通用户终端确认真实版本与 PATH，再决定是否安装；不要据沙箱结果重复安装或改写全局配置。
 
-在 `desktop/` 中执行：
+先在 `resource-core/` 执行 `npm ci` 安装 Sharp 及平台原生依赖，再在 `desktop/` 中执行：
 
 ```powershell
 npm ci
@@ -32,15 +32,17 @@ npm run dev
 | `desktop/` | `npm run build` | Tauri release 构建，不生成安装包；前置执行 build:web，随后复制根目录 EXE |
 | `desktop/` | `npm test` | Vitest + Vue Test Utils + jsdom |
 | `desktop/` | `npm run test:e2e` | Playwright 连接真实 WebView2；先构建当前源码 |
-| `resource-core/` | `npm test` | Node 内置测试框架，不需安装核心 npm 依赖 |
+| `resource-core/` | `npm test` | Node 内置测试框架；先安装核心依赖 |
 | 仓库根目录 | `.\runtime\node.exe --test resource-core/tests/*.test.js` | 使用便携 Node 运行同一核心套件 |
-| 仓库根目录 | `.\runtime\node.exe resource-core/compress.js --help` | 查看自动生成的 CLI 参数 |
+| 仓库根目录 | `.\runtime\node.exe resource-core/cli.js --help` | 查看流水线 CLI 用法 |
 
 原生测试复制工具、生成样本、使用独立 WebView 用户目录和本机随机 CDP 端口；截图位于 `desktop/test-results/`。它使用系统 WebView2，无需另装 Playwright Chromium 浏览器。只对旧 EXE 跑 E2E 不能证明新源码构建正确。
 
 开发 Node 与便携运行时可以不同：当前开发使用 Node 26.13.0，随附运行时保留 Node 24.19.0。核心套件验证开发 Node，原生 E2E 使用工具目录的便携 Node；不要把更新全局 Node 当作更新发布运行时。
 
 ## 依赖安装与安全修复
+
+核心锁定 Sharp 0.35.5，依赖随 `resource-core/node_modules/` 一起发布；构建脚本使用便携 Node 运行只读加载检查。Sharp 用于 PNG/JPEG 缩放，官方行为见 [resize API](https://sharp.pixelplumbing.com/api-resize/) 和 [安装说明](https://sharp.pixelplumbing.com/install/)。代码通过短生命周期子进程加载原生库，避免 Windows 中主进程长期持有 DLL 文件锁。
 
 使用 `npm ci` 复现 `package-lock.json`，避免首次配置时无目的升级全部依赖。测试工具固定在 Vitest `~4.1.12`，用于修复旧 mocker 与线程池依赖的问题，保持 Vite 7 和现有组件测试 API。`js-beautify` 的 `glob` 覆盖到 `^14.0.2`，`minimatch` 覆盖到 `^11.0.1`，修复上游旧依赖链的审计问题。
 
@@ -69,12 +71,12 @@ npm run dev
 | --- | --- |
 | `compress.test.js` | 图片编码、中文/空格路径、链接、另存、备份、CLI 校验 |
 | `resources.test.js` | MP3 真实编码/解码、格式开关、配置基础行为 |
-| `discovery.test.js` | 自动发现、schema、冲突、停用与扩展参数 |
-| `layout.test.js` | 拆分配置、旧格式迁移、保存回滚、移动工具 |
+| `contract.test.js` | 三层发现、参数命名空间、组合/版本拒绝、原子配置 |
+| `resize.test.js` | 真实缩放、透明度、方向、尺寸、顺序、失败回滚及恢复 |
 | `batch.test.js` | 预览、取消、进度、CSV/JSON 报告、状态文件占用 |
 | `desktop.test.js` | JSON Lines、工作进程、宿主退出后的安全取消 |
 | `resume.test.js` | 固定清单、队列、失败副本所有权、任务锁和日志修复 |
-| `restore.test.js` | 恢复哈希、冲突、字节一致、旧备份导出、中断恢复 |
+| `restore.test.js` | 恢复哈希、冲突、字节一致、独立备份导出、中断恢复 |
 | `restore-preview.test.js` | 只读预览、选择范围、哈希快照、CLI 选择文件 |
 
 `portable.js` 是隔离复制辅助文件。前端测试见[前端设计](architecture/frontend.md)。
@@ -97,8 +99,8 @@ npm run dev
 可选正文：原因、行为变化、兼容性与验证。
 ```
 
-scope 可省略。常用类型为 `feat`、`fix`、`docs`、`refactor`、`test`、`build`、`ci`、`perf`、`style`、`chore`、`revert`；范围建议 `ui`、`bridge`、`core`、`tasks`、`restore`、`config`、`processors`、`docs`、`repo`。新增功能用 feat，缺陷修复用 fix；界面功能变化不属于仅格式调整的 style。
+scope 可省略。常用类型为 `feat`、`fix`、`docs`、`refactor`、`test`、`build`、`ci`、`perf`、`style`、`chore`、`revert`；范围建议 `ui`、`bridge`、`core`、`tasks`、`restore`、`config`、`providers`、`docs`、`repo`。新增功能用 feat，缺陷修复用 fix；界面功能变化不属于仅格式调整的 style。
 
-示例：`fix(restore): 保留预览后被修改的目标文件`、`docs(architecture): 补充任务日志恢复流程`。破坏性变更使用 `!` 或 `BREAKING CHANGE:` 脚注，本项目要求同时写清迁移方式和受影响数据。规范由贡献流程遵守，当前未安装自动提交钩子。
+示例：`fix(restore): 保留预览后被修改的目标文件`、`docs(architecture): 补充任务日志恢复流程`。破坏性变更使用 `!` 或 `BREAKING CHANGE:` 脚注，本项目要求同时写清格式影响及读取/拒绝策略；当前新契约明确不迁移历史数据。规范由贡献流程遵守，当前未安装自动提交钩子。
 
 PR 说明应包含具体问题、最终行为、关联问题、验证命令/结果、文档更新和兼容性影响；界面变化附截图。未执行或受阻的验证单独说明。
