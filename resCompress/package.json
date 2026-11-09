@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "compress": "node compress.js",
+    "test": "node --test tests/*.test.js"
+  }
+}

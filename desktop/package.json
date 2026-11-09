@@ -1,0 +1,20 @@
+{
+  "name": "resource-compressor-desktop",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "dev:web": "vite --host 127.0.0.1",
+    "build:web": "vue-tsc --noEmit && vite build",
+    "build": "tauri build --no-bundle && node scripts/portable.mjs",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": { "@tauri-apps/api": "^2", "@tauri-apps/plugin-dialog": "^2", "vue": "^3.5" },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2", "@vitejs/plugin-vue": "^6", "vite": "^7", "typescript": "^5.9",
+    "vue-tsc": "^3", "vitest": "^3", "@vue/test-utils": "^2", "jsdom": "^26",
+    "@playwright/test": "^1.56", "@types/node": "^24"
+  }
+}

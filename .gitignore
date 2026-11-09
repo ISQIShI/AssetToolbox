@@ -1,0 +1,30 @@
+# 本地开发依赖和构建产物
+node_modules/
+/desktop/dist/
+/desktop/src-tauri/target/
+/desktop/src-tauri/gen/
+/desktop/test-results/
+/desktop/playwright-report/
+coverage/
+*.log
+/.local/
+
+# 便携发布产物；编码器是现有运行依赖，保留版本控制
+/ResourceCompressor.exe
+/runtime/node.exe
+
+# 用户配置和处理记录，不属于源码
+/resCompress/user-settings.json
+/resCompress/config/user-settings.json
+/resCompress/compressors/*/user-settings.json
+/resCompress/tasks/
+/resCompress/reports/
+
+# 编辑器与操作系统临时文件
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+.env
+.env.*
+!.env.example

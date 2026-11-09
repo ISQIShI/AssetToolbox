@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "资源压缩",
+  "version": "2.0.0",
+  "identifier": "local.resource-compressor.desktop",
+  "build": { "beforeDevCommand": "npm run dev:web", "devUrl": "http://127.0.0.1:1420", "beforeBuildCommand": "npm run build:web", "frontendDist": "../dist" },
+  "app": {
+    "windows": [{ "title": "资源压缩", "width": 1220, "height": 850, "minWidth": 840, "minHeight": 620, "center": true }],
+    "security": { "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'" }
+  },
+  "bundle": { "active": false, "icon": ["icons/icon.ico", "icons/icon.png"] }
+}
