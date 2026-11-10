@@ -1,6 +1,6 @@
 # ADR 0004：以处理线为骨架重构前端
 
-状态：已采用。日期：2026-11-09。
+状态：已采用；视觉与窗口外壳（顶栏、冷灰机壳、IBM Plex、仅浅色）被 [ADR 0006](0006-desktop-application-shell.md) 取代，处理线结构、工作区划分和全局作业栏继续有效。日期：2026-11-09。
 
 关联：[前端设计规范](../design/frontend-design.md)、[前端架构](../architecture/frontend.md)、`desktop/src/`、`desktop/tests/`。
 

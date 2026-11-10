@@ -1,66 +1,121 @@
 /*
  * 设计令牌：唯一的颜色、字号、间距来源。组件样式只引用这些变量，不写裸色值。
+ * 浅色为默认；深色在 :root[data-theme='dark'] 中按同名令牌重定义，由 core/theme.ts 切换。
  * 规则详见 docs/design/frontend-design.md。
  */
 :root {
-  /* 中性色：冷灰机壳 + 白色工作面 + 墨色文字 */
-  --canvas: #e6e9ed;        /* 窗口底色、处理线所在的侧栏 */
-  --paper: #ffffff;         /* 编辑区、输入框、选中的站点 */
-  --paper-sunk: #f3f5f7;    /* 编辑区内的分组底色、表头 */
-  --ink: #1f2531;           /* 正文、主按钮、处理线 */
-  --ink-raised: #333b4b;    /* 主按钮悬停 */
-  --ink-2: #545d6e;         /* 次要文字 */
-  --ink-3: #7d8697;         /* 提示、占位、停用 */
-  --rule: #c9cfd8;          /* 控件边框、分区线 */
-  --rule-soft: #dde1e7;     /* 表格行线 */
+  color-scheme: light;
+
+  /* 层级：窗口框架 → 侧栏 → 内容面 → 控件。越靠内越亮 */
+  --chrome: #e7e9ee;        /* 标题栏、活动栏、状态栏 */
+  --pane: #f1f2f5;          /* 处理线、任务列表等侧栏，命令栏 */
+  --surface: #fafbfc;       /* 内容区 */
+  --control: #ffffff;       /* 输入框、按钮、分组面板、浮层 */
+  --hover: rgb(24 32 52 / 0.06);    /* 悬停：叠加在任意层级上 */
+  --pressed: rgb(24 32 52 / 0.1);   /* 按下、选中的中性项 */
+
+  --text: #1c2230;          /* 正文 */
+  --text-2: #535c6d;        /* 次要文字、说明 */
+  --text-3: #7f8797;        /* 占位、停用、装饰线 */
+  --border: #cdd2da;        /* 控件边框 */
+  --border-soft: #dfe2e8;   /* 分区线、表格行线 */
+
+  /* 强调色：选中项、主按钮、焦点。只此一种 */
+  --accent: #2f55d4;
+  --accent-hover: #2749bb;
+  --accent-wash: #e6ecfd;   /* 选中行、选中站点 */
+  --on-accent: #ffffff;
 
   /* 状态色：只表达状态，不作装饰 */
-  --focus: #2b50d8;         /* 键盘焦点、选中行 */
-  --focus-wash: #e8edfc;
-  --ok: #17704b;            /* 成功、节省体积 */
-  --ok-wash: #e4f2eb;
-  --warn: #87540b;          /* 可继续、警告、不完整 */
-  --warn-wash: #f8efdf;
-  --danger: #b8322b;        /* 失败、冲突、错误 */
-  --danger-wash: #f8e6e4;
-  --missing: #a80c97;       /* 缺少依赖：沿用游戏引擎“丢失贴图”的品红 */
-  --missing-wash: #fae5f7;
+  --ok: #17704b;
+  --ok-wash: #e2f1ea;
+  --warn: #87540b;
+  --warn-wash: #f8eedc;
+  --danger: #b8322b;
+  --danger-wash: #f9e5e3;
+  --danger-solid: #c42b1c;  /* 窗口关闭按钮悬停 */
+  --on-solid: #ffffff;      /* 关闭按钮悬停与应用图标上的前景 */
+  --missing: #a80c97;       /* 缺少依赖专用的品红 */
+  --missing-wash: #fae4f6;
+  --on-missing: #ffffff;    /* 品红实心块上的文字 */
+  --brand: #256b4d;         /* 仅用于标题栏的应用图标，与程序图标一致 */
 
-  /* 字体：IBM Plex 负责拉丁字母与数字，中文回退到雅黑 UI */
-  --font-sans: 'IBM Plex Sans', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
-  --font-mono: 'IBM Plex Mono', Consolas, 'Microsoft YaHei UI', monospace;
+  --shadow-float: 0 8px 24px rgb(20 28 48 / 0.16), 0 1px 3px rgb(20 28 48 / 0.12);
 
-  /* 字号：12 / 14 / 16 / 18 / 24 / 36，取自经典排版比例 */
+  /* 字体：使用系统界面字体，与 Windows 自身一致 */
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, 'Microsoft YaHei UI', monospace;
+
+  /* 字号：桌面密度，四级 */
   --t-small: 12px;
-  --t-body: 14px;
-  --t-lead: 16px;
-  --t-title: 18px;
-  --t-heading: 24px;
-  --t-display: 36px;
+  --t-body: 13px;
+  --t-title: 15px;
+  --t-figure: 20px;
 
   /* 间距：4 的倍数 */
   --s-1: 4px;
   --s-2: 8px;
   --s-3: 12px;
   --s-4: 16px;
-  --s-5: 24px;
-  --s-6: 32px;
-  --s-7: 48px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
 
-  /* 圆角按层级：控件 4，浮层 6，节点为圆；区域不加圆角 */
+  /* 圆角按层级：控件 4，面板 6，浮层 8 */
   --r-control: 4px;
-  --r-float: 6px;
+  --r-panel: 6px;
+  --r-float: 8px;
 
-  --rail-width: 272px;
-  --bar-height: 52px;
-  --measure: 720px;          /* 编辑区正文最大宽度，约 50 个汉字 */
-  --control-height: 38px;
-  --pane-padding: 32px;
+  --titlebar-height: 36px;
+  --activity-width: 64px;
+  --rail-width: 264px;
+  --list-width: 288px;
+  --command-height: 44px;
+  --status-height: 24px;
+  --control-height: 30px;
+  --control-small: 24px;
+  --row-height: 30px;
+  --label-width: 128px;      /* 属性表单的标签列 */
+  --measure: 760px;          /* 内容区表单的最大宽度 */
+  --pane-padding: 20px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --chrome: #1a1c21;
+  --pane: #202228;
+  --surface: #25272e;
+  --control: #2d3038;
+  --hover: rgb(255 255 255 / 0.06);
+  --pressed: rgb(255 255 255 / 0.1);
+
+  --text: #e7e9ee;
+  --text-2: #acb2be;
+  --text-3: #7b8291;
+  --border: #454954;
+  --border-soft: #353840;
+
+  --accent: #86a2ff;
+  --accent-hover: #9db4ff;
+  --accent-wash: #2c3760;
+  --on-accent: #0e1630;
+
+  --ok: #62c794;
+  --ok-wash: #1f3a2d;
+  --warn: #e2b566;
+  --warn-wash: #3d321c;
+  --danger: #f58e88;
+  --danger-wash: #46262a;
+  --danger-solid: #c42b1c;
+  --missing: #f277e3;
+  --missing-wash: #45213f;
+  --on-missing: #2a0825;
+  --brand: #2f8660;
+
+  --shadow-float: 0 8px 24px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.4);
 }
 
 @media (max-width: 1000px) {
-  :root { --rail-width: 248px; --pane-padding: 24px; }
-}
-@media (max-width: 760px) {
-  :root { --pane-padding: 16px; }
+  :root { --rail-width: 236px; --list-width: 252px; --pane-padding: 16px; --label-width: 108px; }
 }

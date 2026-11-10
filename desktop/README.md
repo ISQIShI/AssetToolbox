@@ -24,7 +24,7 @@ npm run dev
 
 ## 源码与构建
 
-`src/App.vue` 是窗口外壳；`src/core/workbench.ts` 集中状态与作业生命周期；`src/views/` 是处理、任务、恢复、工具四个工作区；`src/components/` 包括处理线、步骤编辑、参数字段、作业栏和恢复表；`src/styles/tokens.css` 是设计令牌。结构见[前端架构](../docs/architecture/frontend.md)。Rust 宿主位于 `src-tauri/src/main.rs`，核心位于相邻 `resource-core/`。
+`src/App.vue` 是窗口外壳（自绘标题栏、活动栏、状态栏）；`src/core/workbench.ts` 集中状态与作业生命周期；`src/views/` 是处理、任务、恢复、工具四个工作区；`src/components/` 包括标题栏、图标、处理线、步骤编辑、参数字段、作业栏和恢复表；`src/styles/tokens.css` 是浅色与深色两套设计令牌。结构见[前端架构](../docs/architecture/frontend.md)。Rust 宿主位于 `src-tauri/src/main.rs`，核心位于相邻 `resource-core/`。
 
 `npm run build` 执行 TypeScript 检查、Vite 打包、Rust release 构建，并通过 `scripts/portable.mjs` 复制根目录 EXE；运行时缺失才复制当前 Node。脚本使用便携 Node 检查 Sharp 原生依赖，失败时不会发布新根 EXE。它不安装依赖，也不自动生成独立分发压缩包。
 

@@ -16,7 +16,7 @@ pngquant 主页宣告当前稳定版本 3.0.3，但本轮下载的官方 `pngqua
 
 LAME 官方只提供源码，Windows 包来自其 Links 页面指向的第三方构建者。[官方许可说明](https://lame.sourceforge.io/license.txt)还保留对旧 mpglib GPL 解码代码的提醒；当前包改用独立 DLL，仍需核对实际源码/链接方式。获取“官方推荐构建”与确认“完整分发条件已满足”是两件事。本次不作二进制分发承诺。
 
-本仓库没有重新发布第三方实现源码，保存许可证文本仅用于署名与审计。Node 运行时另见 [Node 许可合集](runtime/LICENSE-node.txt)。界面字体 IBM Plex Sans 与 IBM Plex Mono（Copyright IBM Corp.，SIL Open Font License 1.1）通过 npm 包 `@fontsource/ibm-plex-sans`、`@fontsource/ibm-plex-mono` 5.3.0 打包进前端产物；随 EXE 分发时须附带 OFL 许可文本（见两包的 `LICENSE`），字体不得单独出售。Vue、Tauri、Vite、Rust crate 等依赖各自按其锁定包的许可证使用；发布编译后的应用前还需生成所含依赖的完整声明，见[分发核对流程](docs/distribution.md)。
+本仓库没有重新发布第三方实现源码，保存许可证文本仅用于署名与审计。Node 运行时另见 [Node 许可合集](runtime/LICENSE-node.txt)。界面使用操作系统自带的字体，前端产物不打包任何字体文件。Vue、Tauri、Vite、Rust crate 等依赖各自按其锁定包的许可证使用；发布编译后的应用前还需生成所含依赖的完整声明，见[分发核对流程](docs/distribution.md)。
 
 项目源码仍保留提供方适配代码；缺少第三方工具时可按前端说明自行获取，或禁用相关步骤。2026-11-09 起支持用户主动触发 LAME/Sharp 固定核验版本的自动下载，地址与摘要见 `resource-core/framework/dependencies/catalog.json`；LAME ZIP 已重新取样匹配原 SHA-256，Sharp 五个 npm 包按锁文件 SHA-512 验证。保留原包许可证，不静默接受商业条款，不使用来源不明的镜像。
 

@@ -52,7 +52,7 @@ Vite 热更新只监听前端相关文件，排除 `src-tauri/`，避免 Windows
 
 这些 overrides 是临时的兼容修复；上游解除旧依赖约束后，移除前必须重跑组件测试、类型检查及 `npm audit`。升级依据见 [Vitest 安全公告](https://github.com/vitest-dev/vitest/security/advisories/GHSA-qxg6-89mg-rqv8)和 [Vitest 4 迁移指南](https://v4.vitest.dev/guide/migration)。
 
-桌面运行依赖新增 `@fontsource/ibm-plex-sans` 与 `@fontsource/ibm-plex-mono`，精确锁定 5.3.0，只提供 OFL 字体文件和 CSS，没有安装脚本；`main.ts` 只引入 latin 子集的所需字重。升级时同步[前端设计规范](design/frontend-design.md#字体)与第三方声明。
+界面使用系统字体，不打包字体文件；图标是 `desktop/src/components/Icon.vue` 中自绘的 SVG 路径，没有图标库依赖。原生窗口关闭了系统边框，标题栏由前端绘制，所需窗口权限登记在 `desktop/src-tauri/capabilities/default.json`，增减权限时同步[前端设计规范](design/frontend-design.md#窗口骨架)。
 
 `package.json` 的 `allowScripts` 仅批准 `esbuild@0.28.2` 的安装脚本；npm 11.20+ 会据此处理安装脚本许可。新版本提示未许可时，先审阅具体包及脚本，再更新许可，不使用全局放开所有依赖脚本的配置。`whatwg-encoding` 的弃用提示来自 jsdom 26 的传递依赖，不影响当前验证；不要仅为消除提示直接替换其内部实现。
 

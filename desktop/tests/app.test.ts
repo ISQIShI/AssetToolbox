@@ -1,4 +1,4 @@
-// App 级交互：作业栏、跨页取消、扫描结果归位、缺依赖拦截、任务与恢复请求。
+// App 级交互：作业栏、跨页取消、扫描结果归位、缺依赖拦截、任务与恢复请求、快捷键与外观。
 import { config, definition, missingProvider, task } from './fixtures';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
@@ -207,4 +207,32 @@ it('offers updates only for managed plans and keeps cancellation/errors visible'
     await finish({ cancelled: false, exitCode: 1, error: '下载完整性校验失败' });
     expect(wrapper.find('.dock').text()).toContain('下载完整性校验失败');
     expect(wrapper.text()).toContain('当前：3.1');
+});
+
+it('switches workspaces and saves with keyboard shortcuts, and reports health in the status bar', async () => {
+    await mountApp();
+    const press = async (key: string) => { window.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true })); await flushPromises(); };
+    expect(wrapper.find('.statusbar').text()).toContain('就绪');
+    expect(wrapper.find('.statusbar').text()).toContain('1 个任务可继续');
+    expect(wrapper.find('.statusbar').text()).toContain('处理工具 1 / 1 可用');
+    await press('2');
+    expect(tab('任务').attributes('aria-current')).toBe('page');
+    await press('s');
+    expect(call).not.toHaveBeenCalledWith('save', expect.anything());
+    await press('1'); await press('s');
+    expect(call).toHaveBeenCalledWith('save', expect.objectContaining({ sourceDir: config.sourceDir }));
+    await button('扫描预览').trigger('click'); await flushPromises();
+    expect(wrapper.find('.statusbar').text()).toContain('正在运行：扫描预览');
+});
+
+it('switches appearance with a single click each way and returns to following the system', async () => {
+    await mountApp();
+    const toggle = wrapper.find('.tab.theme');
+    expect(toggle.attributes('aria-label')).toBe('外观：浅色（跟随系统）');
+    await toggle.trigger('click');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(toggle.attributes('aria-label')).toBe('外观：深色');
+    await toggle.trigger('click');
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(toggle.attributes('aria-label')).toBe('外观：浅色（跟随系统）');
 });
