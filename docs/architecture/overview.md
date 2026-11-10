@@ -23,7 +23,7 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 
 | 入口 | 职责 |
 | --- | --- |
-| `desktop/src/App.vue`、`core/workbench.ts`、`views/`、`components/` | 四个工作区、处理线与步骤编辑、全局作业栏、任务与恢复，见[前端架构](frontend.md) |
+| `desktop/src/App.vue`、`core/workbench.ts`、`views/`、`components/` | 自绘标题栏、活动栏与状态栏，四个工作区、处理线与步骤编辑、全局作业栏、任务与恢复，见[前端架构](frontend.md) |
 | `desktop/src-tauri/src/main.rs` | 本地宿主、目录对话框、报告打开、退出协作 |
 | `desktop-bridge.js` | action 白名单、单活动作业、工作进程生命周期 |
 | `batch.js` | 预览/处理/续跑/恢复路由、锁、进度、报告 |
@@ -36,7 +36,7 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 
 ## 数据流与安全
 
-启动加载目录和配置，配置错误不妨碍任务/恢复入口。前端先 normalize，再保存配置（失败告警但允许本次运行），最后 start。预览不保存配置。批处理扫描后固定任务清单和规范化 pipeline，包括三层版本。
+启动加载目录和配置，配置错误不妨碍任务/恢复入口。前端先 normalize，再保存配置（失败告警但允许本次运行），最后 start。预览不保存配置。批处理扫描后固定任务清单和规范化 pipeline，包括类型、操作、提供方和适配器版本。提供方 API 2 按操作组织适配器，依赖准备按提供方共享。
 
 每个文件过滤适用步骤，按顺序执行；压缩接受更小输出，缩放接受合法输出。全部步骤成功后才做一次提交：写 intent、校验哈希、备份/排他创建或原子替换、写 result。后续步骤失败丢弃前面产物。续跑和恢复复用任务锁、哈希及事件日志；恢复不加载转换插件。
 

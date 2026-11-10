@@ -1,9 +1,10 @@
 <script setup lang="ts">
-// 单个步骤的编辑器：组合（资源类型 / 操作 / 处理工具）、启用、两组参数、顺序与删除。
+// 单个步骤的编辑器：标题与启用开关、步骤命令、组合（资源类型 / 操作 / 处理工具）、两组参数。
 import { computed, useId } from 'vue';
 import type { Definition, Step } from '../core/types';
 import { isMissing, resetStep, retargetStep, stepTitle } from '../core/model';
 import ParameterFields from './ParameterFields.vue';
+import Icon from './Icon.vue';
 
 const props = defineProps<{ definition: Definition; modelValue: Step; index: number; count: number; disabled?: boolean }>();
 const emit = defineEmits<{ 'update:modelValue': [value: Step]; remove: []; move: [offset: number]; 'show-tools': [] }>();
@@ -12,6 +13,7 @@ const id = useId();
 const step = computed(() => props.modelValue);
 const operation = computed(() => props.definition.operations.find(item => item.id === step.value.operation));
 const provider = computed(() => props.definition.providers.find(item => item.id === step.value.provider));
+const adapter = computed(() => provider.value?.adapters.find(item => item.operation === step.value.operation));
 const supported = (resourceType: string, operationId: string) => props.definition.providers.some(p => p.supports.some(s => s.resourceType === resourceType && s.operation === operationId));
 const operations = computed(() => props.definition.operations.filter(item => supported(step.value.resourceType, item.id)));
 const providers = computed(() => props.definition.providers.filter(p => p.supports.some(s => s.resourceType === step.value.resourceType && s.operation === step.value.operation)));
@@ -34,10 +36,17 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
         <p class="order">第 {{ index + 1 }} 步，共 {{ count }} 步</p>
       </div>
       <label class="check switch">
-        <input type="checkbox" :checked="step.enabled" :disabled="disabled" @change="patch({ enabled: ($event.target as HTMLInputElement).checked })">
         启用此步骤
+        <input type="checkbox" class="toggle" :checked="step.enabled" :disabled="disabled" @change="patch({ enabled: ($event.target as HTMLInputElement).checked })">
       </label>
     </header>
+
+    <div class="commands" role="toolbar" aria-label="步骤命令">
+      <button type="button" class="button small" :disabled="disabled || index === 0" @click="emit('move', -1)"><Icon name="up" :size="14" />上移</button>
+      <button type="button" class="button small" :disabled="disabled || index === count - 1" @click="emit('move', 1)"><Icon name="down" :size="14" />下移</button>
+      <button type="button" class="button small" :disabled="disabled" @click="emit('update:modelValue', resetStep(definition, step))"><Icon name="restore" :size="14" />恢复默认参数</button>
+      <button type="button" class="button small danger end" :disabled="disabled" @click="emit('remove')"><Icon name="trash" :size="14" />删除步骤</button>
+    </div>
 
     <div v-if="isMissing(provider)" class="callout missing" role="status">
       <span class="missing-swatch" aria-hidden="true"></span>
@@ -45,7 +54,7 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
       <button type="button" class="button small" @click="emit('show-tools')">查看获取方式</button>
     </div>
 
-    <section class="combo" aria-label="步骤组合">
+    <section class="group combo" aria-label="步骤组合">
       <div class="field">
         <label class="label" :for="`${id}-type`">资源类型</label>
         <select :id="`${id}-type`" class="select" :value="step.resourceType" :disabled="disabled" @change="retarget(($event.target as HTMLSelectElement).value)">
@@ -57,6 +66,7 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
         <select :id="`${id}-operation`" class="select" :value="step.operation" :disabled="disabled" @change="retarget(step.resourceType, ($event.target as HTMLSelectElement).value)">
           <option v-for="item in operations" :key="item.id" :value="item.id">{{ item.displayName }}</option>
         </select>
+        <p class="hint about">{{ about }}</p>
       </div>
       <div class="field">
         <label class="label" :for="`${id}-provider`">处理工具</label>
@@ -66,47 +76,26 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
       </div>
     </section>
 
-    <p class="about">{{ about }}</p>
-
     <section v-if="operation?.fields.length" class="group">
       <h3>{{ operation.displayName }}参数</h3>
       <ParameterFields :id-prefix="`${id}-op`" :fields="operation.fields" :model-value="step.parameters" :disabled="locked" @update:model-value="patch({ parameters: $event })" />
     </section>
-    <section v-if="provider?.fields.length" class="group">
-      <h3>{{ provider.displayName }} 参数</h3>
-      <ParameterFields :id-prefix="`${id}-tool`" :fields="provider.fields" :model-value="step.providerOptions" :disabled="locked" @update:model-value="patch({ providerOptions: $event })" />
+    <section v-if="adapter?.fields.length" class="group">
+      <h3>{{ provider?.displayName }} · {{ operation?.displayName }}参数</h3>
+      <ParameterFields :id-prefix="`${id}-tool`" :fields="adapter.fields" :model-value="step.providerOptions" :disabled="locked" @update:model-value="patch({ providerOptions: $event })" />
     </section>
-    <p v-if="!operation?.fields.length && !provider?.fields.length" class="muted">此步骤没有可调参数。</p>
+    <p v-if="!operation?.fields.length && !adapter?.fields.length" class="muted">此步骤没有可调参数。</p>
     <p v-if="!step.enabled" class="muted small">已停用的步骤不会执行，但参数仍会保存并校验。</p>
-
-    <footer class="actions">
-      <button type="button" class="button" :disabled="disabled || index === 0" @click="emit('move', -1)">上移</button>
-      <button type="button" class="button" :disabled="disabled || index === count - 1" @click="emit('move', 1)">下移</button>
-      <button type="button" class="button" :disabled="disabled" @click="emit('update:modelValue', resetStep(definition, step))">恢复默认参数</button>
-      <button type="button" class="button danger end" :disabled="disabled" @click="emit('remove')">删除步骤</button>
-    </footer>
   </article>
 </template>
 
 <style scoped>
-.editor { display: grid; gap: var(--s-5); }
-.head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; }
-.heading { display: grid; gap: var(--s-2); }
-.order { color: var(--ink-2); font-size: var(--t-small); }
-h2 { font-size: var(--t-heading); }
-.switch { padding: var(--s-1) 0; font-weight: 500; }
-.combo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); padding: var(--s-4); background: var(--paper-sunk); border-radius: var(--r-control); }
-.about { color: var(--ink-2); max-width: 60ch; }
-.group { display: grid; gap: var(--s-3); padding-top: var(--s-4); border-top: 1px solid var(--rule-soft); }
-h3 { font-size: var(--t-body); }
-.actions { display: flex; flex-wrap: wrap; gap: var(--s-2); padding-top: var(--s-4); border-top: 1px solid var(--rule-soft); }
+.editor { display: grid; gap: var(--s-3); }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-4); }
+.heading { display: grid; gap: 2px; min-width: 0; }
+.order { color: var(--text-2); font-size: var(--t-small); }
+.switch { flex: none; height: var(--control-small); color: var(--text-2); }
+.commands { display: flex; flex-wrap: wrap; gap: var(--s-1); }
 .end { margin-left: auto; }
-@container editor (max-width: 600px) {
-  .combo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .combo .field:last-child { grid-column: 1 / -1; }
-}
-@container editor (max-width: 360px) {
-  .combo { grid-template-columns: 1fr; }
-  .end { margin-left: 0; }
-}
+.combo .select { max-width: 320px; }
 </style>

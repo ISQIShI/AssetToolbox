@@ -18,7 +18,7 @@
 | cancel | `{id}` | `{requested:true}`，协作取消 |
 | report | `{id}` | 已结束作业的报告目录 |
 
-Configuration 的 `schema` 为 `asset-toolbox.settings/1`，含 sourceDir/outputDir/backupDir、saveMode、backupEnabled、pipeline。Definition 的 `apiVersion:1`，含 resourceTypes/operations/providers；参数字段描述及步骤结构见[扩展契约](extensions.md)。
+Configuration 的 `schema` 为 `asset-toolbox.settings/2`，含 sourceDir/outputDir/backupDir、saveMode、backupEnabled、pipeline。Definition 的 `apiVersion:2`，含 resourceTypes/operations/providers；Provider 返回生成的 supports 及 `adapters: [{operation, version, fields}]`，不再返回顶层 fields。操作 fields 定义公共参数，选中适配器 fields 定义专属参数。步骤 versions 增加 adapter；旧配置和旧处理快照拒绝，不自动转换，见[扩展契约](extensions.md)。
 
 ## 作业模式
 

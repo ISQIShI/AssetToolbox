@@ -227,8 +227,8 @@ function processResource(filename, workDirectory, executables, pipeline) {
             const provider = providers.get(step.provider), operation = operations.get(step.operation);
             fs.writeFileSync(input, current);
             if (fs.existsSync(output)) fs.unlinkSync(output);
-            const result = provider.execute({ executable: executables.get(provider.id), input, output, workDirectory,
-                parameters: step.parameters, providerOptions: step.providerOptions, resourceType: type.id });
+            const result = provider.adapters[operation.id].execute({ executable: executables.get(provider.id), input, output, workDirectory,
+                operation: operation.id, parameters: step.parameters, providerOptions: step.providerOptions, resourceType: type.id });
             if (result?.then) throw new Error('execute 必须同步返回；异步库须通过工作进程适配');
             if (result?.skipped) { stepResults.push({ id: step.id, operation: step.operation, provider: step.provider, status: 'skipped', inputBytes: current.length, outputBytes: current.length }); continue; }
             if (typeof result?.output !== 'string' || !isWithin(workDirectory, path.resolve(result.output)) || !isWithin(workDirectory, fs.realpathSync(result.output)) || fs.lstatSync(result.output).isSymbolicLink() || !fs.statSync(result.output).isFile()) throw new Error('提供方输出必须是工作目录内的普通文件');

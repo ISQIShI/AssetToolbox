@@ -8,7 +8,7 @@ function compressionPipeline(values = {}, core = path.resolve(__dirname, '..')) 
         const resourceType = provider.supports.find(s => s.operation === 'compress').resourceType;
         const prefix = { pngquant: 'png', 'jpg-c': 'jpg', lame: 'mp3' }[provider.id] || provider.id;
         const providerOptions = {};
-        for (const key of Object.keys(provider.schema.defaults)) {
+        for (const key of Object.keys(provider.adapters.compress.schema.defaults)) {
             const source = ['pngquant', 'jpg-c', 'lame'].includes(provider.id) ? prefix + key[0].toUpperCase() + key.slice(1) : key;
             if (values[source] !== undefined) providerOptions[key] = values[source];
         }

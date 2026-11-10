@@ -7,7 +7,7 @@ import ToolsView from '../src/views/ToolsView.vue';
 import { createWorkbench, workbenchKey } from '../src/core/workbench';
 import { call, openProviderSource } from '../src/core/api';
 import { config, definition, missingProvider, task } from './fixtures';
-import { processingRequest, resetStep, sizeChange, stepChoices, taskStatus } from '../src/core/model';
+import { createStep, processingRequest, resetStep, retargetStep, sizeChange, stepChoices, taskStatus } from '../src/core/model';
 import type { Step, RestoreFile, RestorePreview } from '../src/core/types';
 
 vi.mock('../src/core/api', () => ({ call: vi.fn(), chooseFolder: vi.fn(), openReport: vi.fn(), openProviderSource: vi.fn() }));
@@ -27,7 +27,7 @@ describe('步骤编辑器', () => {
         const wrapper = mount(StepEditor, { props: { definition, modelValue: step, index: 0, count: 1 } });
         expect(wrapper.findAll('input[type=number]')).toHaveLength(2);
         expect(wrapper.find('input[step="0.05"]').attributes('max')).toBe('1');
-        expect(wrapper.text()).toContain('测试工具 参数');
+        expect(wrapper.text()).toContain('测试工具 · 压缩参数');
         await byLabel(wrapper, '模式').setValue('b');
         expect(lastEmitted(wrapper)).toMatchObject({ providerOptions: { mode: 'b' }, parameters: {} });
         const long = '中文'.repeat(7000); await byLabel(wrapper, '文字').setValue(long);
@@ -54,6 +54,50 @@ describe('步骤编辑器', () => {
         expect(wrapper.find('.callout.missing').text()).toContain('缺少文件：tool.exe');
         await button('查看获取方式').trigger('click'); expect(wrapper.emitted('show-tools')).toHaveLength(1);
         await button('删除步骤').trigger('click'); expect(wrapper.emitted('remove')).toHaveLength(1);
+    });
+
+    it('switches adapters within one provider without leaking fields or options between operations', async () => {
+        const wrapper = mount(StepEditor, { props: { definition, modelValue: config.pipeline[0]!, index: 0, count: 1 } });
+        await byLabel(wrapper, '操作').setValue('image-resize');
+        const resized = lastEmitted(wrapper);
+        expect(resized.parameters).toEqual({ width: 512 });
+        expect(resized.providerOptions).toEqual({ quality: 90 });
+        await wrapper.setProps({ modelValue: resized });
+        expect(wrapper.text()).toContain('缩放质量');
+        expect(wrapper.text()).not.toContain('额外开关');
+        await byLabel(wrapper, '缩放质量').setValue(71);
+        expect(lastEmitted(wrapper).providerOptions).toEqual({ quality: 71 });
+        await byLabel(wrapper, '操作').setValue('compress');
+        expect(lastEmitted(wrapper).parameters).toEqual({});
+        expect(lastEmitted(wrapper).providerOptions).toEqual({ level: 4, rate: .7, flag: false, mode: 'a', text: '默认' });
+        wrapper.unmount();
+    });
+
+    it('preserves public parameters when changing tools for the same operation and resets only tool options', async () => {
+        const catalog = structuredClone(definition);
+        catalog.providers.push({ ...structuredClone(catalog.providers[0]!), id: 'other', displayName: '另一工具',
+            supports: [{ resourceType: 'png', operation: 'image-resize' }],
+            adapters: [{ operation: 'image-resize', version: '1.0.0', fields: [{ key: 'speed', label: '工具速度', type: 'integer', default: 3, min: 1, max: 9 }] }] });
+        const original: Step = { ...createStep(catalog, 'png', 'image-resize', 'test'), enabled: false,
+            parameters: { width: 256 }, providerOptions: { quality: 61 },
+            versions: { resourceType: '1.0.0', operation: '1.0.0', provider: '1.0.0', adapter: '1.0.0' } };
+        const wrapper = mount(StepEditor, { props: { definition: catalog, modelValue: original, index: 0, count: 1 } });
+        await byLabel(wrapper, '处理工具').setValue('other');
+        const changed = lastEmitted(wrapper);
+        expect(changed).toMatchObject({ id: original.id, enabled: false, parameters: { width: 256 }, providerOptions: { speed: 3 } });
+        expect(changed.versions).toBeUndefined();
+        expect(changed.parameters).not.toBe(original.parameters);
+        await wrapper.setProps({ modelValue: changed });
+        expect(wrapper.text()).toContain('工具速度'); expect(wrapper.text()).not.toContain('缩放质量');
+        await byLabel(wrapper, '处理工具').setValue('test');
+        expect(lastEmitted(wrapper).parameters).toEqual({ width: 256 });
+        expect(lastEmitted(wrapper).providerOptions).toEqual({ quality: 90 });
+        expect(resetStep(catalog, changed).parameters).toEqual({ width: 512 });
+        // 保留编辑值，不在换工具时静默修正；无效值仍交给核心校验。
+        expect(retargetStep(catalog, { ...original, parameters: { width: '' } }, 'png', 'image-resize', 'other')?.parameters.width).toBe('');
+        expect(retargetStep(catalog, original, 'png', 'compress', 'other')).toBeUndefined();
+        expect(original.providerOptions).toEqual({ quality: 61 });
+        wrapper.unmount();
     });
 });
 

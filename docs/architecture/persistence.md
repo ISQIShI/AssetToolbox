@@ -6,7 +6,7 @@
 
 | 位置（相对 resource-core） | 用途 |
 | --- | --- |
-| `data/settings.json` | `schema: asset-toolbox.settings/1`，路径、保存方式和完整 pipeline |
+| `data/settings.json` | `schema: asset-toolbox.settings/2`，路径、保存方式和完整 pipeline |
 | `data/tasks/<id>/task.json` | `schema: asset-toolbox.task/1`，固定任务头 |
 | `data/tasks/<id>/events.jsonl` | 文件计划、提交及恢复事件 |
 | `data/tasks/<id>/task.lock` 与 claim | PID/token 执行锁 |
@@ -18,7 +18,9 @@
 
 ## 任务头和步骤快照
 
-任务头含 id、createdAt、source、outputDir、backupDir、backupSession、pipeline。步骤包含 id、类型/操作/提供方 ID、enabled、两个参数对象及三层 versions。续跑/重试检查精确版本；不加载新界面参数，也不自动适配旧任务。版本由开发者维护，未对代码内容做哈希锁定。
+任务头含 id、createdAt、source、outputDir、backupDir、backupSession、pipeline。步骤包含 id、类型/操作/提供方 ID、enabled、两个参数对象及 `versions: {resourceType, operation, provider, adapter}`。续跑/重试检查完整且精确的四个版本；不加载新界面参数，也不自动适配旧任务。版本由开发者维护，未对代码内容做哈希锁定。
+
+[ADR 0007](../decisions/0007-operation-adapters.md) 升级提供方契约后，配置 /1 明确拒绝，不重写旧文件；需重新建立 /2 配置。任务与报告外层 /1 保持不变，其步骤快照增加 adapter 版本；旧三字段快照或适配器版本变化会阻止继续处理。任务浏览及备份恢复只读取安全事件和哈希，不执行/迁移旧适配器，仍可恢复已有备份。
 
 plan 每个文件记录相对 path、resourceType、snapshot（size/mtimeMs/ctimeMs）。拒绝绝对路径、空段、`.`/`..`、冒号和空字符；恢复选择还拒绝 Windows 不区分大小写的重复路径。首次完整扫描后清单固定；扫描中取消则下次重扫。
 

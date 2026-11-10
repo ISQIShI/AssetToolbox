@@ -6,10 +6,11 @@ export interface Operation { id: string; displayName: string; description: strin
 export interface Acquisition { name: string; version: string; license: string; url: string; source: string; instructions: string; redistribution: string; checkedAt: string }
 export interface Support { resourceType: string; operation: string }
 export interface Dependency { automatic: boolean; reason: string; targetVersion?: string; installedVersion?: string; checkedAt?: string; sources?: string[]; state?: 'missing' | 'unmanaged' | 'current' | 'update' | 'damaged'; action?: 'install' | 'update' | 'repair' | 'reinstall' }
-export interface Provider { id: string; displayName: string; description: string; supports: Support[]; fields: Field[]; version: string; availability?: { available: boolean; reason: string }; acquisition?: Acquisition | null; dependency?: Dependency }
-export interface Definition { apiVersion: 1; resourceTypes: ResourceType[]; operations: Operation[]; providers: Provider[] }
-export interface Step { id: string; resourceType: string; operation: string; provider: string; enabled: boolean; parameters: Record<string, Value>; providerOptions: Record<string, Value>; versions?: { resourceType: string; operation: string; provider: string } }
-export interface Configuration { schema: 'asset-toolbox.settings/1'; sourceDir: string; outputDir: string; backupDir: string; saveMode: 'overwrite' | 'saveAs'; backupEnabled: boolean; pipeline: Step[] }
+export interface Adapter { operation: string; version: string; fields: Field[] }
+export interface Provider { id: string; displayName: string; description: string; supports: Support[]; adapters: Adapter[]; version: string; availability?: { available: boolean; reason: string }; acquisition?: Acquisition | null; dependency?: Dependency }
+export interface Definition { apiVersion: 2; resourceTypes: ResourceType[]; operations: Operation[]; providers: Provider[] }
+export interface Step { id: string; resourceType: string; operation: string; provider: string; enabled: boolean; parameters: Record<string, Value>; providerOptions: Record<string, Value>; versions?: { resourceType: string; operation: string; provider: string; adapter: string } }
+export interface Configuration { schema: 'asset-toolbox.settings/2'; sourceDir: string; outputDir: string; backupDir: string; saveMode: 'overwrite' | 'saveAs'; backupEnabled: boolean; pipeline: Step[] }
 export interface Bootstrap { config: Configuration | null; definition: Definition | null; warnings: string[]; configError?: string; root?: string; nodeVersion?: string }
 export interface Task { taskFile: string; id: string; createdAt?: string; source?: string; outputDir?: string; backupSession?: string; total: number; completed: number; failed: number; pending: number; backupCount: number; restored: number; restoreFailed: number; restoreStarted: boolean; canResume: boolean; canRetry: boolean; canRestore: boolean; canContinueRestore: boolean; canRetryRestore: boolean; error?: string }
 export type RestoreScope = 'all' | 'continue' | 'retry';

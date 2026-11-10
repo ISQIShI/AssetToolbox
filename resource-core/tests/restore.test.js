@@ -17,7 +17,7 @@ function fixture(t) {
     const tool = copyTool(root), module = path.join(tool, 'resource-core/providers/fixture');
     fs.mkdirSync(module); installType(tool, 'fixture');
     fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '恢复测试', extensions: ['.pack'], enabledKey: 'fixtureEnabled', defaults: {} }));
-    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:1,version:'1.0.0',displayName:'测试提供方',supports:[{resourceType:'fixture',operation:'compress'}],schema:require('./config'),validate:d=>d.toString().startsWith('PACK:'),execute({input,output}){fs.writeFileSync(output,fs.readFileSync(input).subarray(0,10));return {output};}};`);
+    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:2,version:'1.0.0',displayName:'测试提供方',adapters:{'compress':{version:'1.0.0',resourceTypes:['fixture'],schema:require('./config'),execute({input,output}){fs.writeFileSync(output,fs.readFileSync(input).subarray(0,10));return {output};}}}};`);
     const source = path.join(root, '原始 素材'), backupDir = path.join(root, '备份');
     fs.mkdirSync(path.join(source, '二级'), { recursive: true });
     const originals = new Map();

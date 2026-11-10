@@ -31,7 +31,7 @@ test('independent type, operation and provider catalog allows same extension and
     const steps = registry.normalizePipeline([resize('first'), { ...resize('second'), parameters: { width: 30, height: 40 } }, { id: 'compress', resourceType: 'png', operation: 'compress', provider: 'pngquant', enabled: true }]);
     assert.equal(steps[0].parameters.width, 10); assert.equal(steps[1].parameters.width, 30);
     assert.equal(steps[2].providerOptions.speed, 3); assert.equal(steps[2].parameters.speed, undefined);
-    assert.deepEqual(steps[0].versions, { resourceType: '1.0.0', operation: '1.0.0', provider: '1.0.0' });
+    assert.deepEqual(steps[0].versions, { resourceType: '1.0.0', operation: '1.0.0', provider: '2.0.0', adapter: '1.0.0' });
     assert.equal(registry.describe().providers.filter(p => p.supports.some(s => s.resourceType === 'png')).length, 2);
 });
 test('rejects mismatched combinations, stale versions, unknown fields and invalid disabled step parameters', () => {
@@ -60,7 +60,7 @@ test('schema handles all field types and rejects unsafe names, ranges and precis
 test('discovers multiple providers for the same operation and excludes linked or disabled directories', t => {
     const root = temporary(t), core = path.join(copyTool(root), 'resource-core');
     const alternative = path.join(core, 'providers/alternative'); fs.mkdirSync(alternative);
-    fs.writeFileSync(path.join(alternative, 'index.js'), "module.exports={apiVersion:1,version:'1.0.0',displayName:'替代实现',supports:[{resourceType:'png',operation:'compress'}],execute(){return {skipped:true}}};");
+    fs.writeFileSync(path.join(alternative, 'index.js'), "module.exports={apiVersion:2,version:'1.0.0',displayName:'替代实现',adapters:{'compress':{version:'1.0.0',resourceTypes:['png'],execute(){return {skipped:true}}}}};");
     const disabled = path.join(core, 'providers/_disabled'); fs.mkdirSync(disabled); fs.writeFileSync(path.join(disabled, 'index.js'), 'invalid javascript');
     const next = registry.createRegistry(core);
     assert.equal(next.providers.size, 5);

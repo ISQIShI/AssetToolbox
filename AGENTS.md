@@ -26,6 +26,8 @@ JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分�
 
 新功能遵循“资源类型—处理操作—实现提供方”；参数按步骤分为 `parameters` 与 `providerOptions`。验收策略属于操作，压缩才采用更小规则。提供方只处理临时文件，禁止直接修改素材；全部步骤成功才提交一次。保留哈希、原子替换、任务锁、按文件边界取消、显式恢复选择及冲突保护。
 
+提供方使用 API 2 的 `adapters[operationId]`，每项独立声明资源类型、schema、execute 和 version；依赖与 prepare 留在提供方层。不要重复定义 supports 或顶层执行/参数接口。步骤固定适配器版本，同操作切换提供方保留公共参数；详见[ADR 0007](docs/decisions/0007-operation-adapters.md)。
+
 按用户要求，本次为全新项目契约：不读写或迁移旧配置、任务及旧接口；使用新 schema 和 `data/`。不接入 Cordis。后续契约变更必须升级版本并明确拒绝策略，参见 [ADR 0003](docs/decisions/0003-processing-contract.md)。
 
 ## 测试、文档与提交

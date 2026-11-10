@@ -57,9 +57,9 @@ test('ordered repeated operations and compression commit once, snapshot versions
     assert.equal(result.exitCode, 0, result.error); assert.equal(result.summary.backedUp, 1);
     const metadata = await sharp(path.join(source, 'tile.png')).metadata(); assert.deepEqual([metadata.width, metadata.height], [10, 5]);
     const tasks = require(path.join(core, 'tasks')), task = tasks.loadTask(result.task.taskFile);
-    assert.equal(task.header.schema, 'asset-toolbox.task/1'); assert.equal(task.header.pipeline[0].versions.provider, '1.0.0');
+    assert.equal(task.header.schema, 'asset-toolbox.task/1'); assert.equal(task.header.pipeline[0].versions.provider, '2.0.0');
     assert.equal([...task.entries.values()][0].record.steps.length, 3);
-    require(path.join(core, 'framework/registry')).providers.get('sharp').version = '2.0.0';
+    require(path.join(core, 'framework/registry')).providers.get('sharp').adapters['image-resize'].version = '2.0.0';
     assert.match(run({ mode: 'resume', taskFile: task.taskFile }).error, /版本不匹配/);
     const preview = run({ mode: 'restore-preview', taskFile: task.taskFile }); assert.equal(preview.preview.recoverable, 1);
     const restored = run({ mode: 'restore', taskFile: task.taskFile, selection: preview.preview.files.map(({ path, backupHash, targetHash }) => ({ path, backupHash, targetHash })) });
@@ -69,7 +69,7 @@ test('a later step failure never commits an earlier resize or overwrites a confl
     const root = temporary(t), tool = copyTool(root, true), core = path.join(tool, 'resource-core'), source = path.join(root, 'source'); fs.mkdirSync(source);
     const original = await image(path.join(source, 'tile.png'), 40, 20);
     const providerDir = path.join(core, 'providers/failing'); fs.mkdirSync(providerDir);
-    fs.writeFileSync(path.join(providerDir, 'index.js'), "module.exports={apiVersion:1,version:'1.0.0',displayName:'失败提供方',supports:[{resourceType:'png',operation:'image-resize'}],execute(){throw new Error('second step failed')}};");
+    fs.writeFileSync(path.join(providerDir, 'index.js'), "module.exports={apiVersion:2,version:'1.0.0',displayName:'失败提供方',adapters:{'image-resize':{version:'1.0.0',resourceTypes:['png'],execute(){throw new Error('second step failed')}}}};");
     const engine = require(path.join(core, 'engine'));
     const pipeline = [step({ width: 20, height: 10 }), { ...step({ width: 10, height: 5 }, 'png', 'fail'), provider: 'failing' }];
     const backupDir = path.join(root, 'backup'), result = engine.processFolder(source, { pipeline, backupDir, log() {} });

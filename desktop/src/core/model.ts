@@ -59,20 +59,23 @@ export function isMissing(provider?: Provider): boolean {
 export function createStep(definition: Definition, resourceType: string, operation: string, provider?: string, id = crypto.randomUUID()): Step {
     const implementation = definition.providers.find(item => (!provider || item.id === provider) && item.supports.some(s => s.resourceType === resourceType && s.operation === operation));
     const action = definition.operations.find(item => item.id === operation);
-    if (!implementation || !action) throw new Error('没有能执行此操作的处理工具');
+    const adapter = implementation?.adapters.find(item => item.operation === operation);
+    if (!implementation || !action || !adapter) throw new Error('没有能执行此操作的处理工具');
     return {
         id: 'step-' + id, resourceType, operation, provider: implementation.id, enabled: true,
         parameters: Object.fromEntries(action.fields.map(field => [field.key, field.default])),
-        providerOptions: Object.fromEntries(implementation.fields.map(field => [field.key, field.default])),
+        providerOptions: Object.fromEntries(adapter.fields.map(field => [field.key, field.default])),
     };
 }
 
-/** 切换资源类型、操作或工具：重建参数，保留步骤 ID 与启用状态。找不到组合时返回 undefined。 */
+/** 同操作切换保留公共参数；专属参数取新适配器默认值，旧版本快照交由核心重新生成。 */
 export function retargetStep(definition: Definition, step: Step, resourceType: string, operation?: string, provider?: string): Step | undefined {
     const implementation = definition.providers.find(item => (!provider || item.id === provider) && item.supports.some(s => s.resourceType === resourceType && (!operation || s.operation === operation)));
     const support = implementation?.supports.find(s => s.resourceType === resourceType && (!operation || s.operation === operation));
     if (!implementation || !support) return undefined;
-    return { ...createStep(definition, resourceType, support.operation, implementation.id), id: step.id, enabled: step.enabled };
+    const next = createStep(definition, resourceType, support.operation, implementation.id);
+    return { ...next, id: step.id, enabled: step.enabled,
+        parameters: support.operation === step.operation ? { ...step.parameters } : next.parameters };
 }
 
 export function resetStep(definition: Definition, step: Step): Step {

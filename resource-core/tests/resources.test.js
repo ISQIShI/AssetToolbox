@@ -109,8 +109,8 @@ test('MP3 overwrite backs up exact originals, skips growth and protects source o
     const common = { mp3Enabled: true, backupDir: backup, log() {} };
     // ABR 是平均目标，简单音调不保证更大；补齐有效输出以确定性验证拒绝增大的结果。
     const mp3 = providers.get('lame');
-    const encode = mp3.execute;
-    const growth = t.mock.method(mp3, 'execute', args => {
+    const encode = mp3.adapters.compress.execute;
+    const growth = t.mock.method(mp3.adapters.compress, 'execute', args => {
         const result = encode(args);
         fs.appendFileSync(result.output, Buffer.alloc(original.length));
         return result;

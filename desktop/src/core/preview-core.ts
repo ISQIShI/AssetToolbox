@@ -5,18 +5,18 @@ import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provid
 const params = new URLSearchParams(location.search);
 const acquisition = (name: string, version: string, license: string, url: string, instructions: string) => ({ name, version, license, url, source: url, instructions, redistribution: '仅本地使用，发布前须完成许可核对。', checkedAt: '2026-11-08' });
 const providers: Provider[] = [
-    { id: 'pngquant', displayName: 'pngquant 3.0.3', description: '', version: '2.0.0', supports: [{ resourceType: 'png', operation: 'compress' }],
-        fields: [{ key: 'speed', type: 'integer', default: 3, label: 'PNG 速度', hint: '数值越高速度越快。', min: 1, max: 11, step: 1 }, { key: 'qualityMin', type: 'integer', default: 50, label: 'PNG 最低质量', hint: '最低质量不得高于最高质量；未达到时保留原图。', min: 0, max: 100, step: 1 }, { key: 'qualityMax', type: 'integer', default: 80, label: 'PNG 最高质量', hint: '数值越高质量和体积通常越高。', min: 0, max: 100, step: 1 }],
+    { id: 'pngquant', displayName: 'pngquant 3.0.3', description: '', version: '3.0.0', supports: [{ resourceType: 'png', operation: 'compress' }],
+        adapters: [{ operation: 'compress', version: '1.0.0', fields: [{ key: 'speed', type: 'integer', default: 3, label: 'PNG 速度', hint: '数值越高速度越快。', min: 1, max: 11, step: 1 }, { key: 'qualityMin', type: 'integer', default: 50, label: 'PNG 最低质量', hint: '最低质量不得高于最高质量；未达到时保留原图。', min: 0, max: 100, step: 1 }, { key: 'qualityMax', type: 'integer', default: 80, label: 'PNG 最高质量', hint: '数值越高质量和体积通常越高。', min: 0, max: 100, step: 1 }] }],
         availability: params.has('missing') ? { available: false, reason: '缺少文件：pngquant.exe' } : { available: true, reason: '' },
         acquisition: acquisition('pngquant', '3.0.3', 'GPL-3.0-or-later', 'https://pngquant.org/', '推荐运行 cargo install pngquant --version 3.0.3 --locked，再将 pngquant.exe 放入 resource-core/providers/pngquant/。') },
-    { id: 'jpg-c', displayName: 'jpg-c', description: '', version: '1.0.0', supports: [{ resourceType: 'jpg', operation: 'compress' }],
-        fields: [{ key: 'quality', type: 'integer', default: 5, label: 'JPG 质量', hint: '0 不压缩；数值越高质量和体积越高。', min: 0, max: 9, step: 1 }],
+    { id: 'jpg-c', displayName: 'jpg-c', description: '', version: '2.0.0', supports: [{ resourceType: 'jpg', operation: 'compress' }],
+        adapters: [{ operation: 'compress', version: '1.0.0', fields: [{ key: 'quality', type: 'integer', default: 5, label: 'JPG 质量', hint: '0 不压缩；数值越高质量和体积越高。', min: 0, max: 9, step: 1 }] }],
         availability: { available: true, reason: '' }, acquisition: acquisition('JPG-C', '4.0.21.902', '未找到明确再分发授权', 'https://zzy.my/blog/post/Jpg-C', '向作者页面获取，将 EXE 放入 resource-core/providers/jpg-c/。') },
-    { id: 'lame', displayName: 'LAME 4.0', description: '', version: '2.0.0', supports: [{ resourceType: 'mp3', operation: 'compress' }],
-        fields: [{ key: 'bitrate', type: 'integer', default: 24, label: 'MP3 平均码率', min: 8, max: 320, step: 1 }],
+    { id: 'lame', displayName: 'LAME 4.0', description: '', version: '3.0.0', supports: [{ resourceType: 'mp3', operation: 'compress' }],
+        adapters: [{ operation: 'compress', version: '1.0.0', fields: [{ key: 'bitrate', type: 'integer', default: 24, label: 'MP3 平均码率', min: 8, max: 320, step: 1 }] }],
         availability: { available: true, reason: '' }, acquisition: acquisition('LAME', '4.0', 'LGPL-2.0-or-later', 'https://www.rarewares.org/mp3-lame-bundle.php', '将 lame.exe 和 libmpg123-0.dll 一起放入 resource-core/providers/lame/。') },
-    { id: 'sharp', displayName: 'Sharp / libvips', description: '', version: '1.0.0', supports: [{ resourceType: 'png', operation: 'image-resize' }, { resourceType: 'jpg', operation: 'image-resize' }],
-        fields: [{ key: 'jpegQuality', type: 'integer', default: 90, label: 'JPEG 输出质量', hint: '仅影响 JPEG；PNG 保留透明通道。', min: 1, max: 100, step: 1 }],
+    { id: 'sharp', displayName: 'Sharp / libvips', description: '', version: '2.0.0', supports: [{ resourceType: 'png', operation: 'image-resize' }, { resourceType: 'jpg', operation: 'image-resize' }],
+        adapters: [{ operation: 'image-resize', version: '1.0.0', fields: [{ key: 'jpegQuality', type: 'integer', default: 90, label: 'JPEG 输出质量', hint: '仅影响 JPEG；PNG 保留透明通道。', min: 1, max: 100, step: 1 }] }],
         availability: { available: true, reason: '' }, acquisition: acquisition('Sharp / libvips', 'sharp 0.35.5', 'Apache-2.0 AND LGPL-3.0-or-later', 'https://sharp.pixelplumbing.com/install/', '在 resource-core 目录执行 npm ci。') },
 ];
 for (const provider of providers) {
@@ -31,7 +31,7 @@ for (const provider of providers) {
     if (automatic && params.has('missing-auto')) provider.availability = { available: false, reason: '尚未安装所需文件' };
 }
 const definition: Definition = {
-    apiVersion: 1,
+    apiVersion: 2,
     resourceTypes: [
         { id: 'jpg', displayName: 'JPEG', kind: 'image', extensions: ['.jpg', '.jpeg'], version: '1.0.0' },
         { id: 'mp3', displayName: 'MP3', kind: 'audio', extensions: ['.mp3'], version: '1.0.0' },
@@ -50,7 +50,7 @@ const definition: Definition = {
     providers,
 };
 let config: Configuration = {
-    schema: 'asset-toolbox.settings/1', sourceDir: 'D:\\Projects\\StarHarbor\\Assets\\UI', outputDir: '', backupDir: 'D:\\Projects\\StarHarbor\\Backups', saveMode: 'overwrite', backupEnabled: true,
+    schema: 'asset-toolbox.settings/2', sourceDir: 'D:\\Projects\\StarHarbor\\Assets\\UI', outputDir: '', backupDir: 'D:\\Projects\\StarHarbor\\Backups', saveMode: 'overwrite', backupEnabled: true,
     pipeline: [
         { id: 'resize-ui', resourceType: 'png', operation: 'image-resize', provider: 'sharp', enabled: true, parameters: { width: 1024, height: 1024, fit: 'inside', kernel: 'lanczos3', withoutEnlargement: true }, providerOptions: { jpegQuality: 90 } },
         { id: 'png', resourceType: 'png', operation: 'compress', provider: 'pngquant', enabled: true, parameters: {}, providerOptions: { speed: 3, qualityMin: 50, qualityMax: 80 } },

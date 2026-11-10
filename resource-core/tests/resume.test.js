@@ -17,15 +17,14 @@ function fixture(t, names = ['a', 'b', 'c']) {
     const tool = copyTool(root), module = path.join(tool, 'resource-core/providers/fixture');
     fs.mkdirSync(module); installType(tool, 'fixture');
     fs.writeFileSync(path.join(module, 'config.js'), 'module.exports = ' + JSON.stringify({ displayName: '测试续压', extensions: ['.pack'], enabledKey: 'fixtureEnabled', defaults: {} }));
-    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs'),path=require('node:path'); module.exports={apiVersion:1,version:'1.0.0',displayName:'测试提供方',supports:[{resourceType:'fixture',operation:'compress'}],schema:require('./config'),
-        validate:data=>data.toString().startsWith('PACK:'),
+    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs'),path=require('node:path'); module.exports={apiVersion:2,version:'1.0.0',displayName:'测试提供方',adapters:{'compress':{version:'1.0.0',resourceTypes:['fixture'],schema:require('./config'),
         execute({input,output}) {
             const data=fs.readFileSync(input);
             fs.appendFileSync(path.join(__dirname,'calls.txt'), data.toString()+'\\n');
             if(data.toString().includes('KEEP')) return {skipped:true};
             fs.writeFileSync(output,data.subarray(0,data.length-1)); return {output};
         }
-    };`);
+    }}};`);
     const source = path.join(root, '原始 资源'); fs.mkdirSync(path.join(source, '子目录'), { recursive: true });
     const originals = new Map();
     for (const name of names) {

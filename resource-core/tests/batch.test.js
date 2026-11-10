@@ -20,13 +20,12 @@ function fixture(t, delay = 0) {
         displayName: '批量测试模块', extensions: ['.pack'], enabledKey: 'fixtureEnabled', defaults: {},
     }));
     fs.writeFileSync(path.join(module, 'index.js'), `const fs = require('node:fs'); module.exports = {
-        apiVersion:1,version:'1.0.0',displayName:'测试提供方',supports:[{resourceType:'fixture',operation:'compress'}],schema:require('./config'),
-        validate: data => data.toString().startsWith('PACK:'),
+        apiVersion:2,version:'1.0.0',displayName:'测试提供方',adapters:{'compress':{version:'1.0.0',resourceTypes:['fixture'],schema:require('./config'),
         execute({input, output}) {
             Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ${delay});
             fs.writeFileSync(output, fs.readFileSync(input).subarray(0, 8)); return {output};
         }
-    };`);
+    }}};`);
     const source = path.join(root, '中文 素材'); fs.mkdirSync(path.join(source, '子目录'), { recursive: true });
     const original = Buffer.from('PACK:' + 'test'.repeat(100));
     for (const name of ['a', 'b', 'c', 'd', '=formula']) fs.writeFileSync(path.join(source, '子目录', name + '.PACK'), original);

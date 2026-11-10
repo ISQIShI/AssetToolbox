@@ -19,12 +19,18 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     fs.copyFileSync(path.join(project, 'resource-core/desktop-bridge.js'), path.join(tool, 'resource-core/desktop-bridge.js'));
     const module = path.join(tool, 'resource-core/providers/extra'); fs.mkdirSync(module); require(path.join(project, 'resource-core/tests/helpers.js')).installType(tool, 'extra');
     fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '扩展测试模块', order: 5, extensions: ['.pack'], enabledKey: 'extraEnabled', defaults: { extraLevel: 3, extraMode: 'fast', extraText: '原参数' }, limits: { extraLevel: { label: '测试级别', min: 1, max: 9 } }, parameters: { extraMode: { label: '测试模式', type: 'enum', choices: ['fast', 'best'] }, extraText: { label: '测试文字', type: 'text', maxLength: 32767 } } }));
-    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs'),path=require('node:path');module.exports={apiVersion:1,version:'1.0.0',displayName:'测试提供方',supports:[{resourceType:'extra',operation:'compress'}],schema:require('./config'),validate:b=>b.toString().startsWith('PACK:'),execute({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,500);const bytes=fs.readFileSync(input);fs.appendFileSync(path.join(__dirname,'calls.txt'),bytes.subarray(0,6)+'\\n');if(bytes.toString().startsWith('PACK:b')&&!fs.existsSync(path.join(__dirname,'repaired')))throw Error('模拟编码失败');fs.writeFileSync(output,bytes.subarray(0,10));return{output};}}`);
+    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs'),path=require('node:path');module.exports={apiVersion:2,version:'1.0.0',displayName:'测试提供方',adapters:{'compress':{version:'1.0.0',resourceTypes:['extra'],schema:require('./config'),execute({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,500);const bytes=fs.readFileSync(input);fs.appendFileSync(path.join(__dirname,'calls.txt'),bytes.subarray(0,6)+'\\n');if(bytes.toString().startsWith('PACK:b')&&!fs.existsSync(path.join(__dirname,'repaired')))throw Error('模拟编码失败');fs.writeFileSync(output,bytes.subarray(0,10));return{output};}}}}`);
+    // 只在隔离副本登记第二个操作及替代提供方，验证通用目录不依赖内置工具分支。
+    const trimOperation = path.join(tool, 'resource-core/operations/fixture-trim'); fs.mkdirSync(trimOperation);
+    fs.writeFileSync(path.join(trimOperation, 'index.js'), `module.exports={apiVersion:1,version:'1.0.0',displayName:'测试裁切',accepts:['image'],resultPolicy:'valid-output',schema:{defaults:{length:9},limits:{length:{label:'保留长度',min:5,max:20}}}};`);
+    fs.appendFileSync(path.join(module, 'index.js'), `\n;module.exports.adapters['fixture-trim']={version:'1.0.0',resourceTypes:['extra'],schema:{defaults:{suffix:'!'},parameters:{suffix:{label:'追加字符'}}},execute({input,output,operation,parameters,providerOptions}){if(operation!=='fixture-trim')throw Error('操作分派错误');fs.writeFileSync(output,fs.readFileSync(input).subarray(0,parameters.length).toString()+providerOptions.suffix);return{output};}};`);
+    const alternate = path.join(tool, 'resource-core/providers/alternate'); fs.mkdirSync(alternate);
+    fs.writeFileSync(path.join(alternate, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:2,version:'1.0.0',displayName:'替代裁切工具',adapters:{'fixture-trim':{version:'1.0.0',resourceTypes:['extra'],schema:{defaults:{fast:true},parameters:{fast:{label:'快速模式'}}},execute({input,output,parameters}){fs.writeFileSync(output,fs.readFileSync(input).subarray(0,parameters.length));return{output};}}}};`);
     fs.mkdirSync(path.join(source, '二级'), { recursive: true });
     const originals = new Map<string, Buffer>();
     for (const name of ['a', 'b', 'c', 'd', 'e', 'f']) { const data = Buffer.from('PACK:' + name + 'x'.repeat(4000)); const relative = path.join('二级', name + '.pack'); originals.set(relative, data); fs.writeFileSync(path.join(source, relative), data); }
     const settingsPath = path.join(tool, 'resource-core/data/settings.json');
-    const config = { schema: 'asset-toolbox.settings/1', sourceDir: source, outputDir: output, backupDir: backup, saveMode: 'saveAs', backupEnabled: true, pipeline: [{ id: 'pack', resourceType: 'extra', operation: 'compress', provider: 'extra', enabled: true, parameters: {}, providerOptions: { extraLevel: 6, extraMode: 'best', extraText: '中文 配置' } }] };
+    const config = { schema: 'asset-toolbox.settings/2', sourceDir: source, outputDir: output, backupDir: backup, saveMode: 'saveAs', backupEnabled: true, pipeline: [{ id: 'pack', resourceType: 'extra', operation: 'compress', provider: 'extra', enabled: true, parameters: {}, providerOptions: { extraLevel: 6, extraMode: 'best', extraText: '中文 配置' } }] };
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true }); fs.writeFileSync(settingsPath, JSON.stringify(config));
     // 缺少依赖的全新安装：只移动隔离副本，原项目工具保持不变。
     fs.renameSync(path.join(tool, 'resource-core/node_modules'), path.join(tool, 'resource-core/node_modules.manual'));
@@ -191,6 +197,33 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await button('关闭作业结果').click();
         await page.locator('.rail [data-step-id] button').first().click();
         await button('删除步骤').click();
+        const adapterSource = path.join(root, '适配器素材'), adapterOutput = path.join(root, '适配器结果'); fs.mkdirSync(adapterSource);
+        fs.writeFileSync(path.join(adapterSource, 'a.pack'), 'PACK:axxxxxxxxxxxxxxxxx');
+        await station('source').click(); await page.getByLabel('来源文件夹', { exact: true }).fill(adapterSource);
+        await station('output').click(); await page.getByLabel('另存文件夹', { exact: true }).fill(adapterOutput);
+        await page.locator('.rail .adder button').click(); await button('测试资源 测试裁切').click();
+        await page.getByLabel('处理工具', { exact: true }).selectOption('extra');
+        await page.getByLabel('保留长度', { exact: true }).fill('8');
+        await page.getByLabel('追加字符', { exact: true }).fill('?');
+        await page.getByLabel('处理工具', { exact: true }).selectOption('alternate');
+        await expect(page.getByLabel('保留长度', { exact: true })).toHaveValue('8');
+        await expect(page.getByLabel('快速模式', { exact: true })).toBeChecked();
+        await expect(page.getByLabel('追加字符', { exact: true })).toHaveCount(0);
+        await page.getByLabel('处理工具', { exact: true }).selectOption('extra');
+        await expect(page.getByLabel('保留长度', { exact: true })).toHaveValue('8');
+        await expect(page.getByLabel('追加字符', { exact: true })).toHaveValue('!');
+        await expect(page.getByLabel('测试级别', { exact: false })).toHaveCount(0);
+        await page.screenshot({ path: info.outputPath('operation-adapter.png'), fullPage: true });
+        await page.setViewportSize({ width: 840, height: 620 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: info.outputPath('operation-adapter-compact.png'), fullPage: true });
+        await page.setViewportSize({ width: 1220, height: 850 });
+        await button('开始处理').click(); await done();
+        expect(fs.readFileSync(path.join(adapterOutput, 'a.pack'), 'utf8')).toBe('PACK:axx!');
+        const [adapterTask] = require(path.join(tool, 'resource-core/tasks.js')).listTasks();
+        const adapterHeader = JSON.parse(fs.readFileSync(adapterTask.taskFile, 'utf8'));
+        expect(adapterHeader.pipeline.map((s: any) => [s.provider, s.operation, s.versions.adapter])).toEqual([['extra', 'compress', '1.0.0'], ['extra', 'fixture-trim', '1.0.0']]);
+        await button('关闭作业结果').click(); await button('删除步骤').click();
         await station('source').click();
         await page.getByLabel('来源文件夹', { exact: true }).fill(source);
         await station('output').click();

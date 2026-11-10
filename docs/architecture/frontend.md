@@ -6,25 +6,28 @@
 
 | 路径 | 职责 |
 | --- | --- |
-| `main.ts` | 挂载应用，引入 IBM Plex 字体与全局样式 |
-| `App.vue` | 窗口外壳：顶栏标签、全局提示、当前工作区、作业栏；注册原生关闭事件 |
+| `main.ts` | 挂载应用，引入全局样式，初始化外观；生产构建屏蔽浏览器右键菜单与刷新类快捷键 |
+| `App.vue` | 窗口外壳：标题栏、活动栏、信息条、当前工作区、作业栏、状态栏；注册原生关闭事件和全局快捷键 |
 | `core/types.ts` | 与桥接协议一一对应的类型 |
 | `core/api.ts` | 唯一调用 Tauri 的位置：`core_call`、目录对话框、打开报告、打开获取页面 |
 | `core/model.ts` | 纯函数：请求构造、步骤生成与切换、格式化、恢复勾选、任务状态 |
 | `core/workbench.ts` | 工作台状态与全部动作：初始化、配置、作业生命周期、处理/任务/恢复操作 |
+| `core/theme.ts` | 外观：浅色 / 深色，默认跟随系统，一次点击切换；写入 `<html data-theme>` 并保存到 `localStorage` |
 | `core/preview-core.ts` | 仅浏览器调试使用的模拟核心，生产构建不包含 |
-| `views/ProcessView.vue` | 处理页：处理线 + 站点编辑器 + 运行栏 |
+| `views/ProcessView.vue` | 处理页：命令栏 + 处理线 + 站点编辑器 |
 | `views/TasksView.vue` | 任务页：任务列表与详情 |
 | `views/RestoreView.vue` | 恢复页：选择备份来源并检查 |
 | `views/ToolsView.vue` | 工具页：处理工具可用性、获取渠道、识别类型 |
-| `components/PipelineRail.vue` | 处理线与添加步骤菜单 |
-| `components/StepEditor.vue` | 单个步骤：组合、启用、两组参数、排序、删除 |
+| `components/TitleBar.vue` | 自绘标题栏：拖动区域与最小化、最大化、关闭；没有原生窗口时只显示标题 |
+| `components/Icon.vue` | 自绘的单色线条图标 |
+| `components/PipelineRail.vue` | 处理线与添加步骤弹出菜单 |
+| `components/StepEditor.vue` | 单个步骤：启用、排序与删除命令、组合、两组参数 |
 | `components/ParameterFields.vue` | 按字段描述渲染参数控件 |
 | `components/PathField.vue` | 路径输入与原生选择 |
 | `components/ScanSummary.vue` | 扫描结果 |
 | `components/RestoreTable.vue` | 恢复检查结果的筛选、搜索、勾选、分页 |
 | `components/JobDock.vue` | 底部作业栏 |
-| `styles/tokens.css`、`styles/base.css` | 设计令牌与共享控件；组件布局写在各自的 scoped 样式中 |
+| `styles/tokens.css`、`styles/base.css` | 浅色与深色设计令牌、共享控件；组件布局写在各自的 scoped 样式中 |
 
 ## 工作台状态
 
@@ -41,7 +44,16 @@
 | `job`、`submitting`、`closing` | 当前作业、start 请求进行中、窗口正在安全关闭 |
 | `missingProviders`、`blockedSteps` | 缺依赖的工具；启用了缺依赖工具的步骤 |
 
-处理页运行栏根据当前配置实时显示写入策略，点击只切换到 `output` 站点，不保存配置或启动作业；缺依赖入口只切换到工具页。处理线添加菜单关闭时恢复按钮焦点。容器查询负责步骤表单布局，不参与核心参数转换。
+处理页命令栏根据当前配置实时显示写入策略，点击只切换到 `output` 站点，不保存配置或启动作业；缺依赖入口只切换到工具页。处理线的添加菜单是按触发按钮定位的浮动菜单，点击别处、Esc 或窗口尺寸变化时关闭，Esc 关闭后恢复按钮焦点。容器查询负责步骤表单布局，不参与核心参数转换。
+
+## 窗口外壳
+
+- 原生窗口在 `tauri.conf.json` 中设为 `decorations: false`。`TitleBar.vue` 通过 `data-tauri-drag-region` 提供拖动与双击最大化，按钮调用 `getCurrentWindow()` 的 `minimize()`、`toggleMaximize()`、`close()`，并监听 `onResized` 同步最大化图标。所需权限在 `capabilities/default.json`：`start-dragging`、`minimize`、`toggle-maximize`、`internal-toggle-maximize`、`is-maximized`，以及原有的 `close`、`destroy`。
+- 标题栏关闭按钮调用 `close()`，会触发 `onCloseRequested`，与系统关闭走同一条“先协作取消、再退出”的路径。
+- `'__TAURI_INTERNALS__' in window` 为假时（浏览器调试、组件测试）不渲染窗口按钮。
+- 状态栏的内容全部由工作台状态派生：`loading`、`closing`、`busy`、`job.title`、`tasks` 中 `canResume` 的数量、`missingProviders`。它不发起请求。
+- 全局快捷键在 `App.vue` 的 `keydown` 监听中处理：`Ctrl+1`–`4` 调用与活动栏相同的 `go()`；`Ctrl+S` 仅在处理页且不忙时调用 `saveConfig()`。
+- 外观状态是模块级的（`core/theme.ts`），不属于工作台；它只改 `<html data-theme>`，不影响任何请求。
 
 视图不直接调用 `call('start')`。所有作业都经 `launch(request, kind, title, onDone)` 启动。
 
@@ -89,7 +101,8 @@ stateDiagram-v2
 ## 步骤编辑
 
 - 添加步骤菜单列出目录中所有“资源类型 + 操作”组合（`stepChoices`），选择后用默认工具和默认参数创建步骤并选中它。最多 64 步。
-- 切换资源类型、操作或工具时由 `retargetStep` 重建两组参数，保留步骤 ID 和启用状态。
+- 步骤编辑器从 `provider.adapters` 中按当前 operation 读取专属 fields，`providerOptions` 只含该操作的工具参数；公共字段仍由操作定义提供。
+- `retargetStep` 在操作 ID 相同时复制保留公共参数，专属参数使用目标适配器默认值；跨操作则重置两组。保留步骤 ID 和启用状态，清除旧版本快照，由核心重新校验并填充；切换回原工具不会恢复此前的专属参数。
 - “恢复默认参数”只重置当前步骤的参数（`resetStep`），不改变组合、顺序和启用状态。
 - 停用的步骤仍保存参数，参数控件只读。数值框清空时暂存空串，由核心在 `normalize` 时拒绝。
 - 删除步骤后选中相邻步骤；没有步骤时回到“来源”。
@@ -103,7 +116,7 @@ stateDiagram-v2
 | 层级 | 文件 | 覆盖 |
 | --- | --- | --- |
 | 组件与模型 | `desktop/tests/ui.test.ts` | 动态参数及命名空间、组合切换、停用只读、缺依赖提示；恢复筛选与勾选、范围预选、取消后只读；工具页渠道与刷新；请求构造、体积格式、组合列表、任务状态 |
-| 应用流程 | `desktop/tests/app.test.ts` | 扫描结果归位与过期、跨页取消、作业栏持久与关闭、预览错误、缺依赖拦截、添加/排序/删除步骤、续跑与重试请求、任务恢复与独立备份请求 |
+| 应用流程 | `desktop/tests/app.test.ts` | 扫描结果归位与过期、跨页取消、作业栏持久与关闭、预览错误、缺依赖拦截、添加/排序/删除步骤、续跑与重试请求、任务恢复与独立备份请求、快捷键与状态栏、外观切换 |
 | 原生 | `desktop/tests/native.spec.ts` | 构建后的 EXE：工具缺失与恢复、动态扩展参数、840×620 无横向滚动、扫描、另存、覆盖备份、跨页取消、续跑、重试、选择性恢复、真实图片缩放、配置重启、运行中关闭 |
 
-测试只依赖语义选择器、`data-station`、`data-step-id`、`data-provider-id` 以及作业栏的 `data-job-id`、`data-state`。调整样式类名时保持这些钩子。截图保存在 `desktop/test-results/`，不提交。
+测试只依赖语义选择器、`data-station`、`data-step-id`、`data-provider-id`、作业栏的 `data-job-id`、`data-state`，以及少量结构类名（`nav.tabs`、`.rail`、`.adder`、`.choice`、`.editor`、`.runbar`、`.summary-link`、`.dock`、`.statusbar`、`.restore-table .foot`、工具行的 `.state`）。调整样式类名时保持这些钩子。原生窗口的拖动、缩放与窗口按钮无法由 CDP 测试覆盖，改动标题栏后需要人工核对。截图保存在 `desktop/test-results/`，不提交。

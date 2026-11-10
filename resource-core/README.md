@@ -6,7 +6,7 @@ Node CommonJS 核心，实现资源处理流水线、任务和安全恢复。当
 | --- | --- |
 | `resource-types/` | 格式识别与资源种类 |
 | `operations/` | 操作参数、支持种类、结果验收策略 |
-| `providers/` | pngquant、jpg-c、lame、sharp 实现与依赖 |
+| `providers/` | pngquant、jpg-c、lame、sharp 共享依赖；`adapters/<operation>.js` 存放按操作分开的执行和专属参数 |
 | `framework/` | 注册、schema、无 shell 进程执行 |
 | `framework/dependencies/` | 固定清单、下载/解包/摘要验证、独立安装进程与受管理运行时 |
 | `engine.js`、`cli.js` | 扫描、流水线、统一安全提交及直接 CLI |
