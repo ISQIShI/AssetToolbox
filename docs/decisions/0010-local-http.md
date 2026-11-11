@@ -2,6 +2,8 @@
 
 状态：已采用。日期：2026-11-10。部分修订 [ADR 0009](0009-agent-interfaces.md) 的入口与生命周期，保留扩展契约、目录 policy、幂等和文件保护。
 
+> 后续修订：[0011](0011-unified-application.md) 完整统一公共作业契约；本文的桌面临时作业/专用分支描述仅保留为历史决策。
+
 ## 背景
 
 首版只有 CLI/MCP 共用 ApplicationService，桌面直接使用 JobSession，统一应用入口尚不完整。用户要求保留 stdio，并额外提供 HTTP API 和 MCP Streamable HTTP，明确本轮面向本机 Agent。

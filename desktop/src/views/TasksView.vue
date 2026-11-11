@@ -7,14 +7,14 @@ import type { Task } from '../core/types';
 import Icon from '../components/Icon.vue';
 
 const bench = useWorkbench();
-const { tasks, selectedTaskFile, busy } = bench;
+const { tasks, selectedTaskId, busy } = bench;
 const query = ref('');
 
 const rows = computed(() => {
     const text = query.value.trim().toLocaleLowerCase();
     return tasks.value.filter(task => !text || `${task.source || ''}\n${task.id}`.toLocaleLowerCase().includes(text));
 });
-const task = computed(() => tasks.value.find(item => item.taskFile === selectedTaskFile.value) || rows.value[0]);
+const task = computed(() => tasks.value.find(item => item.id === selectedTaskId.value) || rows.value[0]);
 const name = (item: Task) => item.source ? folderName(item.source) : item.id;
 const share = (item: Task, value: number) => item.total ? `${(value / item.total) * 100}%` : '0%';
 </script>
@@ -27,8 +27,8 @@ const share = (item: Task, value: number) => item.total ? `${(value / item.total
         <button type="button" class="button icon-only" aria-label="刷新任务列表" title="刷新" :disabled="busy" @click="bench.refreshTasks().catch(bench.fail)"><Icon name="refresh" /></button>
       </div>
       <ul v-if="rows.length" class="rows">
-        <li v-for="item in rows" :key="item.taskFile">
-          <button type="button" class="row" :aria-current="task?.taskFile === item.taskFile ? 'true' : undefined" @click="selectedTaskFile = item.taskFile">
+        <li v-for="item in rows" :key="item.id">
+          <button type="button" class="row" :aria-current="task?.id === item.id ? 'true' : undefined" @click="selectedTaskId = item.id">
             <span class="row-head"><span class="row-name">{{ name(item) }}</span><span class="tone small" :class="taskStatus(item).tone">{{ taskStatus(item).label }}</span></span>
             <span class="small muted">{{ date(item.createdAt) }}，{{ item.total }} 个文件</span>
             <span class="bar" aria-hidden="true"><span class="done" :style="{ width: share(item, item.completed) }"></span><span class="failed" :style="{ width: share(item, item.failed) }"></span></span>
@@ -78,9 +78,9 @@ const share = (item: Task, value: number) => item.total ? `${(value / item.total
           <h3>备份与恢复</h3>
           <p class="muted">已备份 {{ task.backupCount || 0 }} 个文件，已恢复 {{ task.restored || 0 }} 个，恢复失败 {{ task.restoreFailed || 0 }} 个。</p>
           <div class="actions">
-            <button type="button" class="button" :disabled="busy || !task.backupCount" @click="bench.checkRestore({ kind: 'task', taskFile: task.taskFile })">检查备份</button>
-            <button type="button" class="button" :disabled="busy || !task.canContinueRestore" @click="bench.checkRestore({ kind: 'task', taskFile: task.taskFile }, 'continue')">继续上次恢复</button>
-            <button type="button" class="button" :disabled="busy || !task.canRetryRestore" @click="bench.checkRestore({ kind: 'task', taskFile: task.taskFile }, 'retry')">重试恢复失败项</button>
+            <button type="button" class="button" :disabled="busy || !task.backupCount" @click="bench.checkRestore({ kind: 'task', taskId: task.id })">检查备份</button>
+            <button type="button" class="button" :disabled="busy || !task.canContinueRestore" @click="bench.checkRestore({ kind: 'task', taskId: task.id }, 'continue')">继续上次恢复</button>
+            <button type="button" class="button" :disabled="busy || !task.canRetryRestore" @click="bench.checkRestore({ kind: 'task', taskId: task.id }, 'retry')">重试恢复失败项</button>
           </div>
         </section>
       </article>

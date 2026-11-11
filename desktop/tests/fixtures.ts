@@ -27,6 +27,6 @@ export const config: Configuration = {
 };
 
 export const task: Task = {
-    taskFile: 'D:\\data\\tasks\\t1.jsonl', id: 't1', createdAt: '2026-11-08T00:00:00Z', source: 'D:\\中文 素材', total: 10, completed: 6, pending: 3, failed: 1,
+    id: 't1', createdAt: '2026-11-08T00:00:00Z', source: 'D:\\中文 素材', total: 10, completed: 6, pending: 3, failed: 1,
     backupCount: 6, restored: 0, restoreFailed: 0, restoreStarted: false, canResume: true, canRetry: true, canRestore: true, canContinueRestore: false, canRetryRestore: false,
 };

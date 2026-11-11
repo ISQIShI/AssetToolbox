@@ -1,6 +1,6 @@
 # 外部 Agent、CLI 与 MCP
 
-状态：已实现应用 API /1、结构化 CLI、桌面应用门面、stdio MCP，以及按需启动的本机 HTTP API / MCP Streamable HTTP。源码为 `resource-core/application/`、`resource-core/cli.js`、`agent-mcp/server.mjs`；决策见 [ADR 0009](../decisions/0009-agent-interfaces.md)和 [0010](../decisions/0010-local-http.md)。不需要模型密钥；stdio 保持默认，HTTP 启动与认证见[专门指南](http.md)。
+状态：已实现统一应用 API /2、结构化 CLI、桌面公共作业接口、stdio MCP，以及按需启动的本机 HTTP API / MCP Streamable HTTP。源码为 `resource-core/application/`、`resource-core/cli.js`、`agent-mcp/server.mjs`；决策见 [ADR 0009](../decisions/0009-agent-interfaces.md)、[0010](../decisions/0010-local-http.md) 和 [0011](../decisions/0011-unified-application.md)。不需要模型密钥；stdio 保持默认，HTTP 启动与认证见[专门指南](http.md)。
 
 ## 接入与目录授权
 
@@ -30,7 +30,7 @@
 
 ## 统一动作
 
-CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST /api/v1/<action>`。三者直接调用同一应用服务，MCP 不执行 shell 或解析 CLI 文本。桌面也已接入该门面，使用受信任本地上下文；桌面专属设置命令不公开给 Agent，见[HTTP 专题的统一边界](http.md#统一应用服务边界)。
+CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST /api/v2/<action>`。三者直接调用同一应用服务，MCP 不执行 shell 或解析 CLI 文本。桌面直接使用相同公共动作和作业 DTO，通过启动上下文区分权限和生命周期；专属设置独立，见[统一应用接口](application.md)。
 
 | action | 输入 | 返回及用途 |
 | --- | --- | --- |
@@ -63,22 +63,24 @@ CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST
 .\runtime\node.exe resource-core/cli.js api jobs --policy resource-core/data/automation-policy.json
 ```
 
-`--input -` 读取 UTF-8 stdin JSON；省略 input 等价于 `{}`。stdout 只有一个 `asset-toolbox.response/1` JSON，启动回执与日志写 stderr。成功响应 `{schema,ok:true,result}`；拒绝响应 `{schema,ok:false,error:{code,message}}`。CLI submit 始终等待，便于脚本可靠取得退出码；另一个 CLI 进程可通过相同 policy 的 jobs/status/cancel 查询和取消。
+`--input -` 读取 UTF-8 stdin JSON；省略 input 等价于 `{}`。stdout 只有一个 `asset-toolbox.response/2` JSON，启动回执与日志写 stderr。成功响应 `{schema,ok:true,result}`；拒绝响应 `{schema,ok:false,error:{code,message}}`。CLI submit 始终等待，便于脚本可靠取得退出码；另一个 CLI 进程可通过相同 policy 的 jobs/status/cancel 查询和取消。
 
-原有位置参数 CLI 仍是受信任的人工本地入口，使用执行锁，但没有 Agent 启动权限契约。宿主为 Agent 配置命令时应使用 `api` 子命令；拥有任意 shell 权限并不等于被应用 policy 隔离。
+位置参数 CLI 是公共 submit 的本地适配，自动生成幂等键并等待；`api` 子命令也可显式使用 `--local` 代替 `--policy`。二者同样记录持久作业和任务。Agent 建议使用固定 policy；本地上下文和任意 shell 权限不受 Agent 目录限制。batch.js 仅为内部工作进程，不再提供用户 CLI。
 
 业务拒绝使用 INVALID_REQUEST、UNSUPPORTED_VERSION、PATH_FORBIDDEN、PERMISSION_DENIED、NOT_FOUND、DEPENDENCY_MISSING、MANUAL_INSTALL_REQUIRED、BUSY、IDEMPOTENCY_CONFLICT、NOT_READY。MCP 同时提供 text、structuredContent 与 isError；SDK 在进入业务前拒绝不合法工具参数时使用其标准 MCP 错误。作业成功提交不表示处理成功，务必查询 `done/exitCode`：0 完成、1 失败、2 取消；逐文件失败及未提交音频测量见 results。预览 issues 也应检查，不能只看退出码。
 
 ## 作业、互斥与断连
 
-幂等键为 1–128 个英文、数字或 `._:-`，作用域由规范化权限配置决定；同键同规范化请求返回同一个持久 jobId，同键不同请求明确冲突。键在启动前落盘，不自动回收；启动失败或中断也不会静默重执行。失败后先查 taskId 和报告：已有任务优先 resume/retry，确定需要新作业时才使用新键。不同键不保证业务去重。
+幂等键为 1–128 个英文、数字或 `._:-`，作用域由启动上下文决定（相同规范化 policy 共用；桌面与本地 CLI 共用本地作用域）；同键同规范化请求返回同一个持久 jobId，同键不同请求明确冲突。键在启动前落盘，不自动回收；启动失败或中断也不会静默重执行。失败后先查 taskId 和报告：已有任务优先 resume/retry，确定需要新作业时才使用新键。不同键不保证业务去重。
 
-jobId 对应一次预览/执行；taskId 对应可多次续跑、重试和恢复的素材任务。自动化作业存入 `data/automation/<scope>/<jobId>/`，包含 /1 job 记录、request/status/cancel、worker/exit 记录；桌面仍使用临时会话 ID。各入口通过应用服务共用 `JobSession` 和批处理进程，自动化不会保存桌面 settings。
+jobId 对应一次预览/执行；taskId 对应可多次续跑、重试和恢复的素材任务。全部作业存入 `data/jobs/v2/<jobId>/`，包含 /2 job 记录、request/status/cancel、worker/exit 记录；桌面也使用持久 jobId。各入口通过应用服务共用 `JobSession` 和批处理进程，自动化不会保存桌面 settings。
 
 同一 Windows 用户、同一核心安装的 GUI、CLI 和 MCP 通过系统临时目录中的安装路径哈希锁串行执行作业，包括预览和依赖安装；冲突返回 BUSY。原有每任务锁继续保留。不同安装副本、不同用户或直接调用 engine 库不共享此锁，不能据此并发操作同一素材。失效 PID 锁可回收；无法确认的锁保守拒绝。
 
-stdio MCP 的 stdin 结束、会话正常关闭和 CLI 中断会请求取消，当前文件完成后停止。父进程死亡时仍存活的工作进程会在文件边界检查并停止；Windows 强杀可能同时结束进程树，此时返回 INTERRUPTED 并从任务日志刷新进度，靠既有提交意图与哈希机制续跑，不能宣称正常取消或整批成功。没有跨宿主常驻队列。已完成结果、备份和断点保留，取消不回滚已完成文件。界面任务历史可以看到 Agent 素材任务，但未增加跨窗口的实时作业面板。
+stdio MCP 的 stdin 结束、会话正常关闭和 CLI 中断会请求取消，当前文件完成后停止。父进程死亡时仍存活的工作进程会在文件边界检查并停止；Windows 强杀可能同时结束进程树，此时返回 INTERRUPTED 并从任务日志刷新进度，靠既有提交意图与哈希机制续跑，不能宣称正常取消或整批成功。没有跨宿主常驻队列。已完成结果、备份和断点保留，取消不回滚已完成文件。各入口在当前权限范围内可以查询和取消其他入口创建的作业；界面任务历史可以看到 Agent 素材任务，但未增加跨窗口的实时作业面板。
 
 HTTP 的单次请求或连接结束不触发作业取消，作业由服务进程持有，使用 cancel 或正常停止服务请求安全取消；与 stdio 区别见[HTTP 生命周期](http.md#生命周期与本机保护)。
 
 验证：核心 `application.test.js` 覆盖权限、联接、幂等、分页、真实 Sharp/FFmpeg、恢复/导出和跨入口锁；MCP `server.test.mjs` 验证 stdio，HTTP 见两套 `http` 测试。远程授权、OS 常驻服务、多作业并发、流式报告和自动清理仍未实现。
+
+应用、响应和作业现为 /2；HTTP /api/v1 返回 410，旧 automation 作业不读取、不迁移；公共输入不再接受桌面 taskFile/start/poll。素材任务和报告版本不变。详见[版本拒绝](application.md#版本与验证)。

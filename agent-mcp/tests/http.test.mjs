@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { createInterface } from 'node:readline';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { randomBytes } from 'node:crypto';
 import http from 'node:http';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
@@ -33,8 +35,9 @@ async function fixture(t) {
     const child = spawn(process.execPath, [path.join(serverRoot, 'server.mjs'), '--transport', 'http', '--policy', policy, '--token-file', tokenFile, '--port', '0'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const exited = new Promise(resolve => child.once('close', resolve));
     let stderr = '', stdout = ''; child.stdout.on('data', chunk => { stdout += chunk; });
-    const clients = [];
+    const clients = [], cleanups = [];
     t.after(async () => {
+        for (const cleanup of cleanups) await cleanup();
         for (const client of clients) await client.close();
         child.kill(); await exited;
         for (let i = 0; i < 100; i++) { try { const release = require(path.join(core, 'application/lock')).acquire(); release(); break; } catch { await delay(30); } }
@@ -69,7 +72,7 @@ async function fixture(t) {
         return { status: response.status, body: await response.json() };
     };
     const request = { mode: 'process', folder: source, outputDir: output, pipeline: [{ id: 'compress', resourceType: 'fixture', operation: 'compress', provider: 'fixture', enabled: true }] };
-    return { ...ready, token, connect, api, request, source, output, core };
+    return { ...ready, token, connect, api, request, source, output, core, root, tool, policy, serverRoot, cleanups };
 }
 async function until(call, jobId, predicate = state => state.done) {
     const deadline = Date.now() + 20000;
@@ -119,4 +122,55 @@ test('MCP HTTP shares authentication and bounds; cancellation is explicit and re
     const resumed = await f.api('submit', { request: { mode: 'resume', taskId: stopped.taskId }, idempotencyKey: 'http-resume' });
     assert.equal((await until(client.call, resumed.body.result.jobId)).task.completed, 8);
     const invalid = await client.call('validate', { request: { ...f.request, folder: path.dirname(f.source) } }); assert.equal(invalid.error.code, 'PATH_FORBIDDEN');
+});
+
+test('desktop, CLI, stdio MCP, HTTP and HTTP MCP share schemas, durable jobs, cancellation and results', async t => {
+    const f = await fixture(t), remote = await f.connect();
+    const stdio = new Client({ name: 'cross-entry', version: '1.0.0' });
+    f.cleanups.push(() => stdio.close());
+    await stdio.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(f.serverRoot, 'server.mjs'), '--policy', f.policy], stderr: 'pipe' }));
+    const bridge = spawn(process.execPath, [path.join(f.core, 'desktop-bridge.js')], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    let sequence = 0, stderr = ''; const pending = new Map();
+    bridge.stderr.on('data', chunk => { stderr += chunk; });
+    const closed = new Promise(resolve => bridge.once('close', resolve));
+    f.cleanups.push(async () => { bridge.stdin.end(); await closed; });
+    createInterface({ input: bridge.stdout }).on('line', line => { const { id, ...response } = JSON.parse(line); pending.get(id)?.(response); pending.delete(id); });
+    const desktop = (action, payload = {}) => new Promise(resolve => { const id = ++sequence; pending.set(id, resolve); bridge.stdin.write(JSON.stringify({ id, action, payload }) + '\n'); });
+    const cli = async (action, input = {}) => {
+        const result = spawnSync(process.execPath, [path.join(f.core, 'cli.js'), 'api', action, '--policy', f.policy, '--input', '-'], { input: JSON.stringify(input), encoding: 'utf8', windowsHide: true, timeout: 20000 });
+        assert.ifError(result.error); return JSON.parse(result.stdout);
+    };
+    const calls = [desktop, cli, async (action, input = {}) => (await stdio.callTool({ name: 'asset_' + action, arguments: input })).structuredContent, async (action, input) => (await f.api(action, input)).body, remote.call];
+    const catalogs = await Promise.all(calls.map(call => call('capabilities')));
+    for (const response of catalogs) { assert.equal(response.schema, 'asset-toolbox.response/2'); assert.deepEqual(response.result.inputSchemas, catalogs[0].result.inputSchemas); }
+    const invalid = { ...f.request, pipeline: [{ ...f.request.pipeline[0], operation: 'unknown-operation' }] };
+    const errors = await Promise.all(calls.map(call => call('validate', { request: invalid })));
+    for (const response of errors) { assert.equal(response.ok, false); assert.deepEqual(response.error, errors[0].error); }
+    for (const call of calls) assert.equal((await call('validate', { request: f.request })).ok, true);
+
+    // 桌面创建，外部连接查询/取消；同一 jobId 在所有入口可见。
+    const submitted = await desktop('submit', { request: f.request, idempotencyKey: 'desktop-owned' });
+    assert.equal(submitted.ok, true, stderr + JSON.stringify(submitted)); const { jobId } = submitted.result;
+    assert.equal((await desktop('submit', { request: f.request, idempotencyKey: 'desktop-owned' })).result.replayed, true);
+    await until(remote.call, jobId, state => state.processed >= 1);
+    await f.api('cancel', { jobId });
+    const cancelled = await until(remote.call, jobId); assert.equal(cancelled.cancelled, true); assert.ok(cancelled.task.completed < 8);
+    const states = await Promise.all(calls.map(call => call('status', { jobId })));
+    for (const response of states) assert.deepEqual(response.result, states[0].result);
+    assert.equal('taskFile' in states[0].result.task, false); assert.equal('reportDirectory' in states[0].result, false);
+    const resumed = await cli('submit', { request: { mode: 'resume', taskId: cancelled.taskId }, idempotencyKey: 'cli-resume' });
+    assert.equal(resumed.result.state.task.completed, 8);
+    const pages = await Promise.all(calls.map(call => call('results', { jobId: resumed.result.jobId, limit: 2 })));
+    for (const response of pages) assert.deepEqual(response, pages[0]);
+    for (const call of calls) {
+        assert.ok((await call('jobs')).result.items.some(item => item.jobId === jobId));
+        assert.ok((await call('tasks')).result.items.some(item => item.id === cancelled.taskId));
+    }
+    // 外部提交由桌面读取；HTTP 客户端断开不结束作业。
+    const preview = await remote.call('submit', { request: { ...f.request, mode: 'preview' }, idempotencyKey: 'http-preview' });
+    await remote.client.close(); assert.equal((await until(desktop, preview.result.jobId)).exitCode, 0);
+    const replay = await cli('submit', { request: { ...f.request, mode: 'preview' }, idempotencyKey: 'http-preview' });
+    assert.equal(replay.result.replayed, true); assert.equal(replay.result.jobId, preview.result.jobId);
+    assert.equal(fs.readFileSync(path.join(f.source, '0.pack'), 'utf8'), 'PACK:' + 'data'.repeat(100));
+    assert.equal(fs.existsSync(path.join(f.core, 'data/settings.json')), false);
 });

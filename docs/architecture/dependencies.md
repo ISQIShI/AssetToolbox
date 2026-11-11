@@ -18,7 +18,7 @@
 
 ## 下载、验证与启用
 
-1. 桌面发出 `start {mode:'dependency-install', providerId}`，桥接确认空闲，启动独立安装进程。与处理、恢复共用 `poll`、`cancel` 和安全退出流程。
+1. 桌面与其他入口通过公共 `submit {request:{mode:'dependency-install',providerId},idempotencyKey}` 提交，由应用服务校验权限、幂等和空闲状态，再启动独立安装进程。与处理、恢复共用 `status {jobId}`、`cancel {jobId}` 和上下文安全退出流程。
 2. 仅允许 HTTPS 到 `registry.npmjs.org` 或 `www.rarewares.org`，强制 TLS 证书验证；拒绝凭据 URL、额外端口及所有重定向。每个包限制 64 MiB、60 秒，取消会中止网络请求。
 3. 下载完成先匹配固定摘要，再解包到全新 UUID 目录。TAR 仅接受 `package/` 下普通文件和目录；ZIP 只写清单列出的文件并核验文件摘要。拒绝路径穿越、链接、重复路径、Windows 特殊路径、加密 ZIP 和超过 128 MiB 的展开内容；不运行 npm 生命周期脚本。
 4. 在短生命周期进程中检查 LAME 版本或 Sharp 加载能力，最长 15 秒。生成已安装文件的 SHA-256 清单，原子替换 `active.json` 后才算成功。

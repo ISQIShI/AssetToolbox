@@ -11,16 +11,16 @@ const bench = useWorkbench();
 const { tasks, restoreSource, restorePreview, restoreScope, restoreRevision, busy, job } = bench;
 
 const mode = ref<'task' | 'export'>(restoreSource.value?.kind || 'task');
-const taskFile = ref(restoreSource.value?.kind === 'task' ? restoreSource.value.taskFile : '');
+const taskId = ref(restoreSource.value?.kind === 'task' ? restoreSource.value.taskId : '');
 const backupDir = ref(restoreSource.value?.kind === 'export' ? restoreSource.value.backupDir : '');
 const outputDir = ref(restoreSource.value?.kind === 'export' ? restoreSource.value.outputDir : '');
 const backedUp = computed(() => tasks.value.filter(task => task.backupCount > 0));
-watch(restoreSource, source => { if (source?.kind === 'task') { mode.value = 'task'; taskFile.value = source.taskFile; } });
+watch(restoreSource, source => { if (source?.kind === 'task') { mode.value = 'task'; taskId.value = source.taskId; } });
 
 function check() {
     if (mode.value === 'task') {
-        if (!taskFile.value) { bench.error.value = '请选择一个有备份的任务'; return; }
-        void bench.checkRestore({ kind: 'task', taskFile: taskFile.value });
+        if (!taskId.value) { bench.error.value = '请选择一个有备份的任务'; return; }
+        void bench.checkRestore({ kind: 'task', taskId: taskId.value });
     } else {
         if (!backupDir.value.trim() || !outputDir.value.trim()) { bench.error.value = '请选择备份文件夹和恢复目标文件夹'; return; }
         void bench.checkRestore({ kind: 'export', backupDir: backupDir.value.trim(), outputDir: outputDir.value.trim() });
@@ -40,9 +40,9 @@ function check() {
       <div v-if="mode === 'task'" class="inputs">
         <div class="field stacked grow">
           <label class="label" for="restore-task">任务</label>
-          <select id="restore-task" v-model="taskFile" class="select" :disabled="busy || !backedUp.length">
+          <select id="restore-task" v-model="taskId" class="select" :disabled="busy || !backedUp.length">
             <option value="" disabled>{{ backedUp.length ? '选择一个有备份的任务' : '还没有启用备份的任务' }}</option>
-            <option v-for="task in backedUp" :key="task.taskFile" :value="task.taskFile">{{ task.source ? folderName(task.source) : task.id }}，{{ date(task.createdAt) }}，备份 {{ task.backupCount }} 个</option>
+            <option v-for="task in backedUp" :key="task.id" :value="task.id">{{ task.source ? folderName(task.source) : task.id }}，{{ date(task.createdAt) }}，备份 {{ task.backupCount }} 个</option>
           </select>
         </div>
         <button type="button" class="button primary" :disabled="busy" @click="check"><Icon name="scan" />检查备份</button>

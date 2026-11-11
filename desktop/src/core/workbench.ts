@@ -4,12 +4,12 @@ import { computed, inject, ref, type InjectionKey } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { call, chooseFolder, openProviderSource, openReport } from './api';
 import { createStep, isMissing, processingRequest, providerOf } from './model';
-import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, RestorePreview, RestoreScope, ScanPreview, Selection, Step, Task } from './types';
+import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, ResultPage, RestoreFile, AudioResult, RestorePreview, RestoreScope, ScanPreview, Selection, Step, Task } from './types';
 
 export type Page = 'process' | 'tasks' | 'restore' | 'tools';
 export type JobKind = 'preview' | 'process' | 'resume' | 'retry' | 'restore-check' | 'restore' | 'dependency';
 export interface ActiveJob { id: string; kind: JobKind; title: string; state: JobState; cancelRequested: boolean }
-export type RestoreSource = { kind: 'task'; taskFile: string } | { kind: 'export'; backupDir: string; outputDir: string };
+export type RestoreSource = { kind: 'task'; taskId: string } | { kind: 'export'; backupDir: string; outputDir: string };
 
 const POLL_MS = 250;
 
@@ -28,13 +28,13 @@ export function createWorkbench() {
     const scanRequest = ref('');
 
     // 任务页与恢复页。
-    const selectedTaskFile = ref<string>();
+    const selectedTaskId = ref<string>();
     const restoreSource = ref<RestoreSource>();
     const restorePreview = ref<RestorePreview>();
     const restoreScope = ref<RestoreScope>('all');
     const restoreRevision = ref(0);
 
-    // 作业：同一时间最多一个；submitting 覆盖 start 请求尚未返回的窗口。
+    // 作业：同一时间最多一个；submitting 覆盖 submit 请求尚未返回的窗口。
     const job = ref<ActiveJob>();
     const submitting = ref(false);
     const closing = ref(false);
@@ -56,7 +56,12 @@ export function createWorkbench() {
 
     const fail = (cause: unknown) => { error.value = String(cause instanceof Error ? cause.message : cause); };
 
-    async function refreshTasks() { tasks.value = await call<Task[]>('tasks'); }
+    async function allPages<T>(action: string, input = {}): Promise<T[]> {
+        const items: T[] = []; let offset: number | null = 0;
+        do { const page: ResultPage<T> = await call(action, { ...input, offset, limit: 100 }); items.push(...page.items); offset = page.nextOffset; } while (offset !== null);
+        return items;
+    }
+    async function refreshTasks() { tasks.value = await allPages<Task>('tasks'); }
     async function refreshProviders() {
         try {
             const providers = await call<Provider[]>('providers');
@@ -87,7 +92,13 @@ export function createWorkbench() {
     async function poll(id: string) {
         if (job.value?.id !== id) return;
         try {
-            const state = await call<JobState>('poll', { id });
+            const state = await call<JobState>('status', { jobId: id });
+            if (state.done && state.preview && job.value.kind === 'restore-check') {
+                (state.preview as RestorePreview).files = await allPages<RestoreFile>('results', { jobId: id, kind: 'restore' });
+            }
+            if (state.done && state.hasReport && state.audioResultCount) {
+                state.audioResults = (await call<ResultPage<AudioResult>>('results', { jobId: id, kind: 'audio', limit: 100 })).items;
+            }
             if (job.value?.id !== id) return;
             job.value = { ...job.value, state };
             if (!state.done) { timer = setTimeout(() => void poll(id), POLL_MS); return; }
@@ -108,12 +119,12 @@ export function createWorkbench() {
         if (busy.value) return;
         error.value = ''; pendingCancel = false; submitting.value = true;
         try {
-            const { id } = await call<{ id: string }>('start', request);
+            const { jobId: id } = await call<{ jobId: string }>('submit', { request, idempotencyKey: crypto.randomUUID() });
             completion = finished;
             job.value = { id, kind, title, cancelRequested: pendingCancel, state: { phase: 'starting', done: false, processed: 0, total: 0 } };
             if (pendingCancel || closing.value) {
                 job.value.cancelRequested = true;
-                try { await call('cancel', { id }); } catch (cause) { fail(cause); }
+                try { await call('cancel', { jobId: id }); } catch (cause) { fail(cause); }
             }
             void poll(id);
         } catch (cause) { fail(cause); } finally { submitting.value = false; }
@@ -123,7 +134,7 @@ export function createWorkbench() {
         if (submitting.value) { pendingCancel = true; return; }
         if (!job.value || job.value.state.done) return;
         job.value.cancelRequested = true;
-        try { await call('cancel', { id: job.value.id }); } catch (cause) { job.value.cancelRequested = false; fail(cause); }
+        try { await call('cancel', { jobId: job.value.id }); } catch (cause) { job.value.cancelRequested = false; fail(cause); }
     }
 
     function dismissJob() { if (job.value?.state.done) job.value = undefined; }
@@ -186,11 +197,11 @@ export function createWorkbench() {
 
     // ---------- 任务页 ----------
     async function continueTask(task: Task, mode: 'resume' | 'retry') {
-        selectedTaskFile.value = task.taskFile;
-        await launch({ mode, taskFile: task.taskFile }, mode, mode === 'resume' ? '继续未完成' : '重试失败项');
+        selectedTaskId.value = task.id;
+        await launch({ mode, taskId: task.id }, mode, mode === 'resume' ? '继续未完成' : '重试失败项');
     }
     function showTask(task?: Task) {
-        if (task) selectedTaskFile.value = task.taskFile;
+        if (task) selectedTaskId.value = task.id;
         page.value = 'tasks';
         refreshTasks().catch(fail);
     }
@@ -204,13 +215,13 @@ export function createWorkbench() {
     async function recheckRestore() {
         const source = restoreSource.value;
         if (!source) return;
-        const request: JobRequest = source.kind === 'task' ? { mode: 'restore-preview', taskFile: source.taskFile } : { mode: 'restore-export-preview', backupDir: source.backupDir, outputDir: source.outputDir };
+        const request: JobRequest = source.kind === 'task' ? { mode: 'restore-preview', taskId: source.taskId } : { mode: 'restore-export-preview', backupDir: source.backupDir, outputDir: source.outputDir };
         await launch(request, 'restore-check', '检查备份', state => { restorePreview.value = state.preview as RestorePreview | undefined; });
     }
     async function restoreSelected(selection: Selection[]) {
         const source = restoreSource.value;
         if (!source || !selection.length) return;
-        const request: JobRequest = source.kind === 'task' ? { mode: 'restore', taskFile: source.taskFile, selection } : { mode: 'restore-export', backupDir: source.backupDir, outputDir: source.outputDir, selection };
+        const request: JobRequest = source.kind === 'task' ? { mode: 'restore', taskId: source.taskId, selection } : { mode: 'restore-export', backupDir: source.backupDir, outputDir: source.outputDir, selection };
         await launch(request, 'restore', '恢复所选文件', () => { restorePreview.value = undefined; notice.value = '恢复已结束。重新检查可查看文件的最新状态。'; });
     }
 
@@ -223,7 +234,7 @@ export function createWorkbench() {
 
     return {
         page, boot, config, tasks, loading, error, notice, station, scan, scanStale,
-        selectedTaskFile, restoreSource, restorePreview, restoreScope, restoreRevision,
+        selectedTaskId, restoreSource, restorePreview, restoreScope, restoreRevision,
         job, submitting, closing, definition, busy, missingProviders, blockedSteps,
         fail, initialize, refreshTasks, refreshProviders, browse, saveConfig, installDependency,
         launch, cancelJob, dismissJob, openJobReport, requestClose, stop: () => clearTimeout(timer),

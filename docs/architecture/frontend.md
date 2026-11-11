@@ -39,9 +39,9 @@
 | `boot`、`config`、`definition` | `bootstrap` 结果；`config` 是可编辑副本，先复制原始响应再放进响应式状态 |
 | `station` | 处理线选中的站点：`source`、`output`、`scan` 或 `step:<步骤 ID>` |
 | `scan`、`scanStale` | 最近一次扫描结果；当前配置生成的请求与扫描时不同即视为过期 |
-| `tasks`、`selectedTaskFile` | 任务摘要与任务页选中项 |
+| `tasks`、`selectedTaskId` | 任务摘要与任务页选中项 |
 | `restoreSource`、`restorePreview`、`restoreScope` | 恢复来源（任务或独立备份）、检查结果、默认勾选范围 |
-| `job`、`submitting`、`closing` | 当前作业、start 请求进行中、窗口正在安全关闭 |
+| `job`、`submitting`、`closing` | 当前作业、submit 请求进行中、窗口正在安全关闭 |
 | `missingProviders`、`blockedSteps` | 缺依赖的工具；启用了缺依赖工具的步骤 |
 
 处理页命令栏根据当前配置实时显示写入策略，点击只切换到 `output` 站点，不保存配置或启动作业；缺依赖入口只切换到工具页。处理线的添加菜单是按触发按钮定位的浮动菜单，点击别处、Esc 或窗口尺寸变化时关闭，Esc 关闭后恢复按钮焦点。容器查询负责步骤表单布局，不参与核心参数转换。
@@ -55,27 +55,27 @@
 - 全局快捷键在 `App.vue` 的 `keydown` 监听中处理：`Ctrl+1`–`4` 调用与活动栏相同的 `go()`；`Ctrl+S` 仅在处理页且不忙时调用 `saveConfig()`。
 - 外观状态是模块级的（`core/theme.ts`），不属于工作台；它只改 `<html data-theme>`，不影响任何请求。
 
-视图不直接调用 `call('start')`。所有作业都经 `launch(request, kind, title, onDone)` 启动。
+视图不直接调用 `call('submit')`。所有作业都经 `launch(request, kind, title, onDone)` 启动。
 
 ## 作业生命周期
 
 ```mermaid
 stateDiagram-v2
     [*] --> 提交中: launch()
-    提交中 --> 运行中: start 返回 id
-    提交中 --> [*]: start 失败，显示错误
-    运行中 --> 运行中: 每 250ms poll
+    提交中 --> 运行中: submit 返回 jobId
+    提交中 --> [*]: submit 失败，显示错误
+    运行中 --> 运行中: 每 250ms status
     运行中 --> 等待结束: cancelJob() 或关闭窗口
-    等待结束 --> 已结束: poll 返回 done
-    运行中 --> 已结束: poll 返回 done
+    等待结束 --> 已结束: status 返回 done
+    运行中 --> 已结束: status 返回 done
     已结束 --> [*]: 预览类且拿到结果，自动收起
     已结束 --> [*]: 用户关闭作业栏
 ```
 
 - `busy` 为真（提交中或作业未结束）时，所有会改变配置或启动作业的控件停用；导航、查看和取消仍可用。
-- 在 start 返回前点击取消会记录待取消，拿到 ID 后立即发送 `cancel`。
+- 在 submit 返回前点击取消会记录待取消，拿到 ID 后立即发送 `cancel`。
 - 作业结束后执行 `onDone` 回调并刷新任务列表。`preview` 和 `restore-check` 两类在 `state.preview` 存在时清除 `job`，结果由页面显示；出错时保留作业栏。
-- 窗口关闭：有作业时阻止关闭，设 `closing` 并取消；poll 收到 done 后再调用原生 `close()`。桥接保证工作进程已退出。
+- 窗口关闭：有作业时阻止关闭，设 `closing` 并取消；status 收到 done 后再调用原生 `close()`。桥接保证工作进程已退出。
 - 作业栏在任何页面都显示，直到用户关闭。关闭只清除前端状态，不删除任务或报告。
 
 ## 请求映射
@@ -84,16 +84,16 @@ stateDiagram-v2
 | --- | --- | --- |
 | 启动 | `bootstrap`、`tasks` | 处理配置加载失败时仍可使用任务和恢复 |
 | 保存配置 | `save` | 成功后用返回值替换当前配置 |
-| 扫描预览 | `normalize` → `start {mode:'preview'}` | 不保存配置；结果写入 `scan` 并选中“扫描结果”站点 |
-| 开始处理 | `normalize` → `save` → `start {mode:'process'}` | 保存失败显示提示，但本次仍处理 |
+| 扫描预览 | `normalize` → `submit {request: {mode:'preview'}}` | 不保存配置；结果写入 `scan` 并选中“扫描结果”站点 |
+| 开始处理 | `normalize` → `save` → `submit {request: {mode:'process'}}` | 保存失败显示提示，但本次仍处理 |
 | 刷新依赖状态 | `providers` | 只替换目录中的工具列表，不重置配置 |
 | 打开获取页面 | 原生 `open_provider_source({id})` | 前端只传 ID，地址由核心解析 |
-| 获取安装 / 更新 / 修复 / 重装 | `start {mode:'dependency-install', providerId}` | 前端不传地址、摘要或路径；复用作业栏，结束后刷新 providers，保留当前配置 |
-| 继续未完成 / 重试失败项 | `start {mode:'resume'/'retry', taskFile}` | 不使用当前表单 |
-| 检查备份（任务） | `start {mode:'restore-preview', taskFile}` | 继续上次恢复、重试恢复失败项同样请求，只是默认勾选范围不同 |
-| 检查独立备份 | `start {mode:'restore-export-preview', backupDir, outputDir}` | 两个路径都必填 |
-| 恢复所选 | `start {mode:'restore' 或 'restore-export', …, selection}` | 始终显式传 `{path, backupHash, targetHash}` 数组，空选择不能提交 |
-| 取消 | `cancel {id}` | 协作取消，在文件边界生效 |
+| 获取安装 / 更新 / 修复 / 重装 | `submit {request: {mode:'dependency-install', providerId}}` | 前端不传地址、摘要或路径；复用作业栏，结束后刷新 providers，保留当前配置 |
+| 继续未完成 / 重试失败项 | `submit {request: {mode:'resume'/'retry', taskId}}` | 不使用当前表单 |
+| 检查备份（任务） | `submit {request: {mode:'restore-preview', taskId}}` | 继续上次恢复、重试恢复失败项同样请求，只是默认勾选范围不同 |
+| 检查独立备份 | `submit {request: {mode:'restore-export-preview', backupDir, outputDir}}` | 两个路径都必填 |
+| 恢复所选 | `submit {request: {mode:'restore' 或 'restore-export', …, selection}}` | 始终显式传 `{path, backupHash, targetHash}` 数组，空选择不能提交 |
+| 取消 | `cancel {jobId}` | 协作取消，在文件边界生效 |
 | 打开报告 | 原生 `open_report({id})` | Rust 校验报告目录属于本次作业 |
 
 `processingRequest()` 负责把配置转换为请求：去除路径首尾空白和引号；另存只传 `outputDir`；覆盖且启用备份才传 `backupDir`；缺少必填路径时在发送前报错。
@@ -126,3 +126,5 @@ stateDiagram-v2
 目录 API 3 驱动新增音频组合，无独立硬编码参数表单；同操作跨工具公共参数保留规则不变。workbench.updateStep/addStep 为 preserveOriginal 操作默认选择另存，processingRequest 与核心同时拒绝无备份覆盖。只有 observe 时请求省略记忆中的目标路径，写入摘要显示“仅分析，不写入素材”。
 
 JobDock 中 AudioResults 展示前 100 条步骤测量、请求/实际增益、是否达标和峰值警告，null 明确显示不可测，失败文件标注未提交。完整结果从报告打开；作业栏限制高度并允许内部滚动。原生测试见 audio.spec.ts。
+
+公共调用使用应用 /2；上表 submit 的输入还必填 idempotencyKey，由前端为每次明确提交生成 UUID。所有任务选中值和续跑/恢复参数使用 taskId，任务列表与恢复 results 取完分页；音频完成后从 results 获取前 100 条。状态用 hasReport，原生打开报告按 jobId 由应用服务核验。旧 start/poll 与 taskFile 不再发送，见[统一应用接口](application.md)。

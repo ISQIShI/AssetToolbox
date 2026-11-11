@@ -1,8 +1,8 @@
 const fs = require('node:fs');
-function main(args) {
+async function main(args) {
     if (!args.length || args[0] === '--help') {
         console.log('用法：node cli.js <源文件夹> --pipeline <步骤数组.json> [--output <目录> | --backup <目录>] [--preview]');
-        console.log('Agent API：node cli.js api <capabilities|validate|submit|status|cancel|jobs|tasks|results> --policy <权限.json> [--input <请求.json|->]');
+        console.log('统一 API /2：node cli.js api <capabilities|validate|submit|status|cancel|jobs|tasks|results> <--policy 权限.json | --local> [--input <请求.json|->]');
         return;
     }
     const options = {};
@@ -16,16 +16,13 @@ function main(args) {
         options[key] = key === 'pipeline' ? JSON.parse(fs.readFileSync(value, 'utf8').replace(/^\uFEFF/, '')) : value;
     }
     if (!options.pipeline) throw new Error('必须提供 --pipeline');
-    const { scanFolder, processFolder } = require('./engine');
-    const unlock = require('./application/lock').acquire();
-    let result;
-    try { result = options.preview ? scanFolder(args[0], options) : processFolder(args[0], { ...options, log() {} }); }
-    finally { unlock(); }
-    console.log(JSON.stringify(result, null, 2));
-    process.exitCode = result.failed || result.issues?.length ? 1 : result.cancelled ? 2 : 0;
+    const path = require('node:path');
+    const request = { mode: options.preview ? 'preview' : 'process', folder: path.resolve(args[0]), pipeline: options.pipeline };
+    for (const key of ['outputDir', 'backupDir']) if (options[key]) request[key] = path.resolve(options[key]);
+    return require('./application/cli').runCommand(require('./application/context').localContext(), 'submit', { request, idempotencyKey: require('node:crypto').randomUUID() });
 }
 if (require.main === module) {
     if (process.argv[2] === 'api') void require('./application/cli').main(process.argv.slice(3));
-    else { try { main(process.argv.slice(2)); } catch (error) { console.error(error.message); process.exitCode = 1; } }
+    else void main(process.argv.slice(2)).catch(error => { console.error(error.message); process.exitCode = 1; });
 }
 module.exports = { main };

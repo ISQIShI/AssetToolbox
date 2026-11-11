@@ -3,7 +3,7 @@ const { timingSafeEqual } = require('node:crypto');
 const { ACTION_FIELDS, respond } = require('./service');
 
 const MAX_BODY_BYTES = 1024 * 1024;
-const errorResponse = (code, message) => ({ schema: 'asset-toolbox.response/1', ok: false, error: { code, message } });
+const errorResponse = (code, message) => ({ schema: 'asset-toolbox.response/2', ok: false, error: { code, message } });
 const statusCodes = { INVALID_REQUEST: 400, UNSUPPORTED_VERSION: 400, PATH_FORBIDDEN: 403, PERMISSION_DENIED: 403, NOT_FOUND: 404, BUSY: 409, IDEMPOTENCY_CONFLICT: 409, NOT_READY: 409, DEPENDENCY_MISSING: 422, MANUAL_INSTALL_REQUIRED: 422 };
 function validToken(token) { return typeof token === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(token); }
 function send(res, status, body) {
@@ -34,12 +34,13 @@ async function readJson(req) {
 
 // 一个进程代表一个本地授权主体。HTTP 请求结束不结束应用作业。
 function createHttpServer({ service, token, port = 8787, mcpHandler, closeMcp = async () => {} }) {
-    if (!service || service.desktop) throw new Error('HTTP 只能使用受启动 policy 限制的应用服务');
+    if (!service?.context.policy || service.context.lifetime !== 'server') throw new Error('HTTP 只能使用受启动 policy 限制的 server 生命周期上下文');
     if (!validToken(token)) throw new Error('HTTP 令牌必须为 32–128 个英文、数字、下划线或短横线');
     if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('HTTP 端口必须为 0–65535 的整数');
     const expected = Buffer.from(token);
     let closing = false, stopping;
     const server = http.createServer({ maxHeaderSize: 16384, requestTimeout: 15000, headersTimeout: 10000, keepAliveTimeout: 5000 }, (req, res) => {
+        res.once('close', () => void service.disconnect());
         void handle(req, res).catch(error => {
             if (res.headersSent) { res.destroy(); return; }
             send(res, 500, errorResponse('INTERNAL_ERROR', 'HTTP 处理失败，请查看本地服务日志'));
@@ -70,9 +71,10 @@ function createHttpServer({ service, token, port = 8787, mcpHandler, closeMcp = 
             return reject(401, 'UNAUTHORIZED', '需要有效的本地 Bearer 令牌');
         }
         if (closing) return reject(503, 'SHUTTING_DOWN', '服务正在安全退出');
-        if (req.url === '/health' && req.method === 'GET') return send(res, 200, { schema: 'asset-toolbox.response/1', ok: true, result: { applicationApi: 'asset-toolbox.application/1', mcp: Boolean(mcpHandler) } });
+        if (req.url === '/health' && req.method === 'GET') return send(res, 200, { schema: 'asset-toolbox.response/2', ok: true, result: { applicationApi: 'asset-toolbox.application/2', mcp: Boolean(mcpHandler) } });
+        if (req.url?.startsWith('/api/v1/')) return reject(410, 'UNSUPPORTED_VERSION', '请使用 /api/v2/；旧应用接口已停用');
         const mcp = req.url === '/mcp' && mcpHandler;
-        const action = /^\/api\/v1\/([a-z]+)$/.exec(req.url || '')?.[1];
+        const action = /^\/api\/v2\/([a-z]+)$/.exec(req.url || '')?.[1];
         if (!mcp && (!action || !Object.hasOwn(ACTION_FIELDS, action))) return reject(404, 'NOT_FOUND', '接口不存在');
         if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return reject(405, 'METHOD_NOT_ALLOWED', '此接口只接受 POST'); }
         if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(req.headers['content-type'] || '')) return reject(415, 'UNSUPPORTED_MEDIA_TYPE', '需要 application/json（UTF-8）');

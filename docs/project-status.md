@@ -1,8 +1,40 @@
 # 项目状态
 
-核验日期：2026-11-10（America/Los_Angeles）。应用版本 1.0.0；目录 API 3、提供方 API 2、操作 API 1/2、配置 schema /2、Agent 应用接口 /1。仓库：[ISQIShI/AssetToolbox](https://github.com/ISQIShI/AssetToolbox)。本轮从 `05b40ea` 开始统一应用入口并扩展本机 HTTP，保留默认 stdio；此前记录保留为历史基线。
+核验日期：2026-11-10（America/Los_Angeles）。应用版本 1.0.0；目录 API 3、提供方 API 2、操作 API 1/2、配置 schema /2；公共应用接口、响应与作业格式升级 /2。仓库：[ISQIShI/AssetToolbox](https://github.com/ISQIShI/AssetToolbox)。本轮从 `9fa3ced` 完整实现跨入口公共作业契约，保留 stdio 与 HTTP。
 
-## 统一应用服务与额外 HTTP 支持（本轮）
+## 完整统一公共作业契约（本轮）
+
+- 更正上一轮的完成判定：此前桌面仅转发进 ApplicationService，再经专用分支直接调用 JobSession，CLI 快捷命令也绕过服务。本轮已移除这些路径，全部入口复用同一 submit/status/cancel/results/jobs/tasks/validate/capabilities 实现。
+- 新增 contract.js 作为动作、输入 schema 与版本声明，MCP 使用现有 Zod 从核心 schema 生成适配；没有引入新依赖。权限、幂等作用域、connection/server 生命周期由不可从请求构造且冻结的启动上下文管理，应用服务不按入口分支。
+- 桌面使用持久 jobId/taskId、幂等键、分页任务/恢复结果；音频结果也从公共 results 获取。原生 JSON Lines 使用统一 response/2，Rust 验证版本再解包。设置与打开来源/报告保留桌面专属能力，不访问 JobSession；原生报告仅接收 jobId。
+- 全部作业登记到 data/jobs/v2，按当前权限重新授权跨入口查询/取消。桌面和本地 CLI 共用本地幂等作用域，相同 policy 的外部入口共用其作用域。关闭观察者不取消别人启动的作业；connection 断连取消自己拥有的作业，HTTP 请求断开继续，服务退出才取消。
+- CLI 快捷命令调用公共 submit 并返回结构化响应；api 可显式使用 --local，Agent 继续使用 --policy。batch.js 仅为内部 worker，移除直接恢复/续跑用户命令。恢复所有入口均要求非空哈希选择，不自动扩大范围。
+- 应用/response/job 升级 /2、HTTP 改用 /api/v2，旧 /api/v1 返回 410；旧 automation 存储不读写/迁移，旧桌面 start/poll 停用，需配套新 EXE 与核心。settings、素材 task/report 及扩展契约不变。新增[统一应用架构](architecture/application.md)、[ADR 0011](decisions/0011-unified-application.md)，同步协议、持久化、前后端、HTTP、操作说明、AGENTS 与索引。
+
+### 本轮验证
+
+| 检查 | 结果 |
+| --- | --- |
+| 核心全量与最终回归 | 便携 Node 24.19.0：全量 129 通过、0 失败/跳过，约 34.6 秒；含新增 3 项上下文/版本测试。最终 CLI 日志隔离修复后，application/unified 定向 13 项通过（约 12.9 秒，新增 1 项快捷 CLI 日志/持久作业测试）；未重复其他不受影响套件 |
+| MCP 与跨入口一致性 | 便携 Node 24.19.0：6 项通过，约 13.6 秒。包含真实桌面 JSON Lines、CLI、stdio MCP、HTTP API、HTTP MCP 的 schema/业务错误比较、桌面提交后跨入口取消、CLI 续跑、分页结果一致、授权查询、HTTP 断连继续及幂等重放；原 stdio 3 项保持通过 |
+| 前端 | 30 项组件/应用测试通过，约 5.5 秒；更新 submit/status/jobId/taskId/分页结果断言。独立 typecheck 与构建前置 typecheck 均通过 |
+| 原生构建 | npm run build 通过；Rust 1.99.1 release 约 1 分 35 秒，Vite 生产构建及便携 Node/Sharp 加载检查通过 |
+| 原生 E2E | 新 EXE 上 2 项通过、0 失败，约 49.9 秒；音频 14.2 秒，综合 35.3 秒。新增原生 IPC 与真实 CLI 状态逐字段一致、重启后同一 jobId 可查；真实安装/更新、缩放、取消/续跑/重试、哈希勾选恢复、运行中关闭均通过。未启用浏览器替代路径 |
+| 界面检查 | 查看新 EXE 的恢复清单 1220×850 和音频结果 840×620 截图；结果、勾选和报告按钮正常，原生用例的无横向溢出断言通过；没有改动视觉布局 |
+| 源码与文档 | 源码发布检查通过；38 篇 Markdown 相对链接无失效项；无新增第三方包，二进制、依赖、凭据及运行数据均未跟踪 |
+
+日志位于忽略目录 `.local/unified-review/`，截图位于 `desktop/test-results/`。只用生成素材和隔离副本。初次回归发现两处测试仍按旧 id/stderr 协议断言，已迁入新契约并通过全量回归，文件安全断言未删除。最终审查补齐快捷 CLI 的提供方加载日志隔离，并经定向回归确认 stdout 仍为单一 JSON；此改动仅影响外置 Node CLI，不改变 EXE。预览现在保留公共作业记录，对应测试仍检查素材、输出、其他项目文件不变且没有素材任务/报告。新 EXE 9,016,832 字节，SHA-256 `6d88533348f391f245449401198eef01117ad28ba3d87b3f309493f1296cee18`，已完成原生验收，仅留本地。
+
+### 当前边界
+
+- 同一安装仍串行执行，不提供队列、多用户租户或跨安装互斥；共享存储的可见性取决于当前权限，不等于给外部 Agent 桌面权限。
+- 已完成/预览作业持久保留，没有自动清理；任务与报告勿随意删除。结果响应分页，读取报告仍整体载入内存。未新增实时跨窗口作业面板。
+- 默认 stdio 保留，HTTP 仍需显式启动、回环监听、Bearer 令牌和 policy，不随桌面启动；未配置真实用户素材或注册具体 Agent 宿主。目录权限不替代 OS 沙箱。
+- 本轮仅本地提交，未推送远端或发布二进制；第三方提供方的分发约束保持不变。
+
+## HTTP 与应用门面（历史基线，9fa3ced）
+
+以下“统一应用服务”当时只表示入口收拢，桌面公共作业仍有独立实现；完整统一已由本轮替代。该节 /1、临时桌面 ID 和直接 CLI 的边界仅是历史记录。
 
 - CLI API、桌面桥接、HTTP API 与 MCP 双传输均进入 ApplicationService。桌面设置等业务移入应用层，桥接只转发 IPC；桌面受信任上下文与 Agent policy 上下文分开，网络不能选择或调用桌面专属能力。底层继续共用 JobSession、工作进程和执行锁。
 - 原 `agent-mcp/server.mjs --policy ...` 保持 stdio，不需要令牌、不监听端口。额外 `--transport http` 同时提供 `/api/v1/<action>` 与 `/mcp`；核心也有无需 MCP 包的独立 HTTP API 入口。工具与 schema 共用工厂，HTTP 每请求使用独立 MCP 协议实例。

@@ -103,8 +103,8 @@ test('current versus changed approved catalog is explicit and unknown requests c
     record.catalogHash = fingerprint(require('../framework/dependencies/catalog.json').providers.lame); fs.writeFileSync(file, JSON.stringify(record));
     assert.equal(management('lame', root).state, 'current');
     const bridge = new DesktopBridge();
-    for (const request of [{ mode: 'dependency-install', providerId: 'lame', url: 'https://evil.test' }, { mode: 'dependency-install', providerId: '../lame' }, { mode: 'dependency-install', providerId: '__proto__' }, { mode: 'dependency-install', providerId: 'jpg-c' }]) await assert.rejects(bridge.dispatch('start', request));
-    bridge.application.session.job = { exited: false }; await assert.rejects(bridge.dispatch('start', { mode: 'dependency-install', providerId: 'lame' }), /等待/);
+    for (const request of [{ mode: 'dependency-install', providerId: 'lame', url: 'https://evil.test' }, { mode: 'dependency-install', providerId: '../lame' }, { mode: 'dependency-install', providerId: '__proto__' }, { mode: 'dependency-install', providerId: 'jpg-c' }]) await assert.rejects(bridge.dispatch('submit', { request, idempotencyKey: 'invalid' }));
+    bridge.application.session.job = { exited: false }; await assert.rejects(bridge.dispatch('submit', { request: { mode: 'dependency-install', providerId: 'lame' }, idempotencyKey: 'busy' }), /活动作业/);
     assert.equal(management('pngquant', root).automatic, false); assert.equal(management('jpg-c', root).automatic, false);
 });
 

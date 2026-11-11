@@ -3,10 +3,10 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { JobSession } = require('./job-session');
 const { acquire, alive } = require('./lock');
-const { fail, record, canonical, loadPolicy, authorize, within } = require('./policy');
-const ROOT = path.join(__dirname, '..', 'data', 'automation');
-const DESKTOP = Symbol('trusted-desktop');
-const ACTION_FIELDS = Object.freeze({ capabilities: [], validate: ['request'], submit: ['request', 'idempotencyKey'], status: ['jobId'], cancel: ['jobId'], results: ['jobId', 'kind', 'offset', 'limit'], jobs: ['offset', 'limit'], tasks: ['offset', 'limit'] });
+const { fail, record, canonical, within } = require('./policy');
+const { localContext, policyContext, assertContext } = require('./context');
+const { API, RESPONSE, JOB, ACTION_FIELDS, inputSchemas } = require('./contract');
+const ROOT = path.join(__dirname, '..', 'data', 'jobs', 'v2');
 const fingerprint = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const read = filename => JSON.parse(fs.readFileSync(filename, 'utf8'));
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
@@ -32,20 +32,18 @@ function capabilities() {
     const catalog = require('../framework/registry').describe();
     for (const operation of catalog.operations) operation.parametersSchema = fieldsSchema(operation.fields);
     for (const provider of catalog.providers) for (const adapter of provider.adapters) adapter.providerOptionsSchema = fieldsSchema(adapter.fields);
-    return { ...catalog, applicationApi: 'asset-toolbox.application/1', notes: '字段 schema 供发现使用；公共参数、跨字段约束和版本由 validate 再次核验。预览仅扫描，不测量或编码。' };
+    return { ...catalog, applicationApi: API, inputSchemas, notes: '字段 schema 供发现使用；公共参数、跨字段约束和版本由 validate 再次核验。预览仅扫描，不测量或编码。' };
 }
 
 class ApplicationService {
-    constructor(policyFile) {
-        this.desktop = policyFile === DESKTOP;
-        if (!this.desktop) {
-            this.policy = loadPolicy(policyFile);
-            this.scope = fingerprint(stable(this.policy));
-            this.directory = path.join(ROOT, this.scope);
-        }
+    constructor(context) {
+        this.context = assertContext(typeof context === 'string' ? policyContext(context) : context);
+        this.policy = this.context.policy;
+        this.scope = this.context.scope;
+        this.directory = ROOT;
         this.session = new JobSession();
     }
-    static forDesktop() { return new ApplicationService(DESKTOP); }
+    static forDesktop() { return new ApplicationService(localContext({ settings: true })); }
     taskFile(id) {
         if (typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(id)) fail('INVALID_REQUEST', '无效任务 ID');
         const root = require('../tasks').TASK_ROOT, filename = path.join(root, id, 'task.json');
@@ -82,7 +80,7 @@ class ApplicationService {
             if (!info.automatic) fail('MANUAL_INSTALL_REQUIRED', info.reason);
             request = { ...input };
         } else fail('INVALID_REQUEST', '不支持的作业模式');
-        authorize(request, this.policy);
+        this.context.authorize(request);
         if (['process', 'preview'].includes(request.mode)) {
             // 空文件清单只做目录/保存方式预检，不扫描素材或执行提供方。
             require('../engine').prepareFolder(request.folder, { ...request, fileList: [] });
@@ -92,12 +90,12 @@ class ApplicationService {
     metadata(id) {
         if (typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id)) fail('INVALID_REQUEST', '无效作业 ID');
         const directory = path.join(this.directory, id);
-        if (!fs.existsSync(directory)) fail('NOT_FOUND', '此权限范围内没有该作业');
+        if (!fs.existsSync(directory)) fail('NOT_FOUND', '没有该 /2 作业；不读取或迁移旧 /1 作业');
         if (fs.realpathSync(directory) !== directory) fail('PATH_FORBIDDEN', '作业目录不能是链接');
         const meta = read(path.join(directory, 'job.json'));
-        if (meta.schema !== 'asset-toolbox.job/1' || meta.scope !== this.scope || meta.id !== id) fail('UNSUPPORTED_VERSION', '作业格式或权限范围不符');
+        if (meta.schema !== JOB || meta.id !== id) fail('UNSUPPORTED_VERSION', '作业格式不支持');
         // 重新授权，防止重启后目录链接发生变化。
-        authorize(meta.request, this.policy);
+        this.context.authorize(meta.request);
         return { ...meta, directory };
     }
     submit(input, idempotencyKey) {
@@ -118,10 +116,10 @@ class ApplicationService {
                 if (missing.length) fail('DEPENDENCY_MISSING', missing.map(provider => provider.id + '：' + provider.availability.reason + '；' + provider.acquisition?.instructions).join('\n'));
             }
             fs.mkdirSync(directory, { recursive: true });
-            const meta = { schema: 'asset-toolbox.job/1', id, scope: this.scope, requestHash, request, createdAt: new Date().toISOString(), ownerPid: process.pid };
+            const meta = { schema: JOB, id, scope: this.scope, requestHash, request, createdAt: new Date().toISOString(), ownerPid: process.pid };
             writeExclusive(path.join(directory, 'job.json'), meta);
             try {
-                this.session.start(request.mode === 'dependency-install' ? request : { ...request, _automationPolicy: this.policy }, { directory, id });
+                this.session.start(request.mode === 'dependency-install' || !this.policy ? request : { ...request, _automationPolicy: this.policy }, { directory, id });
             } catch (error) {
                 fs.writeFileSync(path.join(directory, 'status.json'), JSON.stringify({ phase: 'finished', done: true, exitCode: 1, error: error.message, errorCode: 'START_FAILED' }));
                 throw error;
@@ -153,27 +151,33 @@ class ApplicationService {
     }
     status(id) {
         const state = this.rawStatus(id);
-        const { reportDirectory, audioResults, preview, task, ...summary } = state;
+        const { reportDirectory, preview, task, ...summary } = state;
         if (task) { const { taskFile, ...info } = task; summary.task = info; summary.taskId = info.id; }
         if (preview) { const { files, ...info } = preview; summary.preview = info; }
-        return { jobId: id, ...summary, hasReport: Boolean(reportDirectory) };
+        return { jobId: id, processed: 0, total: 0, ...summary, hasReport: Boolean(reportDirectory) };
+    }
+    reportLocation(id) {
+        const state = this.rawStatus(id);
+        if (!state.done) fail('NOT_READY', '作业结束后读取报告');
+        if (!state.reportDirectory) fail('NOT_FOUND', '此作业没有报告');
+        const root = path.join(__dirname, '..', 'data', 'reports'), filename = path.join(state.reportDirectory, 'report.json');
+        if (!within(root, state.reportDirectory) || fs.realpathSync(filename) !== filename) fail('PATH_FORBIDDEN', '报告路径无效');
+        return state.reportDirectory;
     }
     results(id, kind, pagination) {
         const state = this.rawStatus(id);
         if (!state.done) fail('NOT_READY', '作业结束后读取明细');
         if (!['files', 'audio', 'restore'].includes(kind)) fail('INVALID_REQUEST', 'kind 必须为 files、audio 或 restore');
         if (kind === 'restore') return page(state.preview?.files || [], pagination);
-        if (!state.reportDirectory) fail('NOT_FOUND', '此作业没有报告');
-        const root = path.join(__dirname, '..', 'data', 'reports'), filename = path.join(state.reportDirectory, 'report.json');
-        if (!within(root, state.reportDirectory) || fs.realpathSync(filename) !== filename) fail('PATH_FORBIDDEN', '报告路径无效');
+        const filename = path.join(this.reportLocation(id), 'report.json');
         const report = read(filename);
         if (report.schema !== 'asset-toolbox.report/1') fail('UNSUPPORTED_VERSION', '报告版本不支持');
         return { ...page(kind === 'audio' ? report.audioResults || [] : report.files, pagination), summary: report.summary, error: report.error || null };
     }
     dispatch(action, input = {}) {
-        if (this.desktop) return require('./desktop-actions').dispatchDesktop(this, action, input, capabilities);
         if (!Object.hasOwn(ACTION_FIELDS, action)) fail('INVALID_REQUEST', '未知应用操作');
         record(input, ACTION_FIELDS[action]);
+        if (inputSchemas[action].required.some(key => !Object.hasOwn(input, key))) fail('INVALID_REQUEST', '请求缺少必需字段');
         switch (action) {
             case 'capabilities': return { ...capabilities(), policy: this.policy };
             case 'validate': {
@@ -191,20 +195,24 @@ class ApplicationService {
             case 'results': return this.results(input.jobId, input.kind || 'files', input);
             case 'jobs': {
                 const ids = fs.existsSync(this.directory) ? fs.readdirSync(this.directory).filter(id => /^[a-f0-9]{64}$/.test(id)) : [];
-                return page(ids.map(id => { const meta = this.metadata(id); return { jobId: id, mode: meta.request.mode, createdAt: meta.createdAt }; }).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), input);
+                return page(ids.flatMap(id => {
+                    try { const meta = this.metadata(id); return [{ jobId: id, mode: meta.request.mode, createdAt: meta.createdAt }]; }
+                    catch (error) { if (['PATH_FORBIDDEN', 'PERMISSION_DENIED'].includes(error.code)) return []; throw error; }
+                }).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), input);
             }
             case 'tasks': {
                 const items = require('../tasks').listTasks().filter(info => {
-                    try { authorize({ mode: this.policy.allowRestore && info.backupDir ? 'restore-preview' : 'resume', taskFile: this.taskFile(info.id) }, this.policy); return true; } catch { return false; }
+                    try { this.context.authorize({ mode: (!this.policy || this.policy.allowRestore) && info.backupDir ? 'restore-preview' : 'resume', taskFile: this.taskFile(info.id) }); return true; } catch { return false; }
                 }).map(({ taskFile, ...info }) => info);
                 return page(items, input);
             }
         }
     }
     shutdown() { return this.session.shutdown(); }
+    disconnect() { return this.context.lifetime === 'connection' ? this.shutdown() : Promise.resolve(); }
 }
 async function respond(service, action, input) {
-    try { return { schema: 'asset-toolbox.response/1', ok: true, result: await service.dispatch(action, input) }; }
-    catch (error) { return { schema: 'asset-toolbox.response/1', ok: false, error: { code: ['INVALID_REQUEST', 'UNSUPPORTED_VERSION', 'PATH_FORBIDDEN', 'PERMISSION_DENIED', 'NOT_FOUND', 'BUSY', 'DEPENDENCY_MISSING', 'MANUAL_INSTALL_REQUIRED', 'IDEMPOTENCY_CONFLICT', 'NOT_READY'].includes(error.code) ? error.code : 'INVALID_REQUEST', message: error.message } }; }
+    try { return { schema: RESPONSE, ok: true, result: await service.dispatch(action, input) }; }
+    catch (error) { return { schema: RESPONSE, ok: false, error: { code: ['INVALID_REQUEST', 'UNSUPPORTED_VERSION', 'PATH_FORBIDDEN', 'PERMISSION_DENIED', 'NOT_FOUND', 'BUSY', 'DEPENDENCY_MISSING', 'MANUAL_INSTALL_REQUIRED', 'IDEMPOTENCY_CONFLICT', 'NOT_READY'].includes(error.code) ? error.code : 'INVALID_REQUEST', message: error.message } }; }
 }
 module.exports = { ApplicationService, respond, capabilities, page, ACTION_FIELDS };

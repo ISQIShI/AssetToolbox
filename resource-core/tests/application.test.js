@@ -35,7 +35,7 @@ function fixture(t, permissions = {}, count = 4, duration = 20) {
 test('application discovers live adapter schemas; validates scopes, unknown keys, versions and source preservation', async t => {
     const f = fixture(t);
     const catalog = (await f.call('capabilities')).result;
-    assert.equal(catalog.applicationApi, 'asset-toolbox.application/1');
+    assert.equal(catalog.applicationApi, 'asset-toolbox.application/2');
     assert.equal(catalog.operations.find(op => op.id === 'image-resize').parametersSchema.properties.width.minimum, 1);
     assert.ok(catalog.providers.find(p => p.id === 'ffmpeg').acquisition.instructions);
     assert.equal((await f.call('validate', { request: f.request })).ok, true);
@@ -118,9 +118,9 @@ test('desktop and external jobs contend on the same process lock; stale owners c
     const bridge = new DesktopBridge(); t.after(() => bridge.shutdown());
     const { jobId } = f.service.submit(f.request, 'active');
     await f.until(jobId, state => state.processed >= 1);
-    const other = bridge.start({ ...f.request, mode: 'preview' });
-    while (!bridge.poll(other.id).done) await delay(20);
-    assert.equal(bridge.poll(other.id).errorCode, 'BUSY');
+    const other = await bridge.dispatch('submit', { request: { ...f.request, mode: 'preview' }, idempotencyKey: 'competing' });
+    while (!(await bridge.dispatch('status', { jobId: other.jobId })).done) await delay(20);
+    assert.equal((await bridge.dispatch('status', { jobId: other.jobId })).errorCode, 'BUSY');
     await f.until(jobId);
     const lockModule = path.join(f.core, 'application/lock');
     const child = spawn(process.execPath, ['-e', `require(${JSON.stringify(lockModule)}).acquire();process.stdout.write('locked');setInterval(()=>{},1000);`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -138,7 +138,9 @@ test('symlink escapes and changed scopes cannot access jobs or redirect writes',
     const { jobId } = f.service.submit({ ...f.request, mode: 'preview' }, 'preview');
     await f.until(jobId);
     const policy = JSON.parse(fs.readFileSync(f.policyFile)); policy.allowRestore = true; fs.writeFileSync(f.policyFile, JSON.stringify(policy));
-    assert.throws(() => new f.ApplicationService(f.policyFile).status(jobId), { code: 'NOT_FOUND' });
+    assert.equal(new f.ApplicationService(f.policyFile).status(jobId).done, true);
+    const denied = { ...policy, sourceRoots: [] }; fs.writeFileSync(f.policyFile, JSON.stringify(denied));
+    assert.throws(() => new f.ApplicationService(f.policyFile).status(jobId), { code: 'PATH_FORBIDDEN' });
     fs.unlinkSync(linked); fs.rmdirSync(f.output); fs.symlinkSync(outside, f.output, 'junction');
     assert.throws(() => f.service.status(jobId), { code: 'PATH_FORBIDDEN' });
 });

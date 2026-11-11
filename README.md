@@ -65,13 +65,14 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 .\runtime\node.exe resource-core/cli.js "D:\Assets" --pipeline pipeline.json --output "D:\Results"
 ```
 
-直接 CLI 不创建持久任务。需要续跑时，将 `{ "mode": "process", "folder": "D:\\Assets", "pipeline": [...] }` 写入实际 JSON 请求文件（`[...]` 替换为步骤数组），执行 `node resource-core/batch.js request.json`；状态文件写到请求文件所在目录。
+上述快捷命令与桌面、CLI API、MCP 和 HTTP 使用同一应用 /2 服务，返回结构化响应并创建持久 jobId；处理还生成 taskId，可续跑和恢复。API 的本机人工调用可显式使用 --local，外部 Agent 使用固定 --policy。
 
 ```powershell
-.\runtime\node.exe resource-core/batch.js --resume "D:\Task\task.json"
-.\runtime\node.exe resource-core/batch.js --retry "D:\Task\task.json"
-.\runtime\node.exe resource-core/batch.js --restore-preview "D:\Task\task.json"
-.\runtime\node.exe resource-core/batch.js --restore "D:\Task\task.json" --selection selection.json
+.\runtime\node.exe resource-core/cli.js api submit --local --input request.json
+.\runtime\node.exe resource-core/cli.js api jobs --local
+.\runtime\node.exe resource-core/cli.js api status --local --input status.json
 ```
 
-勾选清单为预览返回的 `{path, backupHash, targetHash}` 数组；空数组表示不恢复，不可当成省略。CLI 省略 selection 会采用该命令的默认恢复范围，桌面始终显式传入。退出码 0 表示成功，1 表示失败，2 表示取消（失败优先）。
+续跑 request.json 示例：`{"request":{"mode":"resume","taskId":"<任务 ID>"},"idempotencyKey":"resume-001"}`；status.json 为 `{"jobId":"<作业 ID>"}`。恢复先提交 restore-preview，再从 results 的 restore 分页选择 `{path,backupHash,targetHash}`，执行时显式传非空 selection；省略或空数组均拒绝。batch.js 仅为内部 worker，旧批处理 CLI 不再支持。退出码 0 完成、1 失败、2 取消（失败优先）。
+
+应用 /2、HTTP /api/v2 和持久 job/2 不迁移旧 /1 作业；素材任务/报告及 settings 版本不变，桌面须使用配套新 EXE 与核心。详细契约和最终架构见[统一应用接口](docs/architecture/application.md)。

@@ -131,8 +131,9 @@ test('preview worker and --preview CLI are read-only and preserve caller paramet
     const output = path.join(root, 'not-created');
     const pipelineFile = path.join(root, 'pipeline.json'); fs.writeFileSync(pipelineFile, JSON.stringify(compressionPipeline({ fixtureEnabled: false }, path.join(tool, 'resource-core'))));
     const result = spawnSync(process.execPath, [path.join(tool, 'resource-core/cli.js'), source, '--preview', '--pipeline', pipelineFile, '--output', output], { encoding: 'utf8' });
-    assert.equal(result.status, 0, result.stderr); assert.equal(JSON.parse(result.stdout).enabledFiles, 0);
-    assert.equal(fs.existsSync(output), false); assert.deepEqual(tree(tool), before);
+    assert.equal(result.status, 0, result.stderr); assert.equal(JSON.parse(result.stdout).result.state.preview.enabledFiles, 0);
+    assert.equal(fs.existsSync(output), false); assert.deepEqual(tree(tool).filter(item => !/^resource-core[\\/]data(?:[\\/]jobs(?:[\\/]|$)|$)/.test(item)), before);
+    assert.equal(fs.existsSync(path.join(tool, 'resource-core/data/tasks')), false); assert.equal(fs.existsSync(path.join(tool, 'resource-core/data/reports')), false);
     const empty = path.join(root, 'empty'); fs.mkdirSync(empty);
     const emptyStatus = batch.runJob({ mode: 'preview', folder: empty }, job, reports);
     assert.equal(emptyStatus.processed, 0); assert.equal(emptyStatus.total, 0);

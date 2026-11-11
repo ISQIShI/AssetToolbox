@@ -1,4 +1,4 @@
-const { compressionPipeline, engineFor, batchFor, installType } = require('./helpers');
+const { compressionPipeline, engineFor, batchFor, installType, cliJob, cliCommand } = require('./helpers');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -75,9 +75,9 @@ test('cancel and reopen continues only pending restore files and preserves alrea
     const f = fixture(t), partial = f.recover('restore', 1);
     assert.equal(partial.exitCode, 2); assert.equal(partial.task.restored, 1); assert.equal(partial.task.restorePending, 2);
     const one = path.join(f.source, '二级/a.pack'); fs.writeFileSync(one, 'new edit');
-    const command = spawnSync(process.execPath, [path.join(f.tool, 'resource-core/batch.js'), '--restore', f.taskFile], { encoding: 'utf8', windowsHide: true });
+    const command = spawnSync(process.execPath, cliJob(f.tool, { mode: 'restore', taskId: path.basename(path.dirname(f.taskFile)), selection: f.run({ mode: 'restore-preview', taskFile: f.taskFile }).preview.files.filter(file => file.selectable).map(({ path, backupHash, targetHash }) => ({ path, backupHash, targetHash })) }), { encoding: 'utf8', windowsHide: true });
     assert.equal(command.status, 0, command.stderr);
-    const state = JSON.parse(command.stdout); assert.equal(state.summary.total, 2); assert.equal(state.task.restored, 3);
+    const state = JSON.parse(command.stdout).result.state; assert.equal(state.summary.total, 2); assert.equal(state.task.restored, 3);
     assert.equal(fs.readFileSync(one, 'utf8'), 'new edit');
 });
 
@@ -151,8 +151,8 @@ test('restoration respects the compression task lock', t => {
 test('restoration works with all processors removed in a fresh process', t => {
     const f = fixture(t);
     fs.renameSync(path.join(f.tool, 'resource-core/providers'), path.join(f.tool, 'resource-core/disabled-processors'));
-    const result = spawnSync(process.execPath, [path.join(f.tool, 'resource-core/batch.js'), '--restore', f.taskFile], { encoding: 'utf8', windowsHide: true });
-    assert.equal(result.status, 0, result.stdout + result.stderr); assert.equal(JSON.parse(result.stdout).summary.restored, 3); verify(f);
+    const result = spawnSync(process.execPath, cliJob(f.tool, { mode: 'restore', taskId: path.basename(path.dirname(f.taskFile)), selection: f.run({ mode: 'restore-preview', taskFile: f.taskFile }).preview.files.filter(file => file.selectable).map(({ path, backupHash, targetHash }) => ({ path, backupHash, targetHash })) }), { encoding: 'utf8', windowsHide: true });
+    assert.equal(result.status, 0, result.stdout + result.stderr); assert.equal(JSON.parse(result.stdout).result.state.summary.restored, 3); verify(f);
 });
 
 test('junctions in either source or backup are refused without touching redirected files', { skip: process.platform !== 'win32' }, t => {

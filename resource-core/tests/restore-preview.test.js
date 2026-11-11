@@ -1,4 +1,4 @@
-const { compressionPipeline, engineFor, batchFor, installType } = require('./helpers');
+const { compressionPipeline, engineFor, batchFor, installType, cliJob, cliCommand } = require('./helpers');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -97,8 +97,8 @@ test('cancel and restart resumes only the persisted checked set, leaving unselec
         const partial = f.restore.restoreTask(task, { selection, shouldCancel: () => count >= 1, onFile: () => { count++; } });
         assert.equal(partial.cancelled, true); assert.equal(task.info().restoreSelectedPending, 2);
     } finally { unlock(); }
-    const result = spawnSync(process.execPath, [path.join(f.tool, 'resource-core/batch.js'), '--restore', f.taskFile], { encoding: 'utf8', windowsHide: true });
-    assert.equal(result.status, 0, result.stdout + result.stderr); assert.equal(JSON.parse(result.stdout).summary.restored, 2);
+    const result = spawnSync(process.execPath, cliJob(f.tool, { mode: 'restore', taskId: path.basename(path.dirname(f.taskFile)), selection: f.preview().preview.files.filter(file => file.inLastSelection && file.queue === 'pending' && file.selectable).map(select) }), { encoding: 'utf8', windowsHide: true });
+    assert.equal(result.status, 0, result.stdout + result.stderr); assert.equal(JSON.parse(result.stdout).result.state.summary.restored, 2);
     assert.deepEqual(sourceBytes(f, 1), f.processed.get(f.paths[1]));
     assert.equal(f.tasks.loadTask(f.taskFile).info().restoreSelectedPending, 0);
 });
@@ -166,14 +166,16 @@ test('old backup preview and selective export support arbitrary file types, prot
 });
 
 test('CLI previews and accepts a Unicode JSON checked list without restoring other files', t => {
-    const f = fixture(t), script = path.join(f.tool, 'resource-core/batch.js');
-    const p = spawnSync(process.execPath, [script, '--restore-preview', f.taskFile], { encoding: 'utf8', windowsHide: true });
+    const f = fixture(t), taskId = path.basename(path.dirname(f.taskFile));
+    const p = spawnSync(process.execPath, cliJob(f.tool, { mode: 'restore-preview', taskId }), { encoding: 'utf8', windowsHide: true });
     assert.equal(p.status, 0, p.stderr);
     assert.equal(/[^\x00-\x7f]/.test(p.stdout), false, 'CLI JSON must survive legacy PowerShell native encoding');
+    const listed = spawnSync(process.execPath, cliCommand(f.tool, 'results', { jobId: JSON.parse(p.stdout).result.jobId, kind: 'restore' }), { encoding: 'utf8', windowsHide: true });
+    assert.equal(listed.status, 0, listed.stderr);
     const selectionFile = path.join(f.root, '勾选 清单.json');
-    fs.writeFileSync(selectionFile, '\uFEFF' + JSON.stringify([select(JSON.parse(p.stdout).preview.files[2])]));
-    const run = spawnSync(process.execPath, [script, '--restore', f.taskFile, '--selection', selectionFile], { encoding: 'utf8', windowsHide: true });
-    assert.equal(run.status, 0, run.stdout + run.stderr); assert.equal(JSON.parse(run.stdout).summary.restored, 1);
+    fs.writeFileSync(selectionFile, '\uFEFF' + JSON.stringify([select(JSON.parse(listed.stdout).result.items[2])]));
+    const run = spawnSync(process.execPath, cliJob(f.tool, { mode: 'restore', taskId, selection: JSON.parse(fs.readFileSync(selectionFile, 'utf8').replace(/^\uFEFF/, '')) }), { encoding: 'utf8', windowsHide: true });
+    assert.equal(run.status, 0, run.stdout + run.stderr); assert.equal(JSON.parse(run.stdout).result.state.summary.restored, 1);
     assert.deepEqual(sourceBytes(f, 0), f.processed.get(f.paths[0]));
 });
 

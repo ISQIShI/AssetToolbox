@@ -28,10 +28,11 @@ beforeEach(() => {
     catalog = structuredClone(definition);
     vi.mocked(call).mockImplementation(async (action, payload) => {
         if (action === 'bootstrap') return { config: structuredClone(config), definition: catalog, warnings: [] } as any;
-        if (action === 'tasks') return [task] as any;
+        if (action === 'tasks') return { items: [task], total: 1, nextOffset: null } as any;
         if (action === 'providers') return structuredClone(catalog.providers) as any;
-        if (action === 'start') return { id: 'job-1' } as any;
-        if (action === 'poll') return { ...state } as any;
+        if (action === 'submit') return { jobId: 'job-1', replayed: false } as any;
+        if (action === 'status') return { ...state, preview: state.preview ? { ...state.preview, files: undefined } : undefined } as any;
+        if (action === 'results') return { items: restorePreview.files, total: restorePreview.files.length, nextOffset: null } as any;
         return payload as any;
     });
 });
@@ -41,7 +42,7 @@ it('shows scan progress in the dock, then files the result under the pipeline in
     await mountApp();
     await button('扫描预览').trigger('click'); await flushPromises();
     expect(wrapper.find('.dock').attributes('data-state')).toBe('running');
-    expect(call).toHaveBeenCalledWith('start', expect.objectContaining({ mode: 'preview', folder: config.sourceDir, backupDir: config.backupDir }));
+    expect(call).toHaveBeenCalledWith('submit', { request: expect.objectContaining({ mode: 'preview', folder: config.sourceDir, backupDir: config.backupDir }), idempotencyKey: expect.any(String) });
     await finish({ processed: 35, preview: scan });
     expect(wrapper.find('.dock').exists()).toBe(false);
     expect(wrapper.find('h2').text()).toBe('扫描结果');
@@ -58,7 +59,7 @@ it('keeps a running job cancellable from any page and reports a cancelled scan w
     await button('扫描预览').trigger('click'); await flushPromises(); await go('恢复');
     expect(wrapper.find('.dock').text()).toContain('扫描预览');
     await button('取消').trigger('click'); await flushPromises();
-    expect(call).toHaveBeenCalledWith('cancel', { id: 'job-1' });
+    expect(call).toHaveBeenCalledWith('cancel', { jobId: 'job-1' });
     expect(wrapper.find('.dock').text()).toContain('等待当前文件结束');
     await finish({ processed: 1, cancelled: true, exitCode: 2, preview: { ...scan, checked: 1, cancelled: true } });
     expect(wrapper.find('.dock').exists()).toBe(false);
@@ -72,7 +73,7 @@ it('keeps a finished result in the dock across pages until dismissed, without to
     await button('开始处理').trigger('click'); await flushPromises();
     expect(call).toHaveBeenCalledWith('save', expect.anything());
     await go('任务');
-    await finish({ processed: 35, summary: { total: 35, processed: 30, skipped: 4, failed: 1, savedBytes: 2048 }, task, reportDirectory: 'D:\\r' });
+    await finish({ processed: 35, summary: { total: 35, processed: 30, skipped: 4, failed: 1, savedBytes: 2048 }, task, hasReport: true });
     const dock = wrapper.find('.dock');
     expect(dock.attributes('data-state')).toBe('done');
     expect(dock.text()).toContain('完成，1 个失败'); expect(dock.text()).toContain('−2.0 KB');
@@ -120,10 +121,10 @@ it('adds a step from the catalog menu, selects it, and removes it again', async 
 it('resumes and retries tasks by task file only', async () => {
     await mountApp(); await go('任务');
     await button('继续未完成').trigger('click'); await flushPromises();
-    expect(call).toHaveBeenCalledWith('start', { mode: 'resume', taskFile: task.taskFile });
+    expect(call).toHaveBeenCalledWith('submit', { request: { mode: 'resume', taskId: task.id }, idempotencyKey: expect.any(String) });
     await finish({ summary: { total: 3, processed: 3, skipped: 0, failed: 0, savedBytes: 0 } });
     await button('重试失败项').trigger('click'); await flushPromises();
-    expect(call).toHaveBeenCalledWith('start', { mode: 'retry', taskFile: task.taskFile });
+    expect(call).toHaveBeenCalledWith('submit', { request: { mode: 'retry', taskId: task.id }, idempotencyKey: expect.any(String) });
 });
 
 it('keeps the write policy visible and links it to its settings without changing the configuration', async () => {
@@ -138,7 +139,7 @@ it('keeps the write policy visible and links it to its settings without changing
     await wrapper.find('input[value="saveAs"]').setValue(true);
     expect(summary().text()).toBe('另存结果，保留原文件');
     expect(call).not.toHaveBeenCalledWith('save', expect.anything());
-    expect(call).not.toHaveBeenCalledWith('start', expect.anything());
+    expect(call).not.toHaveBeenCalledWith('submit', expect.anything());
 });
 
 it('returns keyboard focus to the add-step button when Escape dismisses its choices', async () => {
@@ -156,12 +157,12 @@ it('returns keyboard focus to the add-step button when Escape dismisses its choi
 it('checks a task backup, then restores exactly the selected files with hashes', async () => {
     await mountApp(); await go('任务');
     await button('检查备份').trigger('click'); await flushPromises();
-    expect(call).toHaveBeenCalledWith('start', { mode: 'restore-preview', taskFile: task.taskFile });
+    expect(call).toHaveBeenCalledWith('submit', { request: { mode: 'restore-preview', taskId: task.id }, idempotencyKey: expect.any(String) });
     await finish({ preview: restorePreview });
     expect(wrapper.find('.dock').exists()).toBe(false);
     await wrapper.find('input[aria-label="恢复 b.png"]').setValue(false);
     await button('恢复所选 1 项').trigger('click'); await flushPromises();
-    expect(call).toHaveBeenCalledWith('start', { mode: 'restore', taskFile: task.taskFile, selection: [{ path: 'a.png', backupHash: 'a'.repeat(64), targetHash: 'b'.repeat(64) }] });
+    expect(call).toHaveBeenCalledWith('submit', { request: { mode: 'restore', taskId: task.id, selection: [{ path: 'a.png', backupHash: 'a'.repeat(64), targetHash: 'b'.repeat(64) }] }, idempotencyKey: expect.any(String) });
 });
 
 it('checks a standalone backup with both folders', async () => {
@@ -172,7 +173,7 @@ it('checks a standalone backup with both folders', async () => {
     const [backup, target] = wrapper.findAll('input.path');
     await backup!.setValue('D:\\独立备份'); await target!.setValue('D:\\目标');
     await button('检查独立备份').trigger('click'); await flushPromises();
-    expect(call).toHaveBeenCalledWith('start', { mode: 'restore-export-preview', backupDir: 'D:\\独立备份', outputDir: 'D:\\目标' });
+    expect(call).toHaveBeenCalledWith('submit', { request: { mode: 'restore-export-preview', backupDir: 'D:\\独立备份', outputDir: 'D:\\目标' }, idempotencyKey: expect.any(String) });
 });
 
 it('installs a missing dependency by ID, locks concurrent work and refreshes availability without losing edits', async () => {
@@ -181,7 +182,7 @@ it('installs a missing dependency by ID, locks concurrent work and refreshes ava
     await wrapper.find('input.path').setValue('D:\\正在编辑');
     await go('工具');
     await button('获取并安装').trigger('click'); await flushPromises();
-    expect(call).toHaveBeenCalledWith('start', { mode: 'dependency-install', providerId: 'test' });
+    expect(call).toHaveBeenCalledWith('submit', { request: { mode: 'dependency-install', providerId: 'test' }, idempotencyKey: expect.any(String) });
     expect(button('获取并安装').attributes('disabled')).toBeDefined();
     expect(button('刷新依赖状态').attributes('disabled')).toBeDefined();
     catalog.providers = [{ ...catalog.providers[0]!, availability: { available: true, reason: '' }, dependency: { automatic: true, state: 'current', action: 'reinstall', installedVersion: '4.0', targetVersion: '4.0', reason: '核验版本' } }];
@@ -198,7 +199,7 @@ it('offers updates only for managed plans and keeps cancellation/errors visible'
     expect(wrapper.text()).toContain('有新的核验版本');
     await button('更新到核验版本').trigger('click'); await flushPromises();
     await button('取消').trigger('click'); await flushPromises();
-    expect(call).toHaveBeenCalledWith('cancel', { id: 'job-1' });
+    expect(call).toHaveBeenCalledWith('cancel', { jobId: 'job-1' });
     expect(wrapper.find('.dock').text()).toContain('等待依赖检查结束');
     await finish({ cancelled: true, exitCode: 2, message: '安装已取消，原安装保持不变。' });
     expect(wrapper.find('.dock').text()).toContain('原安装保持不变');

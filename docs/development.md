@@ -42,9 +42,9 @@ Vite 热更新只监听前端相关文件，排除 `src-tauri/`，避免 Windows
 
 原生测试复制工具、生成样本、使用独立 WebView 用户目录和本机随机 CDP 端口；截图位于 `desktop/test-results/`。它使用系统 WebView2，无需另装 Playwright Chromium 浏览器。只对旧 EXE 跑 E2E 不能证明新源码构建正确。
 
-Agent 接口的核心验收为 `node --test tests/application.test.js`（resource-core 目录）：含生成图片/音频、目录权限、幂等、分页、恢复/导出及跨入口锁。MCP 使用 Node 24+，需额外安装 agent-mcp 依赖；不会由桌面构建隐式安装。配置和 CLI 示例见[自动化专题](architecture/automation.md)。
+公共应用接口的核心验收为 `node --test tests/application.test.js tests/unified.test.js`（resource-core 目录）：含生成图片/音频、目录权限、幂等、分页、恢复/导出、上下文所有权/生命周期、版本拒绝及跨入口锁。MCP 使用 Node 24+，需额外安装 agent-mcp 依赖；不会由桌面构建隐式安装。配置和 CLI 示例见[自动化专题](architecture/automation.md)。
 
-HTTP 改动增加 `node --test tests/http.test.js`：真实回环 socket、令牌/Host/Origin、请求上限、状态码、生命周期与独立入口；联合服务还需运行 MCP 的 HTTP 官方客户端测试。仅在测试中使用随机端口和随机令牌，不把开发凭据提交到仓库。实际服务启动见[HTTP 指南](architecture/http.md)。
+HTTP 改动增加 `node --test tests/http.test.js`：真实回环 socket、令牌/Host/Origin、请求上限、状态码、生命周期与独立入口；联合服务还需运行 MCP 的 HTTP 官方客户端测试，其中五入口联合用例覆盖真实桌面 JSON Lines、CLI、stdio MCP、HTTP 与 HTTP MCP；原生 E2E 另比较 EXE/CLI 状态和重启后的同一 jobId。仅在测试中使用随机端口和随机令牌，不把开发凭据提交到仓库。实际服务启动见[HTTP 指南](architecture/http.md)。
 
 依赖管理验收：`resource-core/` 下 `node --test tests/dependencies.test.js` 使用合成归档测试来源/摘要、路径与解包边界、失败保护和取消；原生 E2E 还从 RareWares/npm registry 真实安装 LAME/Sharp 并更新，必须联网。安装等待按每包最多 60 秒及运行探测预留，Sharp 五个包最多等待 330 秒；普通作业仍为 30 秒。更换核验清单时同步来源记录与锁文件，不能为测试通过跳过校验。
 

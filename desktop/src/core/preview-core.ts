@@ -65,7 +65,7 @@ let config: Configuration = {
     ],
 };
 const task = (id: string, source: string, completed: number, pending: number, failed: number, extra: Partial<Task> = {}): Task => ({
-    taskFile: `D:\\data\\tasks\\${id}.jsonl`, id, createdAt: '2026-11-07T14:32:00Z', source, total: completed + pending + failed, completed, pending, failed,
+    id, createdAt: '2026-11-07T14:32:00Z', source, total: completed + pending + failed, completed, pending, failed,
     backupCount: completed, restored: 0, restoreFailed: 0, restoreStarted: false, canResume: pending > 0, canRetry: failed > 0, canRestore: completed > 0, canContinueRestore: false, canRetryRestore: false,
     backupSession: completed ? 'D:\\Projects\\StarHarbor\\Backups\\20261107-143200' : undefined, ...extra,
 });
@@ -107,7 +107,7 @@ function poll(id: string): JobState {
         case 'preview': state.preview = { ...scan, cancelled: Boolean(job.cancelled), checked: processed }; break;
         case 'restore-preview': case 'restore-export-preview': state.preview = restore; break;
         case 'restore': case 'restore-export': state.summary = { total: 4, restored: 4, restoredBytes: 3_500_000, skipped: 0, failed: 0 }; state.task = tasks[1]; break;
-        default: state.summary = { total, processed: processed - 12, skipped: 9, failed: 3, savedBytes: 96_300_000, copied: 0, backedUp: processed - 12 }; state.task = tasks[1]; state.reportDirectory = 'D:\\data\\reports\\x';
+        default: state.summary = { total, processed: processed - 12, skipped: 9, failed: 3, savedBytes: 96_300_000, copied: 0, backedUp: processed - 12 }; state.task = tasks[1]; state.hasReport = true;
     }
     return state;
 }
@@ -117,14 +117,17 @@ export async function call(action: string, payload: any): Promise<unknown> {
     switch (action) {
         case 'bootstrap': return { config: structuredClone(config), definition: structuredClone(definition), warnings: [], root: 'D:\\Tools\\AssetToolbox\\resource-core', nodeVersion: '24.19.0' } satisfies Bootstrap;
         case 'providers': return structuredClone(providers);
-        case 'tasks': return structuredClone(tasks);
+        case 'tasks': return page(tasks, payload);
         case 'normalize': return JSON.parse(JSON.stringify(payload));
         case 'save': config = JSON.parse(JSON.stringify(payload)); return structuredClone(config);
-        case 'start': { const id = crypto.randomUUID(); jobs.set(id, { request: payload, started: Date.now(), cancelled: false }); return { id }; }
-        case 'poll': return poll(payload.id);
-        case 'cancel': { const job = jobs.get(payload.id); if (job) job.cancelled = true; return { requested: true }; }
+        case 'submit': { const jobId = crypto.randomUUID(); jobs.set(jobId, { request: payload.request, started: Date.now(), cancelled: false }); return { jobId, replayed: false }; }
+        case 'status': { const state = poll(payload.jobId); if (state.preview && 'files' in state.preview) state.preview = { ...state.preview, files: [] }; return { ...state, jobId: payload.jobId }; }
+        case 'results': return page(payload.kind === 'restore' ? restore.files : [], payload);
+        case 'cancel': { const job = jobs.get(payload.jobId); if (job) job.cancelled = true; return { requested: true }; }
         default: throw new Error('未知桌面操作：' + action);
     }
 }
 
 export async function chooseFolder(title: string): Promise<string> { return `D:\\Projects\\StarHarbor\\${title.replace(/^选择/, '')}`; }
+
+function page<T>(items: T[], { offset = 0, limit = 50 }: { offset?: number; limit?: number }) { return { items: structuredClone(items.slice(offset, offset + limit)), total: items.length, nextOffset: offset + limit < items.length ? offset + limit : null }; }

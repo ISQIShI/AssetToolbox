@@ -12,8 +12,7 @@
 | `data/tasks/<id>/task.lock` 与 claim | PID/token 执行锁 |
 | `data/reports/<id>/report.json`、`files.csv` | `schema: asset-toolbox.report/1` 报告及 CSV |
 | `data/dependencies/<provider>/active.json`、`installs/<uuid>/` | `schema: 1` 受管理依赖启用记录与不可变副本，详见[依赖管理](dependencies.md)；不属于素材任务 |
-| 系统临时 `resource-desktop-*` | request/status/cancel，只属当前会话 |
-| `data/automation/<scope>/<jobId>/` | `asset-toolbox.job/1`、请求/状态/进程记录及取消标记；幂等键派生 jobId，见[自动化专题](automation.md) |
+| `data/jobs/v2/<jobId>/` | 全部入口的 `asset-toolbox.job/2`、请求/状态/进程记录及取消标记；上下文作用域与幂等键派生 jobId，见[统一应用接口](application.md) |
 | 系统临时 `asset-toolbox-locks-<安装路径哈希>/` | GUI/CLI/MCP 执行互斥及提交锁，PID/token 与竞争声明；不改变只读预览的项目目录 |
 
 全部 data、日志和个人路径不提交。缺少设置时只返回默认值，不创建文件；损坏或不支持 schema 时明确报错，不静默退回旧配置。保存先严格校验，再写同目录排他临时文件、fsync、rename；失败清理临时文件并保留旧内容。单文件配置替代原分散设置。
@@ -70,3 +69,5 @@ claim 登记后排他取得 PID/token 锁；只在确认进程退出且锁未变
 [ADR 0008](../decisions/0008-audio-observation.md) 没有改变配置 /2、任务/报告外层 /1 的结构。新增操作与适配器照常固定四项 versions。新配置默认 saveAs，已有显式设置不自动迁移。只观察的文件有 plan/result 与 sourceHash，没有素材 intent、备份或输出；result 的文件状态为 skipped，步骤为 analyzed。
 
 步骤 `metadata.audio` 保存 before/after 测量、增益、峰值限制及警告；失败步骤也可记录已测数据。report.json 的 audioResults 为本次处理的完整音频结果，额外生成 UTF-8 audio.csv；界面状态仅带前 100 条。失败文件所有音频步骤标记 fileStatus:failed，不表示已提交。CSV 沿用公式注入防护，报告写入失败不抹掉处理结果。
+
+应用 /2 不读取或迁移旧 data/automation 作业；新存储中的 job/1 明确拒绝。预览也保留作业记录，但不创建素材任务或报告。当前没有自动清理作业记录；已完成作业可跨入口和重启查询，权限每次重新核验。

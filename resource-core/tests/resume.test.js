@@ -1,4 +1,4 @@
-const { compressionPipeline, engineFor, batchFor, installType } = require('./helpers');
+const { compressionPipeline, engineFor, batchFor, installType, cliJob, cliCommand } = require('./helpers');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -59,8 +59,8 @@ test('cancel, restart, resume, and resume again never re-encode completed files 
     assert.equal(fs.readFileSync(path.join(f.source, 'new.pack'), 'utf8'), 'PACK:new');
     const third = f.run(resume(first.task.taskFile));
     assert.equal(third.summary.total, 0); assert.equal(f.calls().length, 3);
-    const command = spawnSync(process.execPath, [path.join(f.tool, 'resource-core/batch.js'), '--resume', first.task.taskFile], { encoding: 'utf8', windowsHide: true });
-    assert.equal(command.status, 0, command.stderr); assert.equal(JSON.parse(command.stdout).summary.total, 0); assert.equal(f.calls().length, 3);
+    const command = spawnSync(process.execPath, cliJob(f.tool, { mode: 'resume', taskId: first.task.id }), { encoding: 'utf8', windowsHide: true });
+    assert.equal(command.status, 0, command.stderr); assert.equal(JSON.parse(command.stdout).result.state.summary.total, 0); assert.equal(f.calls().length, 3);
 });
 
 test('pending and failed queues stay independent; successful skipped files are not retried', t => {
@@ -187,7 +187,7 @@ test('two processes recovering a stale lock cannot process the same pending file
     const implementation = path.join(f.module, 'index.js');
     fs.writeFileSync(implementation, fs.readFileSync(implementation, 'utf8').replace('const data=fs.readFileSync(input);', 'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,200); const data=fs.readFileSync(input);'));
     const launch = () => new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, [path.join(f.tool, 'resource-core/batch.js'), '--resume', first.task.taskFile], { windowsHide: true, stdio: 'ignore' });
+        const child = spawn(process.execPath, cliJob(f.tool, { mode: 'resume', taskId: first.task.id }), { windowsHide: true, stdio: 'ignore' });
         child.on('error', reject); child.on('exit', resolve);
     });
     const statuses = await Promise.all([launch(), launch()]);

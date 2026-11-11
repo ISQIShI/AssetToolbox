@@ -181,29 +181,12 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
 }
 
 if (require.main === module) {
-    let temporary;
     try {
-        if (['--resume', '--retry', '--restore', '--restore-retry', '--restore-export', '--restore-preview', '--restore-export-preview'].includes(process.argv[2])) {
-            const os = require('node:os');
-            temporary = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'resource-resume-'));
-            const exporting = process.argv[2].startsWith('--restore-export'), tail = process.argv.slice(exporting ? 5 : 4);
-            const request = { mode: process.argv[2].slice(2), taskFile: process.argv[3], backupDir: process.argv[3], outputDir: exporting ? process.argv[4] : undefined };
-            if (tail.length) {
-                if (tail.length !== 2 || tail[0] !== '--selection' || !tail[1] || !['restore', 'restore-retry', 'restore-export'].includes(request.mode)) throw new Error('用法：恢复命令后添加 --selection <勾选清单.json>');
-                request.selection = JSON.parse(fs.readFileSync(tail[1], 'utf8').replace(/^\uFEFF/, ''));
-            }
-            const state = runJob(request, temporary);
-            // PowerShell 5.1 的本机管道可能使用系统代码页；ASCII JSON 保留中文路径的可往返性。
-            console.log(JSON.stringify(state, null, 2).replace(/[\u007f-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))); process.exitCode = state.exitCode;
-        } else {
-            const requestFile = process.argv[2];
-            const request = JSON.parse(fs.readFileSync(requestFile, 'utf8').replace(/^\uFEFF/, ''));
-            process.exitCode = runJob(request, path.dirname(path.resolve(requestFile))).exitCode;
-        }
+        if (!process.argv[2] || process.argv[2].startsWith('--')) throw new Error('batch.js 仅供内部工作进程使用；请通过 cli.js api submit 提交 taskId 和显式恢复选择');
+        const requestFile = process.argv[2];
+        const request = JSON.parse(fs.readFileSync(requestFile, 'utf8').replace(/^\uFEFF/, ''));
+        process.exitCode = runJob(request, path.dirname(path.resolve(requestFile))).exitCode;
     } catch (error) { console.error(error.message); process.exitCode = 1; }
-    finally {
-        if (temporary && path.dirname(fs.realpathSync(temporary)) === fs.realpathSync(require('node:os').tmpdir()) && path.basename(temporary).startsWith('resource-resume-')) fs.rmSync(temporary, { recursive: true, force: true });
-    }
 }
 
 module.exports = { runJob, writeReport };

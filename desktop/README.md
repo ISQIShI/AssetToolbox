@@ -2,6 +2,8 @@
 
 阅读 [AGENTS.md](../AGENTS.md)、[开发指南](../docs/development.md)、[前端架构](../docs/architecture/frontend.md)及[通信协议](../docs/architecture/protocol.md)。
 
+桌面使用与 CLI/MCP/HTTP 相同的[公共作业 /2](../docs/architecture/application.md)，需配套新 EXE 与核心。旧 start/poll 与临时作业 ID 不再支持；所有入口的 jobId 可在授权范围内跨入口及重启查询。
+
 ## 源码发布范围
 
 GitHub 私有仓库使用 MIT，仅包含项目源码和许可记录；没有第三方 EXE/DLL 或完整便携包。依赖缺失时界面提供官方渠道、安装位置、许可说明和刷新按钮。对外二进制发布见[分发核对](../docs/distribution.md)。

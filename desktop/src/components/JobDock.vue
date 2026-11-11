@@ -60,7 +60,7 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
       <div class="actions">
         <button v-if="running" type="button" class="button" :disabled="job.cancelRequested" @click="bench.cancelJob()">取消</button>
         <template v-else>
-          <button v-if="state.reportDirectory" type="button" class="button" @click="bench.openJobReport()"><Icon name="report" />打开报告</button>
+          <button v-if="state.hasReport" type="button" class="button" @click="bench.openJobReport()"><Icon name="report" />打开报告</button>
           <button v-if="state.task" type="button" class="button" @click="bench.showTask(state.task); bench.dismissJob()">查看任务</button>
           <button type="button" class="button quiet icon-only" aria-label="关闭作业结果" title="关闭" @click="bench.dismissJob()"><Icon name="close" /></button>
         </template>

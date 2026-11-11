@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 const require = createRequire(import.meta.url);
 const project = fileURLToPath(new URL('../../', import.meta.url));
@@ -225,6 +225,15 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         const [adapterTask] = require(path.join(tool, 'resource-core/tasks.js')).listTasks();
         const adapterHeader = JSON.parse(fs.readFileSync(adapterTask.taskFile, 'utf8'));
         expect(adapterHeader.pipeline.map((s: any) => [s.provider, s.operation, s.versions.adapter])).toEqual([['extra', 'compress', '1.0.0'], ['extra', 'fixture-trim', '1.0.0']]);
+        // 原生 IPC 与真实 CLI 读取同一持久作业，格式和结果必须一致。
+        const completedJobId = observedJob; expect(completedJobId).toMatch(/^[a-f0-9]{64}$/);
+        const nativeStatus = await page.evaluate(jobId => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'status', payload: { jobId } }), completedJobId);
+        const cliStatus = spawnSync(path.join(tool, 'runtime/node.exe'), [path.join(tool, 'resource-core/cli.js'), 'api', 'status', '--local', '--input', '-'], { input: JSON.stringify({ jobId: completedJobId }), encoding: 'utf8', windowsHide: true, timeout: 15000 });
+        expect(cliStatus.status, cliStatus.stderr).toBe(0);
+        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/2');
+        expect(JSON.parse(cliStatus.stdout).result).toEqual(nativeStatus);
+        expect(nativeStatus.taskId).toBe(adapterTask.id); expect(nativeStatus.task).not.toHaveProperty('taskFile');
+        expect(nativeStatus.hasReport).toBe(true); expect(nativeStatus).not.toHaveProperty('reportDirectory');
         await button('关闭作业结果').click(); await button('删除步骤').click();
         await station('source').click();
         await page.getByLabel('来源文件夹', { exact: true }).fill(source);
@@ -232,6 +241,8 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await page.getByLabel('覆盖原文件', { exact: false }).check();
         await button('保存配置').click();
         await close(); await launch();
+        const reopenedStatus = await page.evaluate(jobId => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'status', payload: { jobId } }), completedJobId);
+        expect(reopenedStatus).toEqual(nativeStatus);
         await station('output').click();
         await expect(page.getByLabel('覆盖原文件', { exact: false })).toBeChecked();
         await expect(page.getByLabel('替换前备份原文件', { exact: false })).toBeChecked();

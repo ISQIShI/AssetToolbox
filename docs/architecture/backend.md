@@ -4,9 +4,9 @@
 
 ## 宿主和调度
 
-Rust 保持一个 Node JSON Lines 会话，对 invoke 请求串行派发；目录选择和打开报告留在原生层。桥接将消息委托给 ApplicationService 的本地桌面上下文，由应用动作白名单与 JobSession 管理临时目录、工作进程、轮询和 cancel。结构化 CLI、HTTP API 和两种 MCP 传输使用同一服务的受限 Agent 上下文，见[HTTP 专题](http.md)。宿主退出或失联时等待当前文件结束再清理。stdout 是桌面/stdio 协议通道，扩展日志使用 stderr。
+Rust 保持一个 Node JSON Lines 会话，对 invoke 请求串行派发；目录选择和打开报告留在原生层。桥接与全部 CLI、HTTP 和 MCP 一样，直接调用 ApplicationService 的公共作业动作；由启动上下文注入权限和生命周期。服务统一管理校验、幂等、持久 jobId、状态、取消和分页；JobSession 仅管理工作进程，见[统一应用接口](application.md)。宿主退出或失联时等待当前文件结束再清理。stdout 是桌面/stdio 协议通道，扩展日志使用 stderr。
 
-`batch.runJob()` 将 preview/process 分派到引擎，resume/retry 加载原任务快照、取锁并重读事件，恢复操作分派到 `restore.js`。配置或注册器失败时，恢复路径仍可运行。临时会话 ID 与持久 taskFile 不可混用。
+`batch.runJob()` 将 preview/process 分派到引擎，resume/retry 加载原任务快照、取锁并重读事件，恢复操作分派到 `restore.js`。配置或注册器失败时，恢复路径仍可运行。公共 jobId 与素材 taskId 分开；taskFile 只留在内部工作请求和任务存储。
 
 ## 执行引擎
 

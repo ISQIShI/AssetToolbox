@@ -38,4 +38,10 @@ function installType(tool, id) {
     fs.mkdirSync(directory, { recursive: true });
     fs.writeFileSync(path.join(directory, 'index.js'), `module.exports={apiVersion:1,version:'1.0.0',displayName:'测试资源',kind:'image',extensions:['.pack'],validate: data=>data.toString().startsWith('PACK:')};`);
 }
-module.exports = { compressionPipeline, engineFor, batchFor, installType };
+function cliCommand(tool, action, input) {
+    const filename = path.join(path.dirname(tool), 'cli-' + require('node:crypto').randomUUID() + '.json');
+    fs.writeFileSync(filename, JSON.stringify(input));
+    return [path.join(tool, 'resource-core/cli.js'), 'api', action, '--local', '--input', filename];
+}
+function cliJob(tool, request) { return cliCommand(tool, 'submit', { request, idempotencyKey: require('node:crypto').randomUUID() }); }
+module.exports = { compressionPipeline, engineFor, batchFor, installType, cliCommand, cliJob };

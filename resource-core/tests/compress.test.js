@@ -269,7 +269,9 @@ test('empty directories and invalid paths have clear outcomes', windowsOnly, t =
     });
     assert.ifError(result.error);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /目标不是文件夹/);
+    const failure = JSON.parse(result.stdout);
+    assert.equal(failure.ok, false); assert.equal(failure.error.code, 'INVALID_REQUEST');
+    assert.match(failure.error.message, /路径不是目录/);
 });
 
 test('save-as preserves every source hash and relative image path, including same-name files', windowsOnly, t => {
@@ -707,7 +709,7 @@ test('CLI forwards custom values and preserves save-as originals', windowsOnly, 
     const cliOutput = path.join(root, 'CLI 输出');
     const pipelineFile = path.join(root, 'pipeline.json'); fs.writeFileSync(pipelineFile, JSON.stringify(compressionPipeline(options)));
     const cli = spawnSync(process.execPath, [
-        path.join(projectRoot, 'resource-core/cli.js'), selected, '--output', cliOutput,
+        path.join(require('./portable').copyTool(root, true), 'resource-core/cli.js'), selected, '--output', cliOutput,
         '--pipeline', pipelineFile,
     ], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 120000 });
     assert.ifError(cli.error);

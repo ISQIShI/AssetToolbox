@@ -1,4 +1,3 @@
-const fs = require('node:fs');
 const path = require('node:path');
 
 // 只由本地桌面上下文调用；这些设置/路径能力不注册到 Agent 接口。
@@ -11,6 +10,7 @@ function normalizeConfiguration(payload) {
     return config;
 }
 function dispatchDesktop(service, action, payload, catalog) {
+    if (!service.context.settings) throw new Error('当前上下文未授权桌面设置');
     switch (action) {
         case 'bootstrap': {
             let config = null, definition = null, configError = null;
@@ -18,7 +18,6 @@ function dispatchDesktop(service, action, payload, catalog) {
             catch (error) { configError = error.message; }
             return { config, definition, warnings: [], configError, root: path.resolve(__dirname, '../..'), nodeVersion: process.version };
         }
-        case 'tasks': return require('../tasks').listTasks();
         case 'providers': return catalog().providers;
         case 'provider-source': {
             const provider = require('../framework/registry').providers.get(payload.id);
@@ -27,14 +26,7 @@ function dispatchDesktop(service, action, payload, catalog) {
         }
         case 'normalize': return normalizeConfiguration(payload);
         case 'save': return require('../settings').saveConfiguration(normalizeConfiguration(payload));
-        case 'start': return service.session.start(payload);
-        case 'poll': return service.session.poll(payload.id);
-        case 'cancel': return service.session.cancel(payload.id);
-        case 'report': {
-            const state = service.session.poll(payload.id);
-            if (!state.done || !state.reportDirectory || !fs.statSync(state.reportDirectory).isDirectory()) throw new Error('本次任务尚无报告');
-            return state.reportDirectory;
-        }
+        case 'report': return service.reportLocation(payload.jobId);
         default: throw new Error('未知桌面操作：' + action);
     }
 }
