@@ -1,5 +1,7 @@
 # 通信协议
 
+本页描述桌面 IPC。外部 Agent 使用独立的[应用 API、CLI/MCP 协议](automation.md)，不直接连接桌面 JSON Lines。DesktopBridge 与外部服务共用 `application/job-session.js`；所有入口作业受同一安装级执行锁约束，竞争作业可能以 `errorCode: BUSY` 结束。
+
 源码：`desktop/src/core/api.ts`、`core/types.ts`、`desktop/src-tauri/src/main.rs`、`resource-core/desktop-bridge.js`、`batch.js`、`framework/dependencies/worker.js`。本页描述新契约，不支持旧 compress mode、扁平 options 或 modules 定义。
 
 ## 原生和 JSON Lines

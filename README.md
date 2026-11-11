@@ -4,6 +4,8 @@
 
 开发者从 [AGENTS.md](AGENTS.md)、[文档索引](docs/README.md)、[项目状态](docs/project-status.md)开始。本版本使用全新契约，不读取或迁移旧版配置、任务、资源模块和 CLI。
 
+外部 Agent 可使用结构化 CLI 或本地 stdio MCP，进行能力发现、预览/处理、取消、续跑、结果查询和受控依赖安装。两入口共用执行核心，默认保留原文件。配置步骤、权限范围和可复制样例见[Agent 接入指南](docs/architecture/automation.md)。
+
 ## 许可与源码获取
 
 项目自有源码采用 [MIT](LICENSE)。第三方工具适用各自许可，见[来源与许可声明](THIRD_PARTY_NOTICES.md)。GitHub 版本只含源码，第三方 EXE/DLL 留在本地；新克隆先在 resource-core 执行 `npm ci`，再按界面“工具”页的说明安装所需处理工具。完整便携包尚未对外发布。

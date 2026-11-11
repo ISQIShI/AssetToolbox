@@ -22,3 +22,14 @@ LAME 官方只提供源码，Windows 包来自其 Links 页面指向的第三方
 项目源码仍保留提供方适配代码；缺少第三方工具时可按前端说明自行获取，或禁用相关步骤。2026-11-09 起支持用户主动触发 LAME/Sharp 固定核验版本的自动下载，地址与摘要见 `resource-core/framework/dependencies/catalog.json`；LAME ZIP 已重新取样匹配原 SHA-256，Sharp 五个 npm 包按锁文件 SHA-512 验证。保留原包许可证，不静默接受商业条款，不使用来源不明的镜像。
 
 自动下载只从原渠道安装到用户本地，不向 GitHub 上传安装产物；既有完整便携包分发缺口仍未闭合。流程与限制见[依赖管理](docs/architecture/dependencies.md)。
+
+## Agent 接入依赖（2026-11-10）
+
+独立 `agent-mcp/` 包从 npm 官方 registry 安装，版本、精确 tarball URL 和 SHA-512 完整记录于 [package-lock.json](agent-mcp/package-lock.json)。没有运行 npm 生命周期脚本；核心和桌面的依赖不随之增加。
+
+| 包 | 来源与版本 | 许可记录 |
+| --- | --- | --- |
+| @modelcontextprotocol/server、core；client 仅测试 | 官方 [TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)，2.4.0 | 包元数据为 Apache-2.0；[包内完整 LICENSE](third-party/licenses/mcp-sdk-2.4.0-LICENSE.txt)同时说明许可过渡：未取得重新授权的原有贡献仍按 MIT，新贡献 Apache-2.0。保留原声明及两种文本，不将全部代码改标为 MIT；三个包的 LICENSE 摘要一致。 |
+| Zod | [官方仓库](https://github.com/colinhacks/zod)，4.6.7 | MIT，保留[原许可证](third-party/licenses/zod-4.6.7-LICENSE.txt)。 |
+
+这次只提交自有适配代码、锁文件及许可文本，不发布第三方包产物。未来分发 MCP 的 node_modules 或打包代码时须带上实际依赖闭包的全部声明；测试客户端及其传递依赖不应混入生产部署。源码仍为 MIT，当前便携二进制分发限制保持不变。

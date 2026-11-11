@@ -1,0 +1,19 @@
+{
+    "idempotencyKey": "resize-icons-001",
+    "request": {
+        "mode": "process",
+        "folder": "D:/Game/Assets",
+        "outputDir": "D:/Game/Processed",
+        "pipeline": [
+            {
+                "id": "resize-icons",
+                "resourceType": "png",
+                "operation": "image-resize",
+                "provider": "sharp",
+                "enabled": true,
+                "parameters": {"width": 256, "height": 256, "fit": "inside"},
+                "providerOptions": {}
+            }
+        ]
+    }
+}

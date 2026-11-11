@@ -1,8 +1,36 @@
 # 项目状态
 
-核验日期：2026-11-10（America/Los_Angeles）。应用版本 1.0.0；当前目录 API 3、提供方 API 2、操作 API 1/2、配置 schema /2。仓库：[ISQIShI/AssetToolbox](https://github.com/ISQIShI/AssetToolbox)。音频实现提交为 `36c6a1a`；用户自行关闭 Smart App Control 后，已完成本机原生 release 构建和最新 EXE 的两项原生 E2E，之前的验收阻碍已解除。
+核验日期：2026-11-10（America/Los_Angeles）。应用版本 1.0.0；目录 API 3、提供方 API 2、操作 API 1/2、配置 schema /2，新增 Agent 应用接口 /1。仓库：[ISQIShI/AssetToolbox](https://github.com/ISQIShI/AssetToolbox)。本轮从 `be29bf6` 开始实现外部 Agent 接入；音频实现与原生验收记录保留如下。
 
-## 音频分析、增益与响度归一化（本轮）
+## 外部 Agent 接入（本轮）
+
+- 新增 CommonJS 应用服务和结构化 CLI，独立 `agent-mcp/` 使用官方 SDK 2.4.0；八个 MCP 工具直接调用同一服务，覆盖发现、校验、提交、查询、取消、任务历史和分页结果。支持现有图片/音频操作、续跑/重试、显式恢复/备份导出和受控依赖安装。
+- DesktopBridge 抽出共享 JobSession，GUI、CLI、MCP 工作进程按同一用户/核心安装互斥；保留原任务锁、提交意图、哈希、原子替换和文件边界取消。预览锁放在系统临时目录，保持素材及项目目录的只读预览边界。
+- 启动 policy 固定 source/output/backup 根目录，转换要求另存或授权备份覆盖。恢复必须传预览路径与哈希，安装只能传核验提供方 ID。工具参数不能扩权，自动化不保存桌面设置。
+- /1 持久作业按权限范围和幂等键去重，jobId 与持久 taskId 分开；结果按页读取，包括完整音频测量。正常断连安全取消；Windows 强杀进程树后返回 INTERRUPTED，从日志刷新进度并续跑，不伪装成正常取消。
+- 新增[自动化专题](architecture/automation.md)、[ADR 0009](decisions/0009-agent-interfaces.md)、[MCP 说明](../agent-mcp/README.md)及[配置](../examples/automation-policy.example.json)/[缩放请求](../examples/agent-resize.example.json)样例，更新 AGENTS、索引、架构、协议、持久化及开发指南。SDK 与 Zod 的固定来源/摘要在独立锁文件，许可及 SDK 的 Apache/MIT 过渡声明见第三方记录。
+
+### 本轮验证
+
+| 检查 | 结果 |
+| --- | --- |
+| 核心全量 | 便携 Node 24.19.0：119 通过、0 失败/跳过，约 28.4 秒；新增 9 项应用接口测试，覆盖真实 Sharp/FFmpeg、权限/联接越界、幂等/分页、恢复/导出、依赖安装互斥和进程强杀后续跑。最终增加无扫描的目录预检后，再次通过 application 9 项定向回归 |
+| MCP | 官方客户端 3 项通过；Node 26.13.0 与便携 Node 24.19.0 均验证。覆盖传统 initialize、2026-07-28 协商、发现/执行、分页、幂等、断连/重连与续跑；最终便携运行约 5.4 秒 |
+| 前端 | 30 项测试、独立 typecheck 及构建前置类型检查/生产前端构建通过 |
+| 原生构建 | npm run build 通过，Rust 1.99.1 release 约 1 分 20 秒；便携 Node/Sharp 加载校验通过 |
+| 原生 E2E | 最新 EXE 上 2 通过、0 失败，约 49.2 秒；音频 7.7 秒、综合流程 41.1 秒，包含真实 LAME/Sharp 安装与更新、缩放、取消/续跑/重试、恢复、重启及关闭；未启用浏览器替代路径 |
+| 源码/文档/依赖 | 源码发布检查通过；34 篇 Markdown 相对链接无失效项；MCP 安装使用 ignore-scripts，npm audit 0 漏洞；第三方包与运行时数据未跟踪 |
+
+日志位于忽略目录 `.local/agent-review/`；全部操作使用生成素材与隔离副本。初次测试发现预览创建锁目录及强杀后进度陈旧，均已修正并回归，没有删除文件安全断言。根目录新 EXE 9,015,808 字节，SHA-256 `57753f9280e87be19070424a8cad90a65fdf1cb70629beef047280460c883fc2`；最终 Agent 目录预检仅修改外置 Node 应用服务，不改变该 EXE 的原生/前端内容。
+
+### 当前边界
+
+- 已提供本地接入命令及配置样例，尚未替用户选择素材目录或注册到具体外部 Agent 宿主。CLI API submit 等待完成；MCP submit 返回 jobId 后轮询。原位置参数 CLI 仍是受信任的人工入口，不应用 Agent policy。
+- 未实现 HTTP/远程访问、常驻队列、同安装多作业并行、跨用户/多安装互斥、实时跨窗口作业面板或自动记录清理。结果响应分页，但读取报告时仍整体载入内存；超大报告需要后续流式存储设计。
+- 目录权限不是 OS 沙箱；宿主 shell/文件权限仍由使用者控制。MCP 的可选长任务、Roots 或采样机制未接入。恢复/依赖安装默认需在启动配置中启用，不使用每次工具调用临时扩权。
+- 本轮仅本地提交，未推送远端或发布二进制；原提供方分发限制保持不变。
+
+## 音频分析、增益与响度归一化（上一轮）
 
 - 新增 WAV/FLAC/Ogg 类型及三个音频操作，FFmpeg 一个提供方按操作组织适配器；支持 MP3、WAV PCM、FLAC、Ogg Vorbis/Opus。详见[音频专题](architecture/audio.md)。
 - 分析只读，记录 LUFS、采样/真峰值、LRA、时长及格式；只分析的文件不复制、备份或写提交意图。任务、取消和结果仍沿用现有设施。混合流水线可分析转换前后，后续失败不提交中间产物。

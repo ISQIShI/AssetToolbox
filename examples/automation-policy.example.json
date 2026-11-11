@@ -1,0 +1,9 @@
+{
+    "schema": "asset-toolbox.automation-policy/1",
+    "sourceRoots": ["D:/Game/Assets"],
+    "outputRoots": ["D:/Game/Processed"],
+    "backupRoots": ["D:/Game/Backups"],
+    "allowOverwrite": false,
+    "allowRestore": false,
+    "allowDependencyInstall": false
+}

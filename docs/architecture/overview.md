@@ -8,7 +8,11 @@ AssetToolbox 1.0.0 是 Windows 便携资源处理工具，使用 Vue 3/TypeScrip
 flowchart TD
     UI[Vue / WebView2] -->|Tauri invoke| Host[Rust 宿主]
     Host -->|JSON Lines| Bridge[Node 桌面会话]
-    Bridge --> Worker[batch.js 工作进程]
+    CLI[结构化 CLI] --> Application[应用服务 / 启动权限 / 幂等作业]
+    MCP[本地 stdio MCP] --> Application
+    Bridge --> Session[共享 JobSession]
+    Application --> Session
+    Session --> Worker[batch.js 工作进程 / 安装级执行锁]
     Worker --> Engine[engine.js 流水线]
     Engine --> Catalog[类型 / 操作 / 提供方]
     Engine --> Tool[编码器 / Sharp 子进程]
@@ -26,6 +30,7 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 | `desktop/src/App.vue`、`core/workbench.ts`、`views/`、`components/` | 自绘标题栏、活动栏与状态栏，四个工作区、处理线与步骤编辑、全局作业栏、任务与恢复，见[前端架构](frontend.md) |
 | `desktop/src-tauri/src/main.rs` | 本地宿主、目录对话框、报告打开、退出协作 |
 | `desktop-bridge.js` | action 白名单、单活动作业、工作进程生命周期 |
+| `application/`、`../agent-mcp/` | 共享 JobSession、Agent 应用 API、权限与持久作业、CLI/MCP 适配；见[自动化专题](automation.md) |
 | `batch.js` | 预览/处理/续跑/恢复路由、锁、进度、报告 |
 | `engine.js` | 扫描、有序步骤、结果策略、临时文件、统一提交 |
 | `settings.js`、`tasks.js`、`restore.js` | 原子配置、任务日志、哈希恢复 |
@@ -34,6 +39,8 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 
 表中核心入口位于 `resource-core/`。Sharp 为核心唯一直接 npm 依赖；核心、桌面 npm 和 Rust 依赖各有锁文件。完整便携部署包含核心 node_modules，构建脚本通过便携 Node 验证 Sharp 可加载。
 
+MCP 单独使用 SDK 2.4.0 与 Zod，不加入桌面核心依赖；按需携带 `agent-mcp/` 及其 node_modules。GUI 与 Agent 素材任务共用历史，实时作业面板仍属于各自会话。原生桥接 JSON Lines 与 MCP 是两个不同协议，不能互换连接。
+
 ## 数据流与安全
 
 启动加载目录和配置，配置错误不妨碍任务/恢复入口。前端先 normalize，再保存配置（失败告警但允许本次运行），最后 start。预览不保存配置。批处理扫描后固定任务清单和规范化 pipeline，包括类型、操作、提供方和适配器版本。提供方 API 2 按操作组织适配器，依赖准备按提供方共享。
@@ -41,6 +48,8 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 每个文件过滤适用步骤，按顺序执行；压缩接受更小输出，缩放接受合法输出。全部步骤成功后才做一次提交：写 intent、校验哈希、备份/排他创建或原子替换、写 result。后续步骤失败丢弃前面产物。续跑和恢复复用任务锁、哈希及事件日志；恢复不加载转换插件。
 
 取消仅在扫描和文件边界检查；当前工具不被强杀。界面每 250ms 轮询，进程退出并释放锁后才显示最终 done。资源识别只按扩展名进入清单，再由类型/提供方验证内容；未知格式不复制。
+
+同一用户、同一核心安装的作业共用系统临时执行锁，防止 GUI、CLI、MCP 的新任务或依赖安装互相竞争；原任务锁保留。外部 Agent 另经启动目录权限检查，转换默认另存，按幂等键提交，不改桌面设置。HTTP、远程账户和常驻队列未实现。
 
 ## 设计边界
 

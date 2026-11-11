@@ -13,6 +13,8 @@
 | `data/reports/<id>/report.json`、`files.csv` | `schema: asset-toolbox.report/1` 报告及 CSV |
 | `data/dependencies/<provider>/active.json`、`installs/<uuid>/` | `schema: 1` 受管理依赖启用记录与不可变副本，详见[依赖管理](dependencies.md)；不属于素材任务 |
 | 系统临时 `resource-desktop-*` | request/status/cancel，只属当前会话 |
+| `data/automation/<scope>/<jobId>/` | `asset-toolbox.job/1`、请求/状态/进程记录及取消标记；幂等键派生 jobId，见[自动化专题](automation.md) |
+| 系统临时 `asset-toolbox-locks-<安装路径哈希>/` | GUI/CLI/MCP 执行互斥及提交锁，PID/token 与竞争声明；不改变只读预览的项目目录 |
 
 全部 data、日志和个人路径不提交。缺少设置时只返回默认值，不创建文件；损坏或不支持 schema 时明确报错，不静默退回旧配置。保存先严格校验，再写同目录排他临时文件、fsync、rename；失败清理临时文件并保留旧内容。单文件配置替代原分散设置。
 

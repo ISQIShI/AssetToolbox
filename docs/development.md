@@ -35,10 +35,14 @@ Vite 热更新只监听前端相关文件，排除 `src-tauri/`，避免 Windows
 | `desktop/` | `npm test` | Vitest + Vue Test Utils + jsdom |
 | `desktop/` | `npm run test:e2e` | Playwright 连接真实 WebView2；先构建当前源码 |
 | `resource-core/` | `npm test` | Node 内置测试框架；先安装核心依赖 |
+| `agent-mcp/` | `npm ci --ignore-scripts` | 安装独立的官方 MCP SDK 与测试客户端，锁定来源和摘要 |
+| `agent-mcp/` | `npm test` | 官方客户端真实 stdio、协议协商、执行与断连续跑测试 |
 | 仓库根目录 | `.\runtime\node.exe --test resource-core/tests/*.test.js` | 使用便携 Node 运行同一核心套件 |
 | 仓库根目录 | `.\runtime\node.exe resource-core/cli.js --help` | 查看流水线 CLI 用法 |
 
 原生测试复制工具、生成样本、使用独立 WebView 用户目录和本机随机 CDP 端口；截图位于 `desktop/test-results/`。它使用系统 WebView2，无需另装 Playwright Chromium 浏览器。只对旧 EXE 跑 E2E 不能证明新源码构建正确。
+
+Agent 接口的核心验收为 `node --test tests/application.test.js`（resource-core 目录）：含生成图片/音频、目录权限、幂等、分页、恢复/导出及跨入口锁。MCP 使用 Node 24+，需额外安装 agent-mcp 依赖；不会由桌面构建隐式安装。配置和 CLI 示例见[自动化专题](architecture/automation.md)。
 
 依赖管理验收：`resource-core/` 下 `node --test tests/dependencies.test.js` 使用合成归档测试来源/摘要、路径与解包边界、失败保护和取消；原生 E2E 还从 RareWares/npm registry 真实安装 LAME/Sharp 并更新，必须联网。更换核验清单时同步来源记录与锁文件，不能为测试通过跳过校验。
 

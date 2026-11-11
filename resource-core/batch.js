@@ -29,7 +29,7 @@ function writeReport(directory, report) {
 function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data', 'reports')) {
     const started = Date.now(), startedAt = new Date().toISOString(), files = [];
     const statusFile = path.join(jobDirectory, 'status.json');
-    let state = { phase: 'starting', done: false, processed: 0, total: 0 }, lastWrite = 0, options, task, unlock;
+    let state = { phase: 'starting', done: false, processed: 0, total: 0 }, lastWrite = 0, options, task, unlock, releaseExecution;
     const publish = (update, force = false) => {
         Object.assign(state, update, { elapsedSeconds: (Date.now() - started) / 1000 });
         if (!force && Date.now() - lastWrite < 150) return;
@@ -48,11 +48,15 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
         }
         lastWrite = Date.now();
     };
-    const shouldCancel = () => fs.existsSync(path.join(jobDirectory, 'cancel'));
+    const parentPid = process.ppid;
+    const shouldCancel = () => fs.existsSync(path.join(jobDirectory, 'cancel')) ||
+        (require.main === module && !require('./application/lock').alive(parentPid));
     const report = { schema: 'asset-toolbox.report/1', startedAt, source: request.folder, mode: request.mode, files };
     try {
     publish({}, true);
     try {
+        releaseExecution = require('./application/lock').acquire();
+        if (request._automationPolicy) require('./application/policy').authorize(request, request._automationPolicy);
         if (!['preview', 'process', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export', 'restore-preview', 'restore-export-preview'].includes(request.mode)) throw new Error('无效任务模式');
         if (request.mode.startsWith('restore')) {
             const { restoreTask, exportBackup, previewRestoreTask, previewBackup } = require('./restore');
@@ -151,7 +155,7 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
     } catch (error) {
         report.error = error.message;
         // 致命错误发生在已处理文件之后时也保留完整明细。
-        publish({ error: error.message, exitCode: 1 }, true);
+        publish({ error: error.message, errorCode: error.code || 'JOB_FAILED', exitCode: 1 }, true);
     }
     if (task) { report.task = task.info(); publish({ task: report.task }, true); }
     report.audioResults = files.flatMap(file => (file.steps || []).filter(step => step.metadata?.audio?.before).map(step => {
@@ -173,7 +177,7 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
     }
     publish({ phase: 'finished', done: true }, true);
     return state;
-    } finally { if (unlock) unlock(); }
+    } finally { try { if (unlock) unlock(); } finally { if (releaseExecution) releaseExecution(); } }
 }
 
 if (require.main === module) {
