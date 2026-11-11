@@ -20,3 +20,5 @@ Node CommonJS 核心，实现资源处理流水线、任务和安全恢复。当
 LAME/Sharp 支持受管理依赖副本，位于 `data/dependencies/`；检查文件完整性后优先使用，没有记录时使用原手动路径。自动安装范围与维护要求见[依赖管理](../docs/architecture/dependencies.md)。
 
 本目录执行 `npm ci` 安装锁定的 Sharp（含平台原生依赖），再执行 `npm test`；`npm run process -- --help` 查看 CLI。本地便携目录需包含所用步骤的完整依赖（手动 node_modules/EXE 或受管理副本），不能只复制 JS；对外分发另须核对许可。核心配置、任务、报告均使用新 schema，不兼容旧项目格式。
+
+音频实现位于 `providers/ffmpeg/adapters/`，三个操作复用 FFmpeg/FFprobe；支持 WAV/FLAC/MP3/Ogg。分析为只读 observe，增益/归一化必须另存或备份，不启用动态压缩。详见[音频专题](../docs/architecture/audio.md)。

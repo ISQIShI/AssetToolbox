@@ -1,6 +1,6 @@
 # 资源处理扩展契约
 
-状态：已实现。提供方与目录 API 为 2；资源类型和操作 API 保持 1。决策见 [ADR 0007](../decisions/0007-operation-adapters.md)，三层边界沿用 [ADR 0003](../decisions/0003-processing-contract.md)。入口为 `resource-core/framework/registry.js`、`schema.js`、`engine.js`；本契约不依赖 Cordis。
+状态：已实现。目录 API 为 3，提供方 API 为 2，资源类型 API 为 1；既有转换操作使用 API 1，音频操作使用 API 2。只读与保留原文件语义见 [ADR 0008](../decisions/0008-audio-observation.md)。决策见 [ADR 0007](../decisions/0007-operation-adapters.md)，三层边界沿用 [ADR 0003](../decisions/0003-processing-contract.md)。入口为 `resource-core/framework/registry.js`、`schema.js`、`engine.js`；本契约不依赖 Cordis。
 
 ## 三层职责
 
@@ -10,7 +10,7 @@
 | 处理操作 | `operations/<id>/index.js` | `accepts`、`resultPolicy` | 定义语义、操作参数和结果验收策略 |
 | 实现提供方 | `providers/<id>/index.js` | `adapters` | 管理工具依赖，按操作组织适配器；同一个组合可有多个提供方 |
 
-所有定义导出 CommonJS 对象，包含 `apiVersion`、语义版本 `version`、`displayName`，可提供 `description`。提供方须声明 `apiVersion: 2`，类型和操作声明 `apiVersion: 1`。ID 来自目录名，必须匹配 `[a-z][a-z0-9-]*`。启动时扫描直接子目录；忽略 `_`/`.` 开头目录、目录链接和无入口目录。格式扩展名必须唯一、小写且带点；只有资源类型占有扩展名。注册失败会阻止新处理，但不阻止现有任务恢复。
+所有定义导出 CommonJS 对象，包含 `apiVersion`、语义版本 `version`、`displayName`，可提供 `description`。提供方须声明 `apiVersion: 2`，资源类型声明 `apiVersion: 1`。操作接受 API 1 或 2：仅 API 2 可使用 `observe` 和布尔型 `preserveOriginal`；其他版本及 API 1 使用新语义明确拒绝。ID 来自目录名，必须匹配 `[a-z][a-z0-9-]*`。启动时扫描直接子目录；忽略 `_`/`.` 开头目录、目录链接和无入口目录。格式扩展名必须唯一、小写且带点；只有资源类型占有扩展名。注册失败会阻止新处理，但不阻止现有任务恢复。
 
 操作的 `accepts` 是资源 `kind` 数组。提供方的 `adapters` 是按操作 ID 索引的对象；每项必须有 `version`、非空且不重复的 `resourceTypes` 数组、同步 `execute`，可选专属 `schema`。引用必须存在且匹配操作种类；未知适配器字段拒绝注册。注册器从适配器生成 `{resourceType, operation}` 形式的 `supports`，不再手写两份能力清单。提供方顶层的旧 `supports`、`schema`、`execute` 明确拒绝。
 
@@ -44,7 +44,7 @@
 
 配置升级为 `asset-toolbox.settings/2`，拒绝读取或转换 `/1`；原文件保留，需重新建立配置。任务及报告外层 `/1` 不变，内部保存上述完整步骤快照；旧快照不可续跑/重试。备份恢复仍基于哈希和事件，不加载适配器，也不迁移原任务，见[持久化](persistence.md)。
 
-前端从目录 API 2 的 `providers[].adapters[]` 按 operation 选择字段，条目含 `operation/version/fields`；顶层 provider.fields 已移除。切换工具时若操作 ID 相同，复制保留公共参数，专属参数取新适配器默认值；切换操作则重置两组参数。保留步骤 ID、顺序和启用状态，清除旧 versions，核心再次规范化。不会记忆切走工具的专属参数；“恢复默认参数”显式重置两组。
+前端从目录 API 3 的 `providers[].adapters[]` 按 operation 选择字段，条目含 `operation/version/fields`；顶层 provider.fields 已移除。切换工具时若操作 ID 相同，复制保留公共参数，专属参数取新适配器默认值；切换操作则重置两组参数。保留步骤 ID、顺序和启用状态，清除旧 versions，核心再次规范化。不会记忆切走工具的专属参数；“恢复默认参数”显式重置两组。
 
 ## 提供方执行接口
 
@@ -91,7 +91,7 @@ module.exports = {
 
 缩放保持格式，支持等比适应 inside、居中裁剪 cover、拉伸 fill；插值为 Lanczos3 或 nearest。默认 512×512、仅缩小；宽高各 1–16384，输入和目标最多 4000 万像素。按 EXIF 方向处理并移除附加元数据；PNG 保留 alpha，半透明颜色存在 libvips 预乘舍入；JPEG 质量由提供方参数控制。拒绝动画/多页与损坏图片，输出完整解码后再返回。
 
-本轮内置功能范围不变；多操作提供方由核心和原生 E2E 隔离夹具验证，未新增 Sharp 压缩等产品功能。
+FFmpeg 同时实现 WAV/FLAC/MP3/Ogg 的 `audio-analyze`（observe）、`audio-gain` 与 `audio-normalize`（valid-output、preserveOriginal）。公共参数、编码边界和测量结果详见[音频专题](audio.md)。未新增 Sharp 压缩等功能。
 
 恢复、备份导出、任务管理属于通用文件安全服务，不伪装为资源转换插件；它们无需加载原提供方即可恢复备份。测试入口：`adapters.test.js`、`contract.test.js`、`resize.test.js`、全部文件安全测试及原生 E2E。
 
@@ -102,3 +102,9 @@ module.exports = {
 `describe().providers` 返回 acquisition、availability（available/reason）及 dependency（自动安装能力、当前/目标版本与状态）。检查不写配置、不自动下载；只有用户点击安装才启动下载作业。Sharp 检查在短生命周期进程中进行。桌面通过 providers action 刷新，只替换目录状态，保留正在编辑的步骤；打开渠道按提供方 ID 从核心取得已登记地址，原生层只打开 HTTPS。实际处理前再次检查依赖。
 
 LAME 优先从受管理目录定位可执行文件，Sharp 的 `prepare()` 固定本次作业的模块路径并通过 `executable` 上下文交给子进程。没有受管理记录时仍可手动安装；记录损坏或版本不匹配时拒绝处理并提示修复或更新。依赖升级改变实现行为时必须同步升级 provider.version。
+
+## 只读与原文件保留
+
+操作 API 2 的 `observe` 适配器同步返回 `{metadata}`，不得返回 output/skipped，也不得改写临时输入或生成预期输出；引擎校验这些边界并记录步骤 `status: analyzed`。混合处理线中分析当前步骤输入；后续转换仍遵循一次提交。仅有观察步骤的文件不复制、备份或写 intent；全观察任务忽略保存的输出/备份路径，仍保存任务和报告。空处理线的既有复制语义不变。
+
+`preserveOriginal: true` 要求另存或有效备份目录，prepareFolder 拒绝无备份覆盖；前端添加、选择或重新启用该操作时默认另存。新配置 saveMode 默认为 saveAs，已有 /2 配置保留显式选择。成功、跳过和失败步骤可携带 metadata；失败元数据只用于报告，不表示中间文件已提交。

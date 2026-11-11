@@ -1,0 +1,1 @@
+module.exports = { apiVersion: 1, version: '1.0.0', displayName: 'Ogg（Vorbis / Opus）', kind: 'audio', extensions: ['.ogg', '.opus'], validate: data => data.length >= 4 && data.toString('ascii', 0, 4) === 'OggS' };

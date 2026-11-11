@@ -1,0 +1,10 @@
+{
+  "name": "FFmpeg / FFprobe",
+  "version": "9.0.2-essentials_build-www.gyan.dev",
+  "license": "GPL-3.0-or-later（此构建启用 GPL 与 version3）",
+  "url": "https://www.gyan.dev/ffmpeg/builds/",
+  "source": "https://github.com/FFmpeg/FFmpeg/commit/946fcce07b",
+  "instructions": "从 FFmpeg 官网 Download → Windows → gyan.dev 获取 9.0.2 essentials 构建，按渠道发布的 SHA-256 校验下载包。解压后将 bin/ffmpeg.exe 与 bin/ffprobe.exe 放入 resource-core/providers/ffmpeg/，保留 LICENSE 和来源记录，再刷新工具状态。此版仅接受 9.0.2。",
+  "redistribution": "源码仓库不包含二进制；便携包分发须提供匹配构建的对应源码、构建配置及所含库的完整许可，不因独立进程调用或 MIT 项目许可而免除义务。尚未放行。",
+  "checkedAt": "2026-11-10"
+}

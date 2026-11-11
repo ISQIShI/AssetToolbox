@@ -110,3 +110,11 @@ scope 可省略。常用类型为 `feat`、`fix`、`docs`、`refactor`、`test`�
 示例：`fix(restore): 保留预览后被修改的目标文件`、`docs(architecture): 补充任务日志恢复流程`。破坏性变更使用 `!` 或 `BREAKING CHANGE:` 脚注，本项目要求同时写清格式影响及读取/拒绝策略；当前新契约明确不迁移历史数据。规范由贡献流程遵守，当前未安装自动提交钩子。
 
 PR 说明应包含具体问题、最终行为、关联问题、验证命令/结果、文档更新和兼容性影响；界面变化附截图。未执行或受阻的验证单独说明。
+
+## 音频测试前提
+
+按“工具”页指引安装 FFmpeg/FFprobe 9.0.2 至 `resource-core/providers/ffmpeg/`；无需系统 PATH。二进制仅本地使用。核心 `audio.test.js` 和原生 `audio.spec.ts` 依赖真实工具，缺失时应安装，不跳过验收。前端 `audio.test.ts` 不需要外部工具。全量命令不变，原生 E2E 必须使用刚构建的根目录 EXE。
+
+独立浏览器集成验证（不能替代原生验收）：先在 desktop 执行 `npm run build:web`，再于 PowerShell 设置 `$env:ASSET_TOOLBOX_AUDIO_BROWSER='1'` 并执行 `npx playwright test audio.spec.ts`。使用已安装 Edge、生产前端、隔离真实核心与 FFmpeg，只模拟原生窗口 IPC。完成后执行 `Remove-Item Env:ASSET_TOOLBOX_AUDIO_BROWSER`；普通 `npm run test:e2e` 必须不带该变量。
+
+若 Rust 宏 DLL 加载报 Windows 4551，可只读检查 CodeIntegrity/Operational 日志。正常重建仍被签名策略阻断时，需在符合组织签名策略的构建环境完成构建；不关闭应用控制或添加不受审查的排除规则，也不把旧 EXE 测试记为新版本通过。

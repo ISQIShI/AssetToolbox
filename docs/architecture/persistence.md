@@ -62,3 +62,9 @@ claim 登记后排他取得 PID/token 锁；只在确认进程退出且锁未变
 写操作生成报告，预览不生成。报告保存 pipeline 快照、逐文件结果、汇总、起止时间及任务摘要；CSV 为 UTF-8 BOM，引用与公式前缀安全转义。报告失败仅告警，不回滚结果。数据没有自动清理/压缩索引；大日志重放有成本。原子替换是单文件保证，不是整批事务。
 
 验证：contract（原子配置/schema）、resume（锁/崩溃）、resize（步骤快照/版本/恢复）、restore/restore-preview（选择与哈希）、batch（报告）。
+
+## 音频观察与报告
+
+[ADR 0008](../decisions/0008-audio-observation.md) 没有改变配置 /2、任务/报告外层 /1 的结构。新增操作与适配器照常固定四项 versions。新配置默认 saveAs，已有显式设置不自动迁移。只观察的文件有 plan/result 与 sourceHash，没有素材 intent、备份或输出；result 的文件状态为 skipped，步骤为 analyzed。
+
+步骤 `metadata.audio` 保存 before/after 测量、增益、峰值限制及警告；失败步骤也可记录已测数据。report.json 的 audioResults 为本次处理的完整音频结果，额外生成 UTF-8 audio.csv；界面状态仅带前 100 条。失败文件所有音频步骤标记 fileStatus:failed，不表示已提交。CSV 沿用公式注入防护，报告写入失败不抹掉处理结果。

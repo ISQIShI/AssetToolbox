@@ -18,6 +18,10 @@ function writeReport(directory, report) {
     const headers = ['相对路径', '模块', '状态', '原始字节', '结果字节', '节省字节', '复制原文件', '已备份', '说明'];
     const rows = [headers.map(csvCell).join(','), ...report.files.map(file => columns.map(key => csvCell(file[key])).join(','))];
     fs.writeFileSync(path.join(session, 'files.csv'), '\uFEFF' + rows.join('\r\n') + '\r\n', { flag: 'wx' });
+    if (report.audioResults?.length) {
+        const columns = ['path', 'operation', 'status', 'fileStatus', 'codec', 'durationSeconds', 'sampleRate', 'channels', 'inputLufs', 'outputLufs', 'inputSamplePeakDb', 'inputTruePeakDb', 'outputTruePeakDb', 'loudnessRangeLu', 'requestedGainDb', 'appliedGainDb', 'targetLufs', 'targetReached', 'limited', 'message'];
+        fs.writeFileSync(path.join(session, 'audio.csv'), '\uFEFF' + [columns, ...report.audioResults.map(row => columns.map(key => row[key]))].map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n', { flag: 'wx' });
+    }
     return session;
 }
 
@@ -150,6 +154,16 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
         publish({ error: error.message, exitCode: 1 }, true);
     }
     if (task) { report.task = task.info(); publish({ task: report.task }, true); }
+    report.audioResults = files.flatMap(file => (file.steps || []).filter(step => step.metadata?.audio?.before).map(step => {
+        const audio = step.metadata.audio;
+        return { path: file.path, operation: step.operation, status: step.status, fileStatus: file.status,
+            ...audio, inputLufs: audio.before.integratedLufs, outputLufs: audio.after?.integratedLufs ?? null,
+            inputTruePeakDb: audio.before.truePeakDb, outputTruePeakDb: audio.after?.truePeakDb ?? null,
+            codec: audio.before.codec, durationSeconds: audio.before.durationSeconds, sampleRate: audio.before.sampleRate, channels: audio.before.channels,
+            inputSamplePeakDb: audio.before.samplePeakDb, loudnessRangeLu: audio.before.loudnessRangeLu,
+            message: [step.message, ...(audio.warnings || []), ...(file.status === 'failed' ? ['该文件处理失败，测量值不代表已提交结果。'] : [])].filter(Boolean).join('；') };
+    }));
+    if (report.audioResults.length) publish({ audioResults: report.audioResults.slice(0, 100), audioResultCount: report.audioResults.length }, true);
     if (['process', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export'].includes(request.mode)) {
         report.finishedAt = new Date().toISOString();
         report.elapsedSeconds = (Date.now() - started) / 1000;

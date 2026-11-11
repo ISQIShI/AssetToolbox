@@ -84,7 +84,7 @@ test('adapter fields, defaults and version snapshots stay isolated per operation
         assert.throws(() => registry.normalizePipeline([value]));
     }
     const catalog = registry.describe(), provider = catalog.providers.find(p => p.id === 'multi');
-    assert.equal(catalog.apiVersion, 2); assert.equal(Object.hasOwn(provider, 'fields'), false);
+    assert.equal(catalog.apiVersion, 3); assert.equal(Object.hasOwn(provider, 'fields'), false);
     assert.deepEqual(provider.adapters.map(a => [a.operation, a.fields.map(f => f.key)]), [['append', ['suffix']], ['compress', ['size', 'fail', 'grow']]]);
     const legacy = structuredClone(normalized[0]); delete legacy.versions.adapter;
     assert.throws(() => registry.normalizePipeline([legacy]), /版本不匹配/);

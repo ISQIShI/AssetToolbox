@@ -18,7 +18,7 @@
 | cancel | `{id}` | `{requested:true}`，协作取消 |
 | report | `{id}` | 已结束作业的报告目录 |
 
-Configuration 的 `schema` 为 `asset-toolbox.settings/2`，含 sourceDir/outputDir/backupDir、saveMode、backupEnabled、pipeline。Definition 的 `apiVersion:2`，含 resourceTypes/operations/providers；Provider 返回生成的 supports 及 `adapters: [{operation, version, fields}]`，不再返回顶层 fields。操作 fields 定义公共参数，选中适配器 fields 定义专属参数。步骤 versions 增加 adapter；旧配置和旧处理快照拒绝，不自动转换，见[扩展契约](extensions.md)。
+Configuration 的 `schema` 为 `asset-toolbox.settings/2`，含 sourceDir/outputDir/backupDir、saveMode、backupEnabled、pipeline。Definition 的 `apiVersion:3`，含 resourceTypes/operations/providers；Provider 返回生成的 supports 及 `adapters: [{operation, version, fields}]`，不再返回顶层 fields。操作 fields 定义公共参数，选中适配器 fields 定义专属参数。步骤 versions 增加 adapter；旧配置和旧处理快照拒绝，不自动转换，见[扩展契约](extensions.md)。
 
 ## 作业模式
 
@@ -55,3 +55,7 @@ exitCode：0 成功，1 错误，2 取消（存在文件错误时优先 1）；�
 同一桥接只允许一个活动作业。会话失效后用 tasks 返回的 taskFile 继续，不复用旧会话 ID。测试：核心 desktop/batch、前端组件及 native.spec.ts。
 
 原生 `open_provider_source({id})` 从核心读取登记地址并在默认浏览器打开；前端不能传任意 URL。缺失依赖的启用步骤阻止“开始处理”，预览和无关功能仍可使用。
+
+## 音频结果
+
+目录 operations 增加 `observe` 策略和 `preserveOriginal`。纯分析请求不需要 outputDir/backupDir，前端不发送记忆中的路径；受保护转换必须另存或备份。JobState 完成状态可含 `audioResults`（前 100 条）及 `audioResultCount`（全量条数），每项有 path/operation/status/fileStatus、before/after 测量、请求/实际增益、目标/是否达到、limited/warnings/message。null 表示无法测量，不显示为 0。完整字段与输出边界见[音频专题](audio.md)。文件 failed 时测量来自未提交的中间步骤；纯分析 summary.skipped 增加，processed 不增加。

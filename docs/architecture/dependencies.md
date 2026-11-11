@@ -10,6 +10,7 @@
 | Sharp | 0.35.5 Windows x64 安装、修复与更新 | npm 官方 registry 的 Sharp、平台原生包、colour、detect-libc、semver 五个固定 tarball；SHA-512 来自已提交的 npm 锁文件 |
 | pngquant | 手动 | 官网 Windows ZIP 仍为 2.17.0，不将其当作 3.0.3 更新；保留 Cargo 编译指引 |
 | JPG-C | 手动 | 作者渠道及再分发授权未核实，不用来源不明的镜像替代 |
+| FFmpeg / FFprobe | 手动，固定 9.0.2 | 官网推荐的 Gyan essentials 构建；ZIP 超过当前 64 MiB 下载上限，7z 不在受支持格式中。按渠道摘要核验下载包并放入 providers/ffmpeg；不放宽下载/解包限制 |
 
 `catalog.json` 是随项目审核和发布的核验清单，记录目标版本、平台、精确 URL、摘要和文件映射。安装请求只接收提供方 ID，不能指定 URL、命令、路径或自定义清单。扩展的 `provenance.json` 只是手动获取说明，不能授予自动安装权限。
 

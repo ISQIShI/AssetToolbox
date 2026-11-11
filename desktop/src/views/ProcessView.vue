@@ -18,6 +18,8 @@ const current = computed(() => {
     return index < 0 ? undefined : { index, step: config.value.pipeline[index]! };
 });
 const enabledCount = computed(() => config.value?.pipeline.filter(step => step.enabled).length || 0);
+const observationOnly = computed(() => enabledCount.value > 0 && config.value!.pipeline.filter(step => step.enabled)
+    .every(step => definition.value?.operations.find(op => op.id === step.operation)?.resultPolicy === 'observe'));
 const coverage = computed(() => definition.value?.resourceTypes.map(type => ({
     type, steps: config.value?.pipeline.filter(step => step.enabled && step.resourceType === type.id).length || 0,
 })) || []);
@@ -44,7 +46,7 @@ const canStart = computed(() => !busy.value && !blockedSteps.value.length && Boo
         <template v-else>
           <span class="muted">{{ config.pipeline.length ? `${enabledCount} / ${config.pipeline.length} 个步骤已启用` : '还没有步骤，添加后才会改动文件' }}</span>
           <button type="button" class="summary-link" :class="{ 'tone warn': config.saveMode === 'overwrite' && !config.backupEnabled }" title="打开写入方式" @click="station = 'output'">
-            {{ config.saveMode === 'saveAs' ? '另存结果，保留原文件' : config.backupEnabled ? '覆盖原文件，替换前备份' : '覆盖原文件，不保留备份' }}
+            {{ observationOnly ? '仅分析，不写入素材' : config.saveMode === 'saveAs' ? '另存结果，保留原文件' : config.backupEnabled ? '覆盖原文件，替换前备份' : '覆盖原文件，不保留备份' }}
           </button>
         </template>
       </div>
@@ -67,7 +69,7 @@ const canStart = computed(() => !busy.value && !blockedSteps.value.length && Boo
           :index="current.index"
           :count="config.pipeline.length"
           :disabled="busy"
-          @update:model-value="config.pipeline[current.index] = $event"
+          @update:model-value="bench.updateStep(current.index, $event)"
           @move="bench.moveStep(current.index, $event)"
           @remove="bench.removeStep(current.index)"
           @show-tools="bench.page.value = 'tools'"

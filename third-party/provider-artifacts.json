@@ -46,5 +46,21 @@
     "platformPackage": "@img/sharp-win32-x64@0.35.5",
     "platformLicense": "Apache-2.0 AND LGPL-3.0-or-later",
     "componentVersions": "third-party/sharp-win32-x64-versions.json"
+  },
+  "ffmpeg": {
+    "checkedAt": "2026-11-10",
+    "version": "9.0.2-essentials_build-www.gyan.dev",
+    "upstream": "https://ffmpeg.org/download.html",
+    "builder": "https://www.gyan.dev/ffmpeg/builds/",
+    "source": "https://github.com/FFmpeg/FFmpeg/commit/946fcce07b",
+    "localOrigin": "已有本地 gyan.dev 9.0.2 essentials 安装；本轮核对版本、构建参数和 LICENSE，未重新下载原归档",
+    "archiveVerified": false,
+    "license": "GPL-3.0-or-later",
+    "buildConfiguration": "configuration: --enable-gpl --enable-version3 --enable-static --disable-w32threads --disable-autodetect --enable-cairo --enable-fontconfig --enable-iconv --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-zlib --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-sdl2 --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxvid --enable-libaom --enable-libopenjpeg --enable-libvpx --enable-mediafoundation --enable-libass --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-openal --enable-libgme --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libtheora --enable-libvo-amrwbenc --enable-libgsm --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-librubberband",
+    "files": {
+      "ffmpeg.exe": "3256173f3f8bffd7df12227c68adf68025edb1832273a9530688a7bb1ed8edec",
+      "ffprobe.exe": "f0d36ecbbdd3bcfac3efa078c96c7271c2e68b3810595552ac3b7f17e9a65c52"
+    },
+    "correspondingSourceVerified": false
   }
 }

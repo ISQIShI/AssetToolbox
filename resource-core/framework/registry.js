@@ -19,7 +19,8 @@ function discover(root, category) {
         const definition = require(filename);
         const provenance = path.join(directory, entry.name, 'provenance.json');
         if (category === 'providers' && fs.existsSync(provenance)) definition.acquisition = JSON.parse(fs.readFileSync(provenance, 'utf8'));
-        if (definition.apiVersion !== (category === 'providers' ? 2 : 1) || !versionPattern.test(definition.version || '') || typeof definition.displayName !== 'string' || !definition.displayName.trim()) throw new Error('扩展契约无效：' + entry.name + '；提供方须使用 API 2，类型和操作须使用 API 1');
+        const apiVersions = category === 'providers' ? [2] : category === 'operations' ? [1, 2] : [1];
+        if (!apiVersions.includes(definition.apiVersion) || !versionPattern.test(definition.version || '') || typeof definition.displayName !== 'string' || !definition.displayName.trim()) throw new Error('扩展契约无效：' + entry.name);
         result.set(entry.name, { ...definition, id: entry.name, directory: path.dirname(filename) });
     }
     return result;
@@ -35,7 +36,9 @@ function createRegistry(root = path.join(__dirname, '..')) {
         }
     }
     for (const operation of operations.values()) {
-        if (!['smaller-only', 'valid-output'].includes(operation.resultPolicy) || !Array.isArray(operation.accepts) || !operation.accepts.length) throw new Error('操作定义无效：' + operation.id);
+        const policies = operation.apiVersion === 2 ? ['smaller-only', 'valid-output', 'observe'] : ['smaller-only', 'valid-output'];
+        if (operation.preserveOriginal !== undefined && (operation.apiVersion !== 2 || typeof operation.preserveOriginal !== 'boolean')) throw new Error('preserveOriginal 需要操作 API 2 的布尔声明');
+        if (!policies.includes(operation.resultPolicy) || !Array.isArray(operation.accepts) || !operation.accepts.length) throw new Error('操作定义无效：' + operation.id);
         operation.schema = compileSchema(operation.schema);
     }
     for (const provider of providers.values()) {
@@ -87,9 +90,9 @@ function createRegistry(root = path.join(__dirname, '..')) {
     }
     function describe() {
         const base = definition => ({ id: definition.id, displayName: definition.displayName, description: definition.description || '', version: definition.version });
-        return { apiVersion: 2,
+        return { apiVersion: 3,
             resourceTypes: [...resourceTypes.values()].map(type => ({ ...base(type), kind: type.kind, extensions: type.extensions })),
-            operations: [...operations.values()].map(operation => ({ ...base(operation), accepts: operation.accepts, resultPolicy: operation.resultPolicy, fields: operation.schema.fields })),
+            operations: [...operations.values()].map(operation => ({ ...base(operation), accepts: operation.accepts, resultPolicy: operation.resultPolicy, preserveOriginal: Boolean(operation.preserveOriginal), fields: operation.schema.fields })),
             providers: [...providers.values()].map(provider => ({ ...base(provider), supports: provider.supports,
                 adapters: Object.entries(provider.adapters).map(([operation, adapter]) => ({ operation, version: adapter.version, fields: adapter.schema.fields })),
                 availability: providerAvailability(provider), acquisition: provider.acquisition || null, dependency: management(provider.id, root) })) };

@@ -37,3 +37,5 @@ npm run dev
 E2E 包含动态提供方、中文路径、步骤排序/删除与真实透明图片缩放、另存、取消、续跑、重试、选择性恢复、重启和运行中关闭。截图在 `test-results/`。必须先构建当前源码，不用旧 EXE 的结果替代验收。实际结果见[项目状态](../docs/project-status.md)。
 
 E2E 还会移走隔离副本的 LAME/Sharp，从前端真实下载并安装，再验证更新和旧目录保留。需能访问 RareWares 与 npm registry；网络或摘要失败应如实报告，不跳过或放宽校验。
+
+音频分析、增益与响度归一化通过现有处理线接入，作业栏显示测量与限制结果。运行音频核心/原生测试前，按工具页安装 FFmpeg/FFprobe 9.0.2；`tests/audio.spec.ts` 使用生成素材和隔离工具副本，不操作用户资源。详见[音频专题](../docs/architecture/audio.md)。

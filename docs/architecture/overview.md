@@ -1,6 +1,6 @@
 # 总体架构
 
-AssetToolbox 1.0.0 是 Windows 便携资源处理工具，使用 Vue 3/TypeScript、Tauri 2/Rust、Node CommonJS。已支持三种格式压缩与 PNG/JPEG 缩放，处理采用有序步骤。不提供云端服务、账户、数据库或应用 HTTP 后端。
+AssetToolbox 1.0.0 是 Windows 便携资源处理工具，使用 Vue 3/TypeScript、Tauri 2/Rust、Node CommonJS。已支持三种格式压缩、PNG/JPEG 缩放，以及 WAV/FLAC/MP3/Ogg 分析、固定增益与响度归一化，处理采用有序步骤。不提供云端服务、账户、数据库或应用 HTTP 后端。
 
 ## 进程与边界
 

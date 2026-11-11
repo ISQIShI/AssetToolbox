@@ -27,3 +27,7 @@ Rust 保持一个 Node JSON Lines 会话，对 invoke 请求串行派发；目�
 参数和依赖预检错误在提交前失败；单文件错误继续后续文件；报告写入错误告警，不回滚素材或抹掉日志。取消是协作式文件边界取消，工具卡住时没有强制超时。源文件大小、时间戳与哈希检查降低并发修改风险，但不提供跨进程全局素材锁或整批事务。扩展可信，不能把路径检查视为恶意代码沙箱。
 
 验证：`contract`、`resize`、`compress`、`resources`、`batch`、`desktop`、`resume`、`restore`、`restore-preview` 核心测试，以及真实原生 E2E。
+
+## 音频与只读步骤
+
+FFmpeg 提供方的三个 adapters 共享探测与测量实现，增益只使用固定 volume；详情见[音频专题](audio.md)。引擎支持 observe：验证输入未变且无输出，只记录 metadata。每个文件只有观察步骤时跳过素材提交，仍写任务结果；受保护转换在准备阶段要求另存或备份。batch 汇总音频步骤到完整报告/audio.csv，界面仅接收前 100 条。

@@ -120,3 +120,9 @@ stateDiagram-v2
 | 原生 | `desktop/tests/native.spec.ts` | 构建后的 EXE：工具缺失与恢复、动态扩展参数、840×620 无横向滚动、扫描、另存、覆盖备份、跨页取消、续跑、重试、选择性恢复、真实图片缩放、配置重启、运行中关闭 |
 
 测试只依赖语义选择器、`data-station`、`data-step-id`、`data-provider-id`、作业栏的 `data-job-id`、`data-state`，以及少量结构类名（`nav.tabs`、`.rail`、`.adder`、`.choice`、`.editor`、`.runbar`、`.summary-link`、`.dock`、`.statusbar`、`.restore-table .foot`、工具行的 `.state`）。调整样式类名时保持这些钩子。原生窗口的拖动、缩放与窗口按钮无法由 CDP 测试覆盖，改动标题栏后需要人工核对。截图保存在 `desktop/test-results/`，不提交。
+
+## 音频操作与结果
+
+目录 API 3 驱动新增音频组合，无独立硬编码参数表单；同操作跨工具公共参数保留规则不变。workbench.updateStep/addStep 为 preserveOriginal 操作默认选择另存，processingRequest 与核心同时拒绝无备份覆盖。只有 observe 时请求省略记忆中的目标路径，写入摘要显示“仅分析，不写入素材”。
+
+JobDock 中 AudioResults 展示前 100 条步骤测量、请求/实际增益、是否达标和峰值警告，null 明确显示不可测，失败文件标注未提交。完整结果从报告打开；作业栏限制高度并允许内部滚动。原生测试见 audio.spec.ts。

@@ -1,7 +1,7 @@
 import type { Configuration, Definition, Provider, Task } from '../src/core/types';
 
 export const definition: Definition = {
-    apiVersion: 2,
+    apiVersion: 3,
     resourceTypes: [{ id: 'png', displayName: 'PNG', extensions: ['.png'], kind: 'image', version: '1.0.0' }],
     operations: [
         { id: 'compress', displayName: '压缩', description: '仅在结果体积变小时采用新内容。', accepts: ['image'], resultPolicy: 'smaller-only', fields: [], version: '1.0.0' },

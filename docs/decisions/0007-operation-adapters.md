@@ -29,3 +29,5 @@
 配置 schema 升为 asset-toolbox.settings/2；拒绝 /1，不修改旧文件。步骤快照增加 versions.adapter，缺失或任何版本不匹配均拒绝处理、续跑和重试。任务/报告外层 schema 不变；既有备份恢复不依赖适配器，不迁移或执行旧快照。
 
 修订 [ADR 0003](0003-processing-contract.md) 的提供方接口、版本与配置约定，其他安全边界保持。测试覆盖注册拒绝、参数与版本隔离、单次 prepare、按序分派、策略区别、失败回滚、前端字段与参数保留，原生 E2E 验证真实目录通信与多操作任务。实际结果见[项目状态](../project-status.md)，接口见[扩展契约](../architecture/extensions.md)。
+
+后续：[ADR 0008](0008-audio-observation.md) 将目录升级为 API 3，并为操作引入只读与保留原文件语义；本决策的提供方 API 2 与参数隔离保持有效。

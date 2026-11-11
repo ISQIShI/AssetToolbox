@@ -4,7 +4,7 @@ import { computed, inject, ref, type InjectionKey } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { call, chooseFolder, openProviderSource, openReport } from './api';
 import { createStep, isMissing, processingRequest, providerOf } from './model';
-import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, RestorePreview, RestoreScope, ScanPreview, Selection, Task } from './types';
+import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, RestorePreview, RestoreScope, ScanPreview, Selection, Step, Task } from './types';
 
 export type Page = 'process' | 'tasks' | 'restore' | 'tools';
 export type JobKind = 'preview' | 'process' | 'resume' | 'retry' | 'restore-check' | 'restore' | 'dependency';
@@ -51,7 +51,7 @@ export function createWorkbench() {
     });
     const scanStale = computed(() => {
         if (!scan.value || !config.value) return false;
-        try { return JSON.stringify(processingRequest(config.value, 'preview')) !== scanRequest.value; } catch { return true; }
+        try { return JSON.stringify(processingRequest(config.value, 'preview', definition.value)) !== scanRequest.value; } catch { return true; }
     });
 
     const fail = (cause: unknown) => { error.value = String(cause instanceof Error ? cause.message : cause); };
@@ -142,13 +142,13 @@ export function createWorkbench() {
         error.value = ''; notice.value = '';
         try {
             const normalized = await call<Configuration>('normalize', config.value);
-            const request = processingRequest(normalized, mode);
+            const request = processingRequest(normalized, mode, definition.value);
             if (mode === 'process') {
                 try { await call('save', normalized); } catch (cause) { notice.value = `配置未能保存，本次仍按当前设置处理：${cause instanceof Error ? cause.message : cause}`; }
                 await launch(request, 'process', '处理资源');
                 return;
             }
-            const snapshot = JSON.stringify(processingRequest(config.value, 'preview'));
+            const snapshot = JSON.stringify(processingRequest(config.value, 'preview', definition.value));
             await launch(request, 'preview', '扫描预览', state => {
                 if (!state.preview) return;
                 scan.value = state.preview as ScanPreview; scanRequest.value = snapshot; station.value = 'scan';
@@ -160,6 +160,7 @@ export function createWorkbench() {
         if (!config.value || !definition.value || config.value.pipeline.length >= 64) return;
         try {
             const step = createStep(definition.value, resourceType, operation);
+            if (definition.value.operations.find(item => item.id === operation)?.preserveOriginal) config.value.saveMode = 'saveAs';
             config.value.pipeline.push(step); station.value = `step:${step.id}`;
         } catch (cause) { fail(cause); }
     }
@@ -167,6 +168,13 @@ export function createWorkbench() {
         const pipeline = config.value?.pipeline;
         if (!pipeline || index + offset < 0 || index + offset >= pipeline.length) return;
         const [step] = pipeline.splice(index, 1); pipeline.splice(index + offset, 0, step!);
+    }
+    function updateStep(index: number, step: Step) {
+        const previous = config.value?.pipeline[index];
+        if (!previous || !config.value) return;
+        if (step.enabled && (previous.operation !== step.operation || !previous.enabled)
+            && definition.value?.operations.find(item => item.id === step.operation)?.preserveOriginal) config.value.saveMode = 'saveAs';
+        config.value.pipeline[index] = step;
     }
     function removeStep(index: number) {
         const pipeline = config.value?.pipeline;
@@ -219,7 +227,7 @@ export function createWorkbench() {
         job, submitting, closing, definition, busy, missingProviders, blockedSteps,
         fail, initialize, refreshTasks, refreshProviders, browse, saveConfig, installDependency,
         launch, cancelJob, dismissJob, openJobReport, requestClose, stop: () => clearTimeout(timer),
-        runPipeline, addStep, moveStep, removeStep,
+        runPipeline, addStep, moveStep, removeStep, updateStep,
         continueTask, showTask, checkRestore, recheckRestore, restoreSelected, openSource,
     };
 }

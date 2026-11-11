@@ -2,6 +2,8 @@
 // 不读写任何文件，数据全部为生成样例。不得在测试或生产代码中引用。
 import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, RestorePreview, ScanPreview, Task } from './types';
 
+import { audioTypes, audioOperations, audioProvider } from './preview-audio';
+
 const params = new URLSearchParams(location.search);
 const acquisition = (name: string, version: string, license: string, url: string, instructions: string) => ({ name, version, license, url, source: url, instructions, redistribution: '仅本地使用，发布前须完成许可核对。', checkedAt: '2026-11-08' });
 const providers: Provider[] = [
@@ -31,7 +33,7 @@ for (const provider of providers) {
     if (automatic && params.has('missing-auto')) provider.availability = { available: false, reason: '尚未安装所需文件' };
 }
 const definition: Definition = {
-    apiVersion: 2,
+    apiVersion: 3,
     resourceTypes: [
         { id: 'jpg', displayName: 'JPEG', kind: 'image', extensions: ['.jpg', '.jpeg'], version: '1.0.0' },
         { id: 'mp3', displayName: 'MP3', kind: 'audio', extensions: ['.mp3'], version: '1.0.0' },
@@ -49,6 +51,10 @@ const definition: Definition = {
     ],
     providers,
 };
+// 与核心契约一致的音频目录样例，仅供浏览器调试。
+definition.resourceTypes.push(...audioTypes);
+definition.operations.push(...audioOperations);
+providers.push(audioProvider);
 let config: Configuration = {
     schema: 'asset-toolbox.settings/2', sourceDir: 'D:\\Projects\\StarHarbor\\Assets\\UI', outputDir: '', backupDir: 'D:\\Projects\\StarHarbor\\Backups', saveMode: 'overwrite', backupEnabled: true,
     pipeline: [

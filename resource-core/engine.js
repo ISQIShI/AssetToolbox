@@ -75,11 +75,14 @@ function collectResources(folder, { exclude = [], extensions = byExtension, shou
 
 function prepareFolder(folder, options) {
     const pipeline = normalizePipeline(options.pipeline);
+    const enabled = pipeline.filter(step => step.enabled);
+    const observationOnly = enabled.length > 0 && enabled.every(step => operations.get(step.operation).resultPolicy === 'observe');
+    if (enabled.some(step => operations.get(step.operation).preserveOriginal) && options.outputDir === undefined && options.backupDir === undefined) throw new Error('音频处理需另存结果，或在覆盖时指定备份目录，以保留原文件');
     if (options.outputDir !== undefined && options.backupDir !== undefined) throw new Error('另存为与覆盖备份不能同时启用');
     const sourceRoot = fs.realpathSync(path.resolve(folder));
     if (!fs.statSync(sourceRoot).isDirectory()) throw new Error('目标不是文件夹：' + sourceRoot);
-    const outputRoot = options.outputDir !== undefined ? validateDestination(sourceRoot, options.outputDir) : null;
-    const backupRoot = options.backupDir !== undefined ? validateDestination(sourceRoot, options.backupDir) : null;
+    const outputRoot = !observationOnly && options.outputDir !== undefined ? validateDestination(sourceRoot, options.outputDir) : null;
+    const backupRoot = !observationOnly && options.backupDir !== undefined ? validateDestination(sourceRoot, options.backupDir) : null;
     const excluded = [outputRoot, backupRoot].filter(Boolean);
     let collected;
     if (options.fileList !== undefined) {
@@ -122,7 +125,9 @@ function scanFolder(folder, options = {}) {
         const bytes = fs.statSync(filename).size;
         group.count++; group.bytes += bytes; result.totalBytes += bytes;
         if (group.enabled) result.enabledFiles++;
-        if (outputRoot) {
+        const observing = pipeline.some(step => step.enabled && step.resourceType === resourceDefinition.id)
+            && pipeline.filter(step => step.enabled && step.resourceType === resourceDefinition.id).every(step => operations.get(step.operation).resultPolicy === 'observe');
+        if (outputRoot && !observing) {
             const target = path.join(outputRoot, relative);
             // 同名输出、父路径为文件或链接均会阻止安全写入。
             let candidate = target;
@@ -216,7 +221,9 @@ function processResource(filename, workDirectory, executables, pipeline) {
     if (fs.lstatSync(filename).isSymbolicLink()) throw new Error('文件已变为符号链接，已取消处理');
     const original = fs.readFileSync(filename), mode = fs.statSync(filename).mode;
     const steps = pipeline.filter(step => step.enabled && step.resourceType === type.id), stepResults = [];
-    const unchanged = { original, output: original, mode, changed: false, stepResults };
+    const applicable = steps.length ? steps : pipeline.filter(step => step.enabled);
+    const readOnly = applicable.length > 0 && applicable.every(step => operations.get(step.operation).resultPolicy === 'observe');
+    const unchanged = { original, output: original, mode, changed: false, stepResults, readOnly };
     if (!steps.length) return { ...unchanged, reason: '该资源未配置启用的处理步骤' };
     const input = path.join(workDirectory, 'input', 'resource' + type.extensions[0]);
     const output = path.join(workDirectory, 'output' + type.extensions[0]);
@@ -230,7 +237,12 @@ function processResource(filename, workDirectory, executables, pipeline) {
             const result = provider.adapters[operation.id].execute({ executable: executables.get(provider.id), input, output, workDirectory,
                 operation: operation.id, parameters: step.parameters, providerOptions: step.providerOptions, resourceType: type.id });
             if (result?.then) throw new Error('execute 必须同步返回；异步库须通过工作进程适配');
-            if (result?.skipped) { stepResults.push({ id: step.id, operation: step.operation, provider: step.provider, status: 'skipped', inputBytes: current.length, outputBytes: current.length }); continue; }
+            if (operation.resultPolicy === 'observe') {
+                if (!result?.metadata || result.output !== undefined || result.skipped || !fs.readFileSync(input).equals(current) || fs.existsSync(output)) throw new Error('分析适配器只能返回 metadata，不得修改或生成输出');
+                stepResults.push({ id: step.id, operation: step.operation, provider: step.provider, status: 'analyzed', metadata: result.metadata, inputBytes: current.length, outputBytes: current.length });
+                continue;
+            }
+            if (result?.skipped) { stepResults.push({ id: step.id, operation: step.operation, provider: step.provider, status: 'skipped', metadata: result.metadata, inputBytes: current.length, outputBytes: current.length }); continue; }
             if (typeof result?.output !== 'string' || !isWithin(workDirectory, path.resolve(result.output)) || !isWithin(workDirectory, fs.realpathSync(result.output)) || fs.lstatSync(result.output).isSymbolicLink() || !fs.statSync(result.output).isFile()) throw new Error('提供方输出必须是工作目录内的普通文件');
             const next = fs.readFileSync(result.output);
             if (!type.validate(next)) throw new Error('处理结果格式无效，保留原文件');
@@ -239,10 +251,10 @@ function processResource(filename, workDirectory, executables, pipeline) {
                 inputBytes: current.length, outputBytes: accepted ? next.length : current.length, ...(result.metadata ? { metadata: result.metadata } : {}) });
             if (accepted) current = next;
         }
-        return { original, output: current, mode, changed: !current.equals(original), stepResults };
+        return { original, output: current, mode, changed: !current.equals(original), stepResults, readOnly };
     } catch (error) {
         const failed = steps[stepResults.length];
-        if (failed) stepResults.push({ id: failed.id, operation: failed.operation, provider: failed.provider, status: 'failed', message: error.message.replaceAll(input, filename) });
+        if (failed) stepResults.push({ id: failed.id, operation: failed.operation, provider: failed.provider, status: 'failed', message: error.message.replaceAll(input, filename), metadata: error.metadata });
         return { ...unchanged, error: new Error(error.message.replaceAll(input, filename)) };
     } finally {
         for (const temporary of [input, output]) if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
@@ -296,12 +308,13 @@ function processFolder(folder, options = {}) {
                 options.beforeFile?.(relativePath, filename);
                 const result = processResource(filename, workDirectory, executables, pipeline);
                 record.steps = result.stepResults;
+                record.readOnly = result.readOnly;
                 record.originalBytes = result.original.length;
                 record.sourceHash = digest(result.original);
                 const expectedHash = digest(result.output);
                 assertUnchanged(filename, result.original);
                 let previousOutput, outputTarget;
-                if (outputRoot) {
+                if (outputRoot && !result.readOnly) {
                     outputTarget = destinationFile(outputRoot, relativePath);
                     let existing;
                     try { existing = fs.lstatSync(outputTarget); } catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -313,13 +326,13 @@ function processFolder(folder, options = {}) {
                         if (digest(previousOutput) !== ownedHash) throw new Error('之前的失败副本已被修改，未覆盖');
                     }
                 }
-                options.beforeCommit?.({ ...record, status: result.error ? 'failed' : result.changed ? 'processed' : 'skipped',
+                if (!result.readOnly) options.beforeCommit?.({ ...record, status: result.error ? 'failed' : result.changed ? 'processed' : 'skipped',
                     expectedHash, outputHash: outputRoot ? expectedHash : null, outputBytes: result.output.length,
                     savedBytes: result.changed ? result.original.length - result.output.length : 0,
                     copied: Boolean(outputRoot && !result.changed), backedUp: Boolean(backupSession && result.changed && !outputRoot),
                     message: result.error?.message || result.reason || '',
                 });
-                if (outputRoot) {
+                if (outputRoot && !result.readOnly) {
                     if (previousOutput !== undefined) replaceIfUnchanged(outputTarget, previousOutput, result.output, result.mode);
                     else writeNewFile(outputTarget, result.output, result.mode);
                     record.outputHash = expectedHash;
@@ -351,7 +364,7 @@ function processFolder(folder, options = {}) {
                 }
                 record.outputBytes = result.output.length;
                 if (result.error) {
-                    throw new Error(`${result.error.message}${outputRoot ? '；已将原文件复制到输出目录' : ''}`);
+                    throw new Error(`${result.error.message}${outputRoot && !result.readOnly ? '；已将原文件复制到输出目录' : ''}`);
                 }
                 if (result.changed) {
                     summary.processed++;
@@ -360,8 +373,8 @@ function processFolder(folder, options = {}) {
                     log(`[${index + 1}/${files.length}] 已处理${outputRoot ? '并另存' : ''} ${relativePath} (${result.original.length} → ${result.output.length} 字节)`);
                 } else {
                     summary.skipped++;
-                    record.status = 'skipped'; record.message = result.reason || '无需处理或未满足质量要求';
-                    log(`[${index + 1}/${files.length}] ${outputRoot ? '已复制原文件' : '保留原文件'} ${relativePath}（${result.reason || '无需处理或未满足质量要求'}）`);
+                    record.status = 'skipped'; record.message = result.reason || (result.readOnly ? '分析完成，素材未写入' : '无需处理或未满足质量要求');
+                    log(`[${index + 1}/${files.length}] ${outputRoot && !result.readOnly ? '已复制原文件' : '保留原文件'} ${relativePath}（${record.message}）`);
                 }
             } catch (error) {
                 summary.failed++;

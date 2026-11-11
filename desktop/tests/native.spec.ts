@@ -13,7 +13,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function freePort(): Promise<number> { const server = createServer(); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const port = (server.address() as { port: number }).port; await new Promise<void>(resolve => server.close(() => resolve())); return port; }
 test('native portable app: config + dynamic providers + image resize + save-as + cancel/resume/retry + selective restore + relaunch', async ({}, info) => {
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'asset-native-test-'));
-    const tool = copyTool(root, true), source = path.join(root, '中文 素材'), backup = path.join(root, '原图备份'), output = path.join(root, '另存 结果');
+    const tool = copyTool(root, true, true), source = path.join(root, '中文 素材'), backup = path.join(root, '原图备份'), output = path.join(root, '另存 结果');
     fs.mkdirSync(path.join(tool, 'runtime')); fs.copyFileSync(path.join(project, 'runtime/node.exe'), path.join(tool, 'runtime/node.exe'));
     fs.copyFileSync(path.join(project, 'AssetToolbox.exe'), path.join(tool, 'AssetToolbox.exe'));
     fs.copyFileSync(path.join(project, 'resource-core/desktop-bridge.js'), path.join(tool, 'resource-core/desktop-bridge.js'));

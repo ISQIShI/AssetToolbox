@@ -6,7 +6,7 @@ const SETTINGS_FILE = path.join(__dirname, 'data', 'settings.json');
 function defaultConfiguration() {
     const pipeline = [['png', 'pngquant', true], ['jpg', 'jpg-c', true], ['mp3', 'lame', false]]
         .filter(([, provider]) => providers.has(provider)).map(([resourceType, provider, enabled]) => ({ id: resourceType + '-compress', resourceType, operation: 'compress', provider, enabled }));
-    return { schema: 'asset-toolbox.settings/2', sourceDir: '', outputDir: '', backupDir: '', saveMode: 'overwrite', backupEnabled: false, pipeline: normalizePipeline(pipeline) };
+    return { schema: 'asset-toolbox.settings/2', sourceDir: '', outputDir: '', backupDir: '', saveMode: 'saveAs', backupEnabled: false, pipeline: normalizePipeline(pipeline) };
 }
 function validateConfiguration(input) {
     if (!input || input.schema !== 'asset-toolbox.settings/2' || Object.keys(input).some(key => !['schema', 'sourceDir', 'outputDir', 'backupDir', 'saveMode', 'backupEnabled', 'pipeline'].includes(key))) throw new Error('不支持的设置契约');

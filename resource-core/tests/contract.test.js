@@ -63,7 +63,7 @@ test('discovers multiple providers for the same operation and excludes linked or
     fs.writeFileSync(path.join(alternative, 'index.js'), "module.exports={apiVersion:2,version:'1.0.0',displayName:'替代实现',adapters:{'compress':{version:'1.0.0',resourceTypes:['png'],execute(){return {skipped:true}}}}};");
     const disabled = path.join(core, 'providers/_disabled'); fs.mkdirSync(disabled); fs.writeFileSync(path.join(disabled, 'index.js'), 'invalid javascript');
     const next = registry.createRegistry(core);
-    assert.equal(next.providers.size, 5);
+    assert.equal(next.providers.size, 6);
     assert.equal(next.normalizePipeline([{ ...resize(), operation: 'compress', provider: 'alternative', parameters: {} }])[0].provider, 'alternative');
     const collision = path.join(core, 'resource-types/collision'); fs.mkdirSync(collision);
     fs.writeFileSync(path.join(collision, 'index.js'), "module.exports={apiVersion:1,version:'1.0.0',displayName:'冲突',kind:'image',extensions:['.png'],validate(){return true}};");

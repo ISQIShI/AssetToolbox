@@ -4,6 +4,7 @@ import { computed } from 'vue';
 import { useWorkbench } from '../core/workbench';
 import { bytes, elapsed, sizeChange } from '../core/model';
 import Icon from './Icon.vue';
+import AudioResults from './AudioResults.vue';
 
 const bench = useWorkbench();
 const { job, closing } = bench;
@@ -66,6 +67,7 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
       </div>
     </div>
 
+    <AudioResults v-if="!running && state.audioResults?.length" :results="state.audioResults" :total="state.audioResultCount || state.audioResults.length" />
     <p v-if="running && state.current" class="current path">{{ state.current }}</p>
     <p v-if="running && job.kind === 'dependency' && state.message" class="small muted">{{ state.message }}</p>
     <div v-if="!running && (state.error || notes.length || state.cancelled || state.message)" class="details selectable">

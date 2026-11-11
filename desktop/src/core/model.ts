@@ -97,13 +97,16 @@ export function visibleFiles(files: RestoreFile[], state: string, query: string)
 
 const clean = (value: string) => value.trim().replace(/^"|"$/g, '');
 
-export function processingRequest(config: Configuration, mode: 'preview' | 'process'): JobRequest {
+export function processingRequest(config: Configuration, mode: 'preview' | 'process', definition?: Definition): JobRequest {
+    const enabled = config.pipeline.filter(step => step.enabled);
+    const observationOnly = enabled.length > 0 && enabled.every(step => definition?.operations.find(op => op.id === step.operation)?.resultPolicy === 'observe');
     if (!config.sourceDir.trim()) throw new Error('请选择来源文件夹');
-    if (config.saveMode === 'saveAs' && !config.outputDir.trim()) throw new Error('请选择另存文件夹');
-    if (config.saveMode === 'overwrite' && config.backupEnabled && !config.backupDir.trim()) throw new Error('请选择备份文件夹');
+    if (!observationOnly && config.saveMode === 'saveAs' && !config.outputDir.trim()) throw new Error('请选择另存文件夹');
+    if (!observationOnly && config.saveMode === 'overwrite' && config.backupEnabled && !config.backupDir.trim()) throw new Error('请选择备份文件夹');
+    if (enabled.some(step => definition?.operations.find(op => op.id === step.operation)?.preserveOriginal) && config.saveMode === 'overwrite' && !config.backupEnabled) throw new Error('音频覆盖处理必须启用备份，或改为另存结果');
     return {
         mode, folder: clean(config.sourceDir), pipeline: config.pipeline,
-        ...(config.saveMode === 'saveAs' ? { outputDir: clean(config.outputDir) } : config.backupEnabled ? { backupDir: clean(config.backupDir) } : {}),
+        ...(!observationOnly && config.saveMode === 'saveAs' ? { outputDir: clean(config.outputDir) } : !observationOnly && config.backupEnabled ? { backupDir: clean(config.backupDir) } : {}),
     };
 }
 

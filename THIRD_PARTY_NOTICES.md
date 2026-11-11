@@ -2,10 +2,11 @@
 
 AssetToolbox 自有源码按根目录 [MIT License](LICENSE) 发布。MIT 不替换或重新许可第三方工具、依赖、源码及许可证文本。当前 GitHub 仓库仅发布项目源码、锁文件、来源记录和许可说明，不携带 EXE、DLL、Node 运行时或 node_modules；私有可见性本身不免除第三方义务。
 
-核验日期：2026-11-08。可安装渠道同步记录于每个提供方的 `provenance.json`，前端“工具”页读取这些记录。
+音频提供方核验日期：2026-11-10；其余工具记录沿用 2026-11-08/09 的核验。可安装渠道同步记录于每个提供方的 `provenance.json`，前端“工具”页读取这些记录。
 
 | 提供方 | 当前本地版本 / 来源 | 许可与本次处置 |
 | --- | --- | --- |
+| FFmpeg / FFprobe | 9.0.2-essentials_build-www.gyan.dev；[官网 Windows 渠道](https://ffmpeg.org/download.html)、[Gyan 构建页](https://www.gyan.dev/ffmpeg/builds/)、[对应源提交](https://github.com/FFmpeg/FFmpeg/commit/946fcce07b) | FFmpeg developers 及所含组件作者；本构建启用 GPL/version3，适用 GPL-3.0-or-later，并非 LGPL-only。[本地包 GPL 文本](third-party/licenses/ffmpeg-9.0.2-GPL.txt)。从已有本地安装复制两个工具，记录版本、配置及文件 SHA-256；未重新下载或核验发行归档，完整对应源码和组件许可待补齐，不分发二进制。 |
 | pngquant | 3.0.3；[作者项目](https://github.com/kornelski/pngquant/tree/3.0.3)、[crates.io 发行包](https://crates.io/crates/pngquant/3.0.3) | Kornel Lesiński 及 Jef Poskanzer、Greg Roelofs 等贡献者；GPL-3.0-or-later，附原始代码声明；另有商业许可。由官方发行源码锁定依赖编译，替换本地 2.17.0；[完整 COPYRIGHT](third-party/licenses/pngquant-3.0.3-COPYRIGHT.txt)。 |
 | JPG-C | 4.0.21.902；EXE 版本信息为 Copyright (C) zzy 2021 / zzy.my；[作者页面](https://zzy.my/blog/post/Jpg-C) | 原始二进制取得渠道无可核验证据；未找到明确再分发许可。作者页面本轮超时/证书异常，未绕过证书检查；保留本地版本，不分发。 |
 | LAME | 4.0 x64；[官方项目](https://lame.sourceforge.io/)、[官网推荐的 RareWares](https://www.rarewares.org/mp3-lame-bundle.php)，2026-08-23 未打 q4 补丁构建 | LAME Project；可执行文件自述 GNU Library GPL v2 or later。更新本地 3.100.1，同时安装 libmpg123-0.dll。二进制与对应源码、解码组件的许可链尚未闭合，故不分发。不能仅凭 LGPL 标签忽略解码器。 |
