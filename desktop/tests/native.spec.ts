@@ -12,8 +12,7 @@ const { copyTool } = require(path.join(project, 'resource-core/tests/portable.js
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function freePort(): Promise<number> { const server = createServer(); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const port = (server.address() as { port: number }).port; await new Promise<void>(resolve => server.close(() => resolve())); return port; }
 test('native portable app: config + dynamic providers + image resize + save-as + cancel/resume/retry + selective restore + relaunch', async ({}, info) => {
-    // 安装会串行下载多个包（每包最多 60 秒），网络等待不能使用普通作业的 30 秒限时。
-    test.setTimeout(600000);
+    test.setTimeout(120000);
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'asset-native-test-'));
     const tool = copyTool(root, true, true), source = path.join(root, '中文 素材'), backup = path.join(root, '原图备份'), output = path.join(root, '另存 结果');
     fs.mkdirSync(path.join(tool, 'runtime')); fs.copyFileSync(path.join(project, 'runtime/node.exe'), path.join(tool, 'runtime/node.exe'));
@@ -34,9 +33,8 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     const settingsPath = path.join(tool, 'resource-core/data/settings.json');
     const config = { schema: 'asset-toolbox.settings/2', sourceDir: source, outputDir: output, backupDir: backup, saveMode: 'saveAs', backupEnabled: true, pipeline: [{ id: 'pack', resourceType: 'extra', operation: 'compress', provider: 'extra', enabled: true, parameters: {}, providerOptions: { extraLevel: 6, extraMode: 'best', extraText: '中文 配置' } }] };
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true }); fs.writeFileSync(settingsPath, JSON.stringify(config));
-    // 缺少依赖的全新安装：只移动隔离副本，原项目工具保持不变。
-    fs.renameSync(path.join(tool, 'resource-core/node_modules'), path.join(tool, 'resource-core/node_modules.manual'));
-    for (const name of ['lame.exe', 'libmpg123-0.dll']) fs.renameSync(path.join(tool, 'resource-core/providers/lame', name), path.join(tool, 'resource-core/providers/lame', name + '.manual'));
+    // 常规原生回归不访问下载渠道；若误调用安装器，隔离副本立即失败。
+    fs.writeFileSync(path.join(tool, 'resource-core/framework/dependencies/download.js'), "exports.download=async()=>{throw Error('离线原生回归禁止下载，请运行 network 项目')};");
     let child: ChildProcess | undefined, browser: Browser | undefined, page!: Page;
     const errors: string[] = [];
     async function launch() {
@@ -66,34 +64,6 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     }
     try {
         await launch();
-        // 直接从核验渠道安装，之后的真实缩放使用受管理的 Sharp。
-        await tab('工具').click();
-        await page.screenshot({ path: info.outputPath('dependency-missing.png'), fullPage: true });
-        for (const id of ['lame', 'sharp']) {
-            const provider = page.locator(`[data-provider-id="${id}"]`);
-            await expect(provider).toContainText('缺少依赖');
-            await provider.getByRole('button', { name: '获取并安装', exact: true }).click();
-            await started();
-            if (id === 'lame') await page.screenshot({ path: info.outputPath('dependency-progress.png'), fullPage: true });
-            await done(true, id === 'sharp' ? 330000 : 75000);
-            await expect(page.locator('.dock')).toContainText('已安装并通过完整性校验');
-            await expect(provider).toContainText('已安装核验版本');
-            await expect(provider.locator('.state')).toHaveText('可用');
-            await page.getByRole('button', { name: '关闭作业结果' }).click();
-        }
-        await page.screenshot({ path: info.outputPath('installed-dependencies.png'), fullPage: true });
-        // 模拟上一核验清单记录，走更新按钮；旧目录仍可供运行中的快照使用。
-        const recordFile = path.join(tool, 'resource-core/data/dependencies/lame/active.json');
-        const previous = JSON.parse(fs.readFileSync(recordFile, 'utf8'));
-        fs.writeFileSync(recordFile, JSON.stringify({ ...previous, catalogHash: 'previous-approved-catalog' }));
-        await button('刷新依赖状态').click();
-        const lame = page.locator('[data-provider-id="lame"]');
-        if (!(await lame.locator('details').getAttribute('open') !== null)) await lame.locator('summary').click();
-        await lame.getByRole('button', { name: '更新到核验版本', exact: true }).click(); await done(false, 75000);
-        await expect(lame).toContainText('已安装核验版本');
-        expect(JSON.parse(fs.readFileSync(recordFile, 'utf8')).directory).not.toBe(previous.directory);
-        expect(fs.existsSync(path.join(tool, 'resource-core/data/dependencies/lame/installs', previous.directory))).toBe(true);
-        await page.getByRole('button', { name: '关闭作业结果' }).click();
         // 工具页：移走真实编码器后显示缺失原因与获取渠道，放回后恢复可用。
         const pngTool = path.join(tool, 'resource-core/providers/pngquant/pngquant.exe');
         fs.renameSync(pngTool, pngTool + '.held');
@@ -265,7 +235,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         const nativeStatus = await page.evaluate(jobId => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'status', payload: { jobId } }), completedJobId);
         const cliStatus = spawnSync(path.join(tool, 'runtime/node.exe'), [path.join(tool, 'resource-core/cli.js'), 'api', 'status', '--local', '--input', '-'], { input: JSON.stringify({ jobId: completedJobId }), encoding: 'utf8', windowsHide: true, timeout: 15000 });
         expect(cliStatus.status, cliStatus.stderr).toBe(0);
-        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/2');
+        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/3');
         expect(JSON.parse(cliStatus.stdout).result).toEqual(nativeStatus);
         expect(nativeStatus.taskId).toBe(adapterTask.id); expect(nativeStatus.task).not.toHaveProperty('taskFile');
         expect(nativeStatus.hasReport).toBe(true); expect(nativeStatus).not.toHaveProperty('reportDirectory');
@@ -283,6 +253,34 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect(page.getByLabel('替换前备份原文件', { exact: false })).toBeChecked();
         expect(fs.readFileSync(settingsPath, 'utf8')).toContain('中文 配置');
         expect(errors).toEqual([]);
+        // 只给隔离副本中的已完成作业模拟 45 天前时间；真实配置与素材不参与清理验收。
+        const oldJob = path.join(tool, 'resource-core/data/jobs/v2', completedJobId);
+        const jobFile = path.join(oldJob, 'job.json'), oldMeta = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
+        const oldReport = JSON.parse(fs.readFileSync(path.join(oldJob, 'status.json'), 'utf8')).reportDirectory;
+        const oldTime = new Date(Date.now() - 45 * 86400000);
+        fs.writeFileSync(jobFile, JSON.stringify({ ...oldMeta, createdAt: oldTime.toISOString() }));
+        for (const directory of [oldJob, oldReport]) for (const name of fs.readdirSync(directory)) fs.utimesSync(path.join(directory, name), oldTime, oldTime);
+        const journalFile = path.join(tool, 'resource-core/data/tasks', adapterTask.id, 'events.jsonl');
+        const journalBefore = fs.readFileSync(journalFile), outputBefore = fs.readFileSync(path.join(adapterOutput, 'a.pack'));
+        await tab('工具').click(); await page.locator('.storage > summary').click();
+        await button('预览清理范围').click();
+        const selectedJob = page.getByLabel(`清理作业 ${completedJobId}`, { exact: true });
+        await expect(selectedJob).toBeEnabled(); await expect(selectedJob).not.toBeChecked();
+        await selectedJob.check();
+        await page.screenshot({ path: info.outputPath('storage-1220-light.png'), fullPage: true });
+        await page.setViewportSize({ width: 840, height: 620 });
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: info.outputPath('storage-840-dark.png'), fullPage: true });
+        await button('清理所选 1 项').click();
+        await expect(page.locator('.storage')).toContainText('已清理，保留作业身份与幂等记录');
+        const expired = await page.evaluate(jobId => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'status', payload: { jobId } }), completedJobId);
+        expect(expired.resultsExpired).toBe(true); expect(expired.hasReport).toBe(false);
+        expect(fs.existsSync(oldReport)).toBe(false); expect(fs.existsSync(jobFile)).toBe(true);
+        expect(fs.readFileSync(journalFile)).toEqual(journalBefore); expect(fs.readFileSync(path.join(adapterOutput, 'a.pack'))).toEqual(outputBefore);
+        await page.setViewportSize({ width: 1220, height: 850 });
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+        await tab('处理').click();
         // 运行中关闭窗口：先协作取消，任务保留可继续状态。
         await button('开始处理').click();
         await started();

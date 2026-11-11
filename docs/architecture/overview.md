@@ -8,10 +8,11 @@ AssetToolbox 1.0.0 是 Windows 便携资源处理工具，使用 Vue 3/TypeScrip
 flowchart TD
     UI[Vue / WebView2] -->|Tauri invoke| Host[Rust 宿主]
     Host -->|JSON Lines| Bridge[Node 桌面会话]
-    CLI[结构化 CLI] --> Application[ApplicationService /2 唯一公共作业用例]
+    CLI[结构化 CLI] --> Application[ApplicationService /3 唯一公共作业用例]
     MCP[MCP stdio / Streamable HTTP] --> Application
     HTTP[本机 HTTP API] --> Application
     Bridge --> Application
+    Application --> Storage[本地存储维护 / 预览与显式清理]
     Application --> Session[JobSession / 持久作业进程]
     Session --> Worker[batch.js 工作进程 / 安装级执行锁]
     Worker --> Engine[engine.js 流水线]
@@ -44,7 +45,7 @@ MCP 单独使用 SDK 2.4.0 与 Zod，不加入桌面核心依赖；按需携带 
 
 ## 数据流与安全
 
-启动加载目录和配置，配置错误不妨碍任务/恢复入口。前端先 normalize，再保存配置（失败告警但允许本次运行），最后 start。预览不保存配置。批处理扫描后固定任务清单和规范化 pipeline，包括类型、操作、提供方和适配器版本。提供方 API 2 按操作组织适配器，依赖准备按提供方共享。
+启动加载目录和配置，配置错误不妨碍任务/恢复入口。前端先 normalize，再保存配置（失败告警但允许本次运行），最后 submit。预览不保存配置。批处理扫描后固定任务清单和规范化 pipeline，包括类型、操作、提供方和适配器版本。提供方 API 2 按操作组织适配器，依赖准备按提供方共享。
 
 每个文件过滤适用步骤，按顺序执行；压缩接受更小输出，缩放接受合法输出。全部步骤成功后才做一次提交：写 intent、校验哈希、备份/排他创建或原子替换、写 result。后续步骤失败丢弃前面产物。续跑和恢复复用任务锁、哈希及事件日志；恢复不加载转换插件。
 
@@ -55,3 +56,5 @@ MCP 单独使用 SDK 2.4.0 与 Zod，不加入桌面核心依赖；按需携带 
 ## 设计边界
 
 当前只支持同格式、一入一出、逐文件串行；扩展为可信本地代码，无权限隔离、热重载、依赖注入。没有 Cordis。新数据根和 schema 不兼容历史数据，见[持久化](persistence.md)。后续扩展优先遵循契约，出现生命周期或服务依赖需求后再评估框架收益。
+
+[存储维护](storage.md)直接复用应用服务，默认保留 30 天，人工预览和选择后清理成功旧作业明细；任务、备份与幂等身份保留。当前实现同步扫描/哈希，未实现流式报告或定时清理。[测试分层](../testing.md)区分源码 CI、真实编码器、原生离线及联网安装验收。

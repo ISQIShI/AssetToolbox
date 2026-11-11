@@ -1,5 +1,5 @@
-const API = 'asset-toolbox.application/2';
-const RESPONSE = 'asset-toolbox.response/2';
+const API = 'asset-toolbox.application/3';
+const RESPONSE = 'asset-toolbox.response/3';
 const JOB = 'asset-toolbox.job/2';
 const object = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 const string = { type: 'string' };
@@ -17,12 +17,15 @@ const request = { oneOf: [
 ] };
 const jobId = { type: 'string', pattern: '^[a-f0-9]{64}$' };
 const pagination = { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 100 } };
+const retentionDays = { type: 'integer', minimum: 1, maximum: 3650, default: 30 };
 const inputSchemas = {
     capabilities: object({}), validate: object({ request }),
     submit: object({ request, idempotencyKey: { type: 'string', pattern: '^[a-zA-Z0-9._:-]{1,128}$' } }),
     status: object({ jobId }), cancel: object({ jobId }),
     results: object({ jobId, kind: { enum: ['files', 'audio', 'restore'] }, ...pagination }, ['jobId']),
     jobs: object(pagination, []), tasks: object(pagination, []),
+    'storage-preview': object({ retentionDays, ...pagination }, []),
+    'storage-clean': object({ retentionDays, selection: { type: 'array', minItems: 1, maxItems: 100, items: object({ jobId, fingerprint: { type: 'string', pattern: '^[a-f0-9]{64}$' } }) } }, ['retentionDays', 'selection']),
 };
 const ACTION_FIELDS = Object.freeze(Object.fromEntries(Object.entries(inputSchemas).map(([action, schema]) => [action, Object.keys(schema.properties)])));
 module.exports = { API, RESPONSE, JOB, ACTION_FIELDS, inputSchemas };

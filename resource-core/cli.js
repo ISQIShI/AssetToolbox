@@ -2,7 +2,8 @@ const fs = require('node:fs');
 async function main(args) {
     if (!args.length || args[0] === '--help') {
         console.log('用法：node cli.js <源文件夹> --pipeline <步骤数组.json> [--output <目录> | --backup <目录>] [--preview]');
-        console.log('统一 API /2：node cli.js api <capabilities|validate|submit|status|cancel|jobs|tasks|results> <--policy 权限.json | --local> [--input <请求.json|->]');
+        const { API, ACTION_FIELDS } = require('./application/contract');
+        console.log(`统一 API ${API}：node cli.js api <${Object.keys(ACTION_FIELDS).join('|')}> <--policy 权限.json | --local> [--input <请求.json|->]`);
         return;
     }
     const options = {};

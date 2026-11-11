@@ -1,10 +1,10 @@
 # 本机 HTTP API 与 MCP Streamable HTTP
 
-状态：已实现。仅支持本机 Agent；stdio MCP 保留且仍为默认启动模式。源码为 `resource-core/application/http.js`、`http-server.js`、`server-options.js`、`agent-mcp/server.mjs`、`tools.mjs`；决策见 [ADR 0010](../decisions/0010-local-http.md)。业务动作、目录 policy、幂等键和报告分页使用 /2 [自动化契约](automation.md)。
+状态：已实现。仅支持本机 Agent；stdio MCP 保留且仍为默认启动模式。源码为 `resource-core/application/http.js`、`http-server.js`、`server-options.js`、`agent-mcp/server.mjs`、`tools.mjs`；决策见 [ADR 0010](../decisions/0010-local-http.md)。业务动作、目录 policy、幂等键和报告分页使用 /3 [自动化契约](automation.md)。
 
 ## 统一应用服务边界
 
-桌面、CLI（含快捷命令）、MCP 和 HTTP 直接复用应用 /2 的公共作业契约与唯一实现。权限和 connection/server 生命周期来自启动上下文；没有桌面专用作业分支，详见[统一应用接口](application.md)。桌面设置保持独立，网络不公开 save、bootstrap 或内部执行方法。HTTP 服务只接受 policy 权限及 server 生命周期上下文。
+桌面、CLI（含快捷命令）、MCP 和 HTTP 直接复用应用 /3 的公共作业契约与唯一实现。权限和 connection/server 生命周期来自启动上下文；没有桌面专用作业分支，详见[统一应用接口](application.md)。桌面设置保持独立，网络不公开 save、bootstrap 或内部执行方法。HTTP 服务只接受 policy 权限及 server 生命周期上下文。
 
 ## 启动
 
@@ -34,25 +34,25 @@ stdio 由宿主按会话启动；HTTP 由使用者单独启动并保持运行。
 
 ## HTTP API
 
-所有请求都带 `Authorization: Bearer <令牌>`。API 是动作式 JSON 接口，路径为 `POST /api/v2/<action>`，正文与 CLI/MCP 对应动作的输入一致，响应沿用 `asset-toolbox.response/2`。
+所有请求都带 `Authorization: Bearer <令牌>`。API 是动作式 JSON 接口，路径为 `POST /api/v3/<action>`，正文与 CLI/MCP 对应动作的输入一致，响应沿用 `asset-toolbox.response/3`。
 
 | 路径 | JSON 输入 | 成功响应 |
 | --- | --- | --- |
-| `/api/v2/capabilities` | `{}` | 200，目录、schema、提供方获取信息及当前 policy |
-| `/api/v2/validate` | `{request}` | 200，规范化请求 |
-| `/api/v2/submit` | `{request,idempotencyKey}` | 202，立即返回 jobId；需继续查询状态 |
-| `/api/v2/status` | `{jobId}` | 200，进度、done、exitCode、taskId |
-| `/api/v2/cancel` | `{jobId}` | 200，取消请求回执 |
-| `/api/v2/jobs`、`/api/v2/tasks` | `{offset?,limit?}` | 200，分页摘要 |
-| `/api/v2/results` | `{jobId,kind?,offset?,limit?}` | 200，分页文件、音频或恢复结果 |
+| `/api/v3/capabilities` | `{}` | 200，目录、schema、提供方获取信息及当前 policy |
+| `/api/v3/validate` | `{request}` | 200，规范化请求 |
+| `/api/v3/submit` | `{request,idempotencyKey}` | 202，立即返回 jobId；需继续查询状态 |
+| `/api/v3/status` | `{jobId}` | 200，进度、done、exitCode、taskId |
+| `/api/v3/cancel` | `{jobId}` | 200，取消请求回执 |
+| `/api/v3/jobs`、`/api/v3/tasks` | `{offset?,limit?}` | 200，分页摘要 |
+| `/api/v3/results` | `{jobId,kind?,offset?,limit?}` | 200，分页文件、音频或恢复结果 |
 | `GET /health` | 无正文 | 200，应用接口版本及是否挂载 MCP；仍需认证 |
 
 示例：
 
 ```powershell
 $assetHeaders = @{ Authorization = 'Bearer ' + (Get-Content -Raw resource-core/data/http-token.txt).Trim() }
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v2/capabilities -Headers $assetHeaders -ContentType 'application/json' -Body '{}'
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v2/submit -Headers $assetHeaders -ContentType 'application/json' -InFile examples/agent-resize.example.json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v3/capabilities -Headers $assetHeaders -ContentType 'application/json' -Body '{}'
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v3/submit -Headers $assetHeaders -ContentType 'application/json' -InFile examples/agent-resize.example.json
 ```
 
 先复制修改请求示例中的路径和幂等键。相同 policy 的 CLI、stdio、HTTP API 与 HTTP MCP 共用幂等记录；同一 HTTP 服务中的 API 和 MCP 使用同一个应用实例。桌面/本地 CLI 作业也可按 jobId 访问，但必须通过当前 policy 对原请求的授权检查。响应丢失时使用同键重试，不以新键盲目重做。
@@ -89,3 +89,7 @@ Host 必须是当前端口的 127.0.0.1 或 localhost，不采信代理转发头
 本机令牌与目录 policy 不替代 OS 沙箱。没有增加文件上传/下载、任意命令、远程网络监听、代理部署或公有服务；处理路径始终是服务器本机目录。
 
 验证入口：核心 `http.test.js`（真实 socket、请求边界、状态码、生命周期、独立入口）与 `desktop.test.js`；MCP `http.test.mjs`（官方客户端、新旧协议、并发实例、共享幂等、显式取消、断连后继续）及原 stdio 测试。全量结果见[项目状态](../project-status.md)。
+
+## 存储维护与版本
+
+当前 HTTP 为 /api/v3；旧 /api/v1、/api/v2 返回 410/UNSUPPORTED_VERSION。应用和响应为 /3，持久 job/2 不变。`storage-preview/storage-clean` 虽在公共契约中声明，但 HTTP 与 MCP HTTP 均为 policy 上下文，调用返回 403/PERMISSION_DENIED；不能通过网络授权全局清理。已清理的作业仍可 status 查询，results 返回 410/RESULTS_EXPIRED。默认 stdio 及两种传输的工具工厂保持不变。

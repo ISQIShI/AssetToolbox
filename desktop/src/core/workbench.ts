@@ -3,7 +3,8 @@
 import { computed, inject, ref, type InjectionKey } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { call, chooseFolder, openProviderSource, openReport } from './api';
-import { createStep, isMissing, processingRequest, providerOf } from './model';
+import { bytes, createStep, isMissing, processingRequest, providerOf } from './model';
+import type { StoragePreview, StorageResult, StorageSelection } from './types';
 import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, ResultPage, RestoreFile, AudioResult, RestorePreview, RestoreScope, ScanPreview, Selection, Step, Task } from './types';
 
 export type Page = 'process' | 'tasks' | 'restore' | 'tools';
@@ -21,6 +22,8 @@ export function createWorkbench() {
     const loading = ref(true);
     const error = ref('');
     const notice = ref('');
+    const maintenanceBusy = ref(false);
+    const storagePreview = ref<StoragePreview>();
 
     // 处理页：当前选中的处理线站点（source / output / scan / step:<步骤 ID>）与最近一次扫描。
     const station = ref('source');
@@ -43,7 +46,7 @@ export function createWorkbench() {
     let completion: ((state: JobState) => void) | undefined;
 
     const definition = computed<Definition | undefined>(() => boot.value?.definition || undefined);
-    const busy = computed(() => submitting.value || Boolean(job.value && !job.value.state.done));
+    const busy = computed(() => maintenanceBusy.value || submitting.value || Boolean(job.value && !job.value.state.done));
     const missingProviders = computed(() => definition.value?.providers.filter(isMissing) || []);
     const blockedSteps = computed(() => {
         if (!config.value || !definition.value) return [];
@@ -62,6 +65,26 @@ export function createWorkbench() {
         return items;
     }
     async function refreshTasks() { tasks.value = await allPages<Task>('tasks'); }
+    async function previewStorage(retentionDays: number, offset = 0) {
+        if (busy.value) return;
+        maintenanceBusy.value = true; error.value = ''; storagePreview.value = undefined;
+        try { storagePreview.value = await call<StoragePreview>('storage-preview', { retentionDays, offset, limit: 100 }); }
+        catch (cause) { fail(cause); }
+        finally { maintenanceBusy.value = false; if (closing.value) await getCurrentWindow().close(); }
+    }
+    async function cleanStorage(selection: StorageSelection[]) {
+        if (busy.value || !storagePreview.value || !selection.length) return;
+        const retentionDays = storagePreview.value.retentionDays;
+        maintenanceBusy.value = true; error.value = ''; notice.value = '';
+        try {
+            const result = await call<StorageResult>('storage-clean', { retentionDays, selection });
+            notice.value = `已清理 ${result.cleaned} 个作业的旧明细，释放 ${bytes(result.freedBytes)}。任务、备份和幂等记录保留。`;
+            if (result.failed) fail(result.items.filter(item => !item.cleaned).map(item => item.error).join('；'));
+            if (job.value && selection.some(item => item.jobId === job.value!.id)) job.value.state = await call<JobState>('status', { jobId: job.value.id });
+            storagePreview.value = await call<StoragePreview>('storage-preview', { retentionDays, offset: 0, limit: 100 });
+        } catch (cause) { storagePreview.value = undefined; fail(cause); }
+        finally { maintenanceBusy.value = false; if (closing.value) await getCurrentWindow().close(); }
+    }
     async function refreshProviders() {
         try {
             const providers = await call<Provider[]>('providers');
@@ -143,6 +166,7 @@ export function createWorkbench() {
 
     /** 窗口关闭：有作业时先协作取消，等桥接确认结束后由 poll 关闭窗口。 */
     async function requestClose(): Promise<boolean> {
+        if (maintenanceBusy.value) { closing.value = true; return false; }
         if (!busy.value) return true;
         closing.value = true; await cancelJob(); return false;
     }
@@ -234,6 +258,7 @@ export function createWorkbench() {
 
     return {
         page, boot, config, tasks, loading, error, notice, station, scan, scanStale,
+        maintenanceBusy, storagePreview, previewStorage, cleanStorage,
         selectedTaskId, restoreSource, restorePreview, restoreScope, restoreRevision,
         job, submitting, closing, definition, busy, missingProviders, blockedSteps,
         fail, initialize, refreshTasks, refreshProviders, browse, saveConfig, installDependency,

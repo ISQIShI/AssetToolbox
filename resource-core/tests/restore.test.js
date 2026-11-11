@@ -7,44 +7,8 @@ const { test } = require('node:test');
 const { spawnSync } = require('node:child_process');
 const { copyTool } = require('./portable');
 
-function fixture(t) {
-    const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'backup-restore-test-'));
-    t.after(() => {
-        assert.equal(path.dirname(fs.realpathSync(root)), parent);
-        assert.ok(path.basename(root).startsWith('backup-restore-test-'));
-        fs.rmSync(root, { recursive: true, force: true });
-    });
-    const tool = copyTool(root), module = path.join(tool, 'resource-core/providers/fixture');
-    fs.mkdirSync(module); installType(tool, 'fixture');
-    fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '恢复测试', extensions: ['.pack'], enabledKey: 'fixtureEnabled', defaults: {} }));
-    fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:2,version:'1.0.0',displayName:'测试提供方',adapters:{'compress':{version:'1.0.0',resourceTypes:['fixture'],schema:require('./config'),execute({input,output}){fs.writeFileSync(output,fs.readFileSync(input).subarray(0,10));return {output};}}}};`);
-    const source = path.join(root, '原始 素材'), backupDir = path.join(root, '备份');
-    fs.mkdirSync(path.join(source, '二级'), { recursive: true });
-    const originals = new Map();
-    for (const name of ['a', 'b', 'c']) {
-        const relative = path.join('二级', name + '.pack'), data = Buffer.from('PACK:' + name.repeat(200));
-        fs.writeFileSync(path.join(source, relative), data); originals.set(relative, data);
-    }
-    const batch = batchFor(path.join(tool, 'resource-core')), tasks = require(path.join(tool, 'resource-core/tasks'));
-    const restore = require(path.join(tool, 'resource-core/restore'));
-    const run = (request, cancelAfter = Infinity) => {
-        const job = fs.mkdtempSync(path.join(root, 'job-')), original = restore.restoreTask;
-        restore.restoreTask = (task, options) => {
-            let count = 0;
-            return original(task, { ...options, onFile: record => {
-                options.onFile(record);
-                if (++count === cancelAfter) fs.writeFileSync(path.join(job, 'cancel'), '');
-            } });
-        };
-        try { return batch.runJob(request, job, path.join(root, 'reports')); }
-        finally { restore.restoreTask = original; }
-    };
-    const first = run({ mode: 'process', folder: source, backupDir });
-    assert.equal(first.exitCode, 0, first.error); assert.equal(first.summary.backedUp, 3);
-    const taskFile = first.task.taskFile, backup = tasks.loadTask(taskFile).header.backupSession;
-    const recover = (mode = 'restore', cancelAfter = Infinity) => run({ mode, taskFile }, cancelAfter);
-    return { root, tool, source, backup, originals, run, recover, taskFile, tasks, restore };
-}
+const { fixture } = require('./fixtures/restore');
+
 function report(state) { return JSON.parse(fs.readFileSync(path.join(state.reportDirectory, 'report.json'))); }
 function verify(f) {
     for (const [relative, bytes] of f.originals) {
@@ -232,47 +196,4 @@ test('export refuses overlapping directories and links; task without backups has
     const first = f.run({ mode: 'process', folder: f.source, options: { fixtureEnabled: false } });
     assert.equal(first.task.canRestore, false);
     assert.match(f.run({ mode: 'restore', taskFile: first.task.taskFile }).error, /没有可恢复/);
-});
-
-test('real PNG, JPEG and MP3 compression backups restore byte-for-byte without invoking encoders again', { skip: process.platform !== 'win32' }, t => {
-    const f = fixture(t), source = path.join(f.root, '真实 图片音乐'); fs.mkdirSync(source);
-    const script = `param($Source)
-$ErrorActionPreference='Stop'
-Add-Type -AssemblyName System.Drawing
-$bitmap=New-Object Drawing.Bitmap 256,256
-$random=New-Object Random 42
-try {
-    for ($x=0; $x -lt 256; $x++) { for ($y=0; $y -lt 256; $y++) {
-        $shade=$random.Next(16)*16
-        $bitmap.SetPixel($x,$y,[Drawing.Color]::FromArgb($shade,$shade,255-$shade))
-    } }
-    $bitmap.Save((Join-Path $Source '测试.png'),[Drawing.Imaging.ImageFormat]::Png)
-    $codec=[Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
-    $parameters=New-Object Drawing.Imaging.EncoderParameters 1
-    $parameters.Param[0]=New-Object Drawing.Imaging.EncoderParameter ([Drawing.Imaging.Encoder]::Quality),([long]100)
-    try { $bitmap.Save((Join-Path $Source '测试.jpg'),$codec,$parameters) } finally { $parameters.Dispose() }
-} finally { $bitmap.Dispose() }
-`;
-    const driver = path.join(f.root, 'images.ps1'); fs.writeFileSync(driver, '\uFEFF' + script);
-    const imageResult = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', driver, source], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
-    assert.equal(imageResult.status, 0, imageResult.stdout + imageResult.stderr);
-    const rate = 44100, samples = rate * 2, wav = Buffer.alloc(44 + samples * 4);
-    wav.write('RIFF', 0); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);
-    wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(2, 22);
-    wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 4, 28); wav.writeUInt16LE(4, 32);
-    wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(samples * 4, 40);
-    for (let index = 0; index < samples; index++) {
-        const value = Math.round(Math.sin(index * 2 * Math.PI * 440 / rate) * 16000);
-        wav.writeInt16LE(value, 44 + index * 4); wav.writeInt16LE(-value, 46 + index * 4);
-    }
-    const input = path.join(f.root, 'input.wav'); fs.writeFileSync(input, wav);
-    const music = path.join(source, '主题.mp3');
-    const audioResult = spawnSync(path.join(f.tool, 'resource-core/providers/lame/lame.exe'), ['-b', '192', input, music], { windowsHide: true, encoding: 'utf8', timeout: 30000 });
-    assert.equal(audioResult.status, 0, audioResult.stderr);
-    const originals = fs.readdirSync(source).map(name => [name, fs.readFileSync(path.join(source, name))]);
-    const processed = f.run({ mode: 'process', folder: source, backupDir: path.join(f.root, 'real-backup'), options: { mp3Enabled: true } });
-    assert.equal(processed.summary.processed, 3, JSON.stringify(report(processed)));
-    const done = f.run({ mode: 'restore', taskFile: processed.task.taskFile });
-    assert.equal(done.summary.restored, 3, JSON.stringify(report(done)));
-    for (const [name, data] of originals) assert.deepEqual(fs.readFileSync(path.join(source, name)), data);
 });

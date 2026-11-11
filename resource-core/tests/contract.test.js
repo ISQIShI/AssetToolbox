@@ -15,13 +15,14 @@ function temporary(t) {
 const resize = (id = 'resize') => ({ id, resourceType: 'png', operation: 'image-resize', provider: 'sharp', enabled: true, parameters: { width: 10, height: 20 }, providerOptions: {} });
 test('missing binaries and DLLs expose acquisition metadata and refresh without writing user data', t => {
     const root = temporary(t), core = path.join(copyTool(root), 'resource-core');
-    fs.unlinkSync(path.join(core, 'providers/pngquant/pngquant.exe'));
-    fs.unlinkSync(path.join(core, 'providers/lame/libmpg123-0.dll'));
+    fs.rmSync(path.join(core, 'providers/pngquant/pngquant.exe'), { force: true });
+    fs.rmSync(path.join(core, 'providers/lame/libmpg123-0.dll'), { force: true });
     const catalog = registry.createRegistry(core), before = catalog.describe().providers;
     assert.equal(before.find(p => p.id === 'pngquant').availability.available, false);
     assert.match(before.find(p => p.id === 'pngquant').acquisition.instructions, /cargo install/);
     assert.match(before.find(p => p.id === 'lame').availability.reason, /libmpg123-0.dll/);
-    fs.copyFileSync(path.join(__dirname, '../providers/pngquant/pngquant.exe'), path.join(core, 'providers/pngquant/pngquant.exe'));
+    // 此处只测试文件存在性，不执行编码器；生成占位文件使源码检出也能运行。
+    fs.writeFileSync(path.join(core, 'providers/pngquant/pngquant.exe'), 'availability fixture');
     assert.equal(catalog.describe().providers.find(p => p.id === 'pngquant').availability.available, true);
     assert.equal(fs.existsSync(path.join(core, 'data')), false);
     const { DesktopBridge } = require(path.join(core, 'desktop-bridge'));

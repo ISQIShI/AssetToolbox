@@ -15,7 +15,7 @@ import Icon, { type IconName } from './components/Icon.vue';
 
 const bench = createWorkbench();
 provide(workbenchKey, bench);
-const { page, boot, config, tasks, loading, error, notice, job, busy, closing, definition, missingProviders } = bench;
+const { page, boot, config, tasks, loading, error, notice, job, busy, maintenanceBusy, closing, definition, missingProviders } = bench;
 
 const tabs = computed<{ id: Page; label: string; icon: IconName; missing?: number }[]>(() => [
     { id: 'process', label: '处理', icon: 'process' },
@@ -29,6 +29,7 @@ const providerCount = computed(() => definition.value?.providers.length || 0);
 const activity = computed(() => {
     if (loading.value) return '正在读取配置和处理工具';
     if (closing.value) return '正在安全退出';
+    if (maintenanceBusy.value) return '正在维护存储';
     if (busy.value) return job.value ? `正在运行：${job.value.title}` : '正在启动作业';
     return '就绪';
 });

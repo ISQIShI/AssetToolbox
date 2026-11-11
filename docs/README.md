@@ -17,10 +17,12 @@
 | [音频处理](architecture/audio.md) | 分析、固定增益、响度归一化、峰值策略、质量边界和报告 |
 | [提供方依赖管理](architecture/dependencies.md) | 固定核验清单、HTTPS/摘要校验、自动安装更新、取消与不可变目录 |
 | [通信协议](architecture/protocol.md) | Tauri 命令、JSON Lines、操作与作业模式、错误语义 |
-| [统一应用接口](architecture/application.md) | 公共作业 /2、唯一业务实现、启动上下文、跨入口访问与版本拒绝 |
+| [统一应用接口](architecture/application.md) | 应用/响应 /3、持久作业 /2、唯一实现、启动上下文与跨入口访问 |
 | [外部 Agent 接入](architecture/automation.md) | 共享应用 API、结构化 CLI、本地 MCP、启动权限、幂等与分页查询 |
 | [本机 HTTP 与 MCP HTTP](architecture/http.md) | 统一应用上下文、独立/联合启动、令牌、Streamable HTTP、生命周期与边界 |
 | [持久化与版本契约](architecture/persistence.md) | 新 schema、步骤快照、锁、崩溃恢复、报告格式 |
+| [存储维护](architecture/storage.md) | 默认 30 天、手动预览/勾选、报告清理、保护范围、幂等保留与结果过期 |
+| [测试分层与 CI](testing.md) | 源码、真实编码器、原生离线/联网验收、固定 Actions 和检查命令 |
 | [开发与验证](development.md) | 环境、构建、测试矩阵、Git 与 Conventional Commits |
 | [分发核对](distribution.md) | MIT 源码发布范围、历史清理、提供方许可与二进制放行条件 |
 | [第三方声明](../THIRD_PARTY_NOTICES.md) | 来源、版本、许可证及当前分发结论 |
@@ -47,5 +49,6 @@
 | CLI、MCP、HTTP 或外部 Agent | 统一应用接口、外部 Agent 接入、本机 HTTP、通信协议、持久化 | 核心 `application`、`unified`、`http`、`desktop` 及 `agent-mcp` 官方客户端测试 |
 | 恢复与勾选 | 前端架构、持久化、后端设计 | `restore`、`restore-preview`、组件与原生测试 |
 | 打包或依赖 | 总体架构、依赖管理、开发与验证、桌面 README | 核心 dependencies、类型检查、release 构建、原生 E2E |
+| 存储维护或测试基础设施 | 存储维护、测试分层、统一应用接口、持久化 | 核心 storage/http、跨入口权限、组件与原生存储流程；安装行为另跑联网 E2E |
 
 表中核心测试名称对应 `resource-core/tests/<名称>.test.js`。

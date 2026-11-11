@@ -1,5 +1,9 @@
 // 与 resource-core 桌面桥接协议一一对应的类型；字段含义见 docs/architecture/protocol.md。
 export type Value = string | number | boolean;
+export interface StorageItem { jobId: string; mode: string; createdAt: string; finishedBefore?: string; bytes: number; eligible: boolean; reason: string; fingerprint?: string }
+export interface StoragePreview { items: StorageItem[]; total: number; nextOffset: number | null; retentionDays: number; scannedAt: string; eligibleCount: number; eligibleBytes: number; protectedCount: number }
+export interface StorageSelection { jobId: string; fingerprint: string }
+export interface StorageResult { items: { jobId: string; freedBytes: number; cleaned: boolean; error?: string }[]; cleaned: number; failed: number; freedBytes: number }
 export interface Field { key: string; type: 'integer' | 'number' | 'boolean' | 'enum' | 'text'; default: Value; label: string; hint?: string; min?: number; max?: number; decimalPlaces?: number; step?: number; maxLength?: number; choices?: { label: string; value: Value }[] }
 export interface ResourceType { id: string; displayName: string; description?: string; kind: string; extensions: string[]; version: string }
 export interface Operation { id: string; displayName: string; description: string; accepts: string[]; resultPolicy: 'smaller-only' | 'valid-output' | 'observe'; preserveOriginal?: boolean; fields: Field[]; version: string }
@@ -23,6 +27,6 @@ export interface JobRequest { mode: JobMode; folder?: string; pipeline?: Step[];
 export interface JobSummary { total: number; processed?: number; skipped: number; failed: number; savedBytes?: number; restored?: number; restoredBytes?: number; copied?: number; backedUp?: number; backupDirectory?: string }
 export interface AudioMeasurement { durationSeconds: number; sampleRate: number; channels: number; codec: string; bitsPerSample: number | null; integratedLufs: number | null; samplePeakDb: number | null; truePeakDb: number | null; loudnessRangeLu: number | null; warnings: string[] }
 export interface AudioResult { path: string; operation: string; status: string; fileStatus: string; before: AudioMeasurement; after?: AudioMeasurement; requestedGainDb?: number; appliedGainDb?: number; targetLufs?: number; targetReached?: boolean; limited?: boolean; message: string }
-export interface JobState { done: boolean; phase: string; processed: number; total: number; current?: string; message?: string; error?: string; elapsedSeconds?: number; exitCode?: number; cancelled?: boolean; jobId?: string; hasReport?: boolean; reportWarning?: string; recoveryWarnings?: string[]; task?: Task; preview?: RestorePreview | ScanPreview; summary?: JobSummary; audioResults?: AudioResult[]; audioResultCount?: number }
+export interface JobState { done: boolean; phase: string; processed: number; total: number; current?: string; message?: string; error?: string; elapsedSeconds?: number; exitCode?: number; cancelled?: boolean; jobId?: string; hasReport?: boolean; resultsExpired?: boolean; cleanedAt?: string; reportWarning?: string; recoveryWarnings?: string[]; task?: Task; preview?: RestorePreview | ScanPreview; summary?: JobSummary; audioResults?: AudioResult[]; audioResultCount?: number }
 
 export interface ResultPage<T> { items: T[]; total: number; nextOffset: number | null }

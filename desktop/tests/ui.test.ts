@@ -151,7 +151,7 @@ describe('处理工具页', () => {
         bench.boot.value = { config, definition: { ...definition, providers: [missingProvider()] }, warnings: [] };
         vi.mocked(call).mockResolvedValue([{ ...definition.providers[0], availability: { available: true, reason: '' } }]);
         const wrapper = mount(ToolsView, { global: { provide: { [workbenchKey as symbol]: bench } } });
-        expect(wrapper.find('details').attributes('open')).toBeDefined();
+        expect(wrapper.find('.providers details').attributes('open')).toBeDefined();
         expect(wrapper.text()).toContain('缺少文件：tool.exe'); expect(wrapper.text()).toContain('providers/test/');
         expect(wrapper.find('a').attributes('href')).toBe('https://example.com/download');
         await wrapper.find('a').trigger('click'); expect(openProviderSource).toHaveBeenCalledWith('test');

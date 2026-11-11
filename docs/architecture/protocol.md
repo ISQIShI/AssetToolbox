@@ -1,12 +1,12 @@
 # 通信协议
 
-桌面、CLI、MCP（stdio/Streamable HTTP）及 HTTP 使用同一[应用 /2 契约](application.md)。本页补充桌面传输与原生能力；公共动作、请求和错误码见[自动化接口](automation.md)，HTTP 认证与路径见 [HTTP 专题](http.md)。
+桌面、CLI、MCP（stdio/Streamable HTTP）及 HTTP 使用同一[应用 /3 契约](application.md)。本页补充桌面传输与原生能力；公共动作、请求和错误码见[自动化接口](automation.md)，HTTP 认证与路径见 [HTTP 专题](http.md)。
 
 源码：`desktop/src/core/{api,types,workbench}.ts`、`desktop/src-tauri/src/main.rs`、`resource-core/desktop-bridge.js`、`application/{contract,service,desktop-actions}.js`。
 
 ## 原生和 JSON Lines
 
-前端 `invoke('core_call', {action,payload})` 经 Rust 转为一行 `{id,action,payload}`。Node 调用公共 respond，返回 `{id,schema:"asset-toolbox.response/2",ok:true,result}` 或 `{id,schema,ok:false,error:{code,message}}`。Rust 核对关联 id 和响应版本后解包；失败向前端返回带错误码的消息。stdout 只能写协议。
+前端 `invoke('core_call', {action,payload})` 经 Rust 转为一行 `{id,action,payload}`。Node 调用公共 respond，返回 `{id,schema:"asset-toolbox.response/3",ok:true,result}` 或 `{id,schema,ok:false,error:{code,message}}`。Rust 核对关联 id 和响应版本后解包；失败向前端返回带错误码的消息。stdout 只能写协议。
 
 | 公共 action | payload | 返回 |
 | --- | --- | --- |
@@ -17,8 +17,10 @@
 | cancel | `{jobId}` | `{jobId,requested:true}` |
 | results | `{jobId,kind?,offset?,limit?}` | files/audio/restore 分页明细 |
 | jobs / tasks | `{offset?,limit?}` | 当前权限可见的分页摘要 |
+| storage-preview | `{retentionDays?,offset?,limit?}` | 本地存储维护预览；默认保留 30 天 |
+| storage-clean | `{retentionDays,selection:[{jobId,fingerprint}]}` | 本地逐项清理结果；必须显式选择 |
 
-这些动作直接进入 ApplicationService，桥接没有公共作业分支。桌面以任务 id 选中、续跑和恢复；不传 taskFile。旧 start/poll、临时作业 ID 和 /1 响应不支持，不做兼容映射。
+这些动作直接进入 ApplicationService，桥接没有公共作业分支。桌面以任务 id 选中、续跑和恢复；不传 taskFile。旧 start/poll、临时作业 ID 和 /1、/2 响应不支持，不做兼容映射。
 
 ## 桌面专属能力
 
@@ -55,3 +57,5 @@ exitCode 为 0 完成、1 失败、2 取消（失败优先）；CLI 也将预览
 桌面、CLI 和 stdio MCP 使用 connection 生命周期，拥有会话关闭时请求取消自己启动的活动作业；HTTP 使用 server 生命周期，客户端断开不取消。所有入口共享执行互斥；公共记录重启后仍可查询，跨入口读取/取消须再次通过当前权限。
 
 验证：核心 application/unified/desktop/http，MCP 官方客户端五入口联合测试，前端组件测试，以及真实 EXE 与 CLI 状态一致、重启查询、安装/音频/恢复等原生 E2E。实际结果见[项目状态](../project-status.md)。
+
+清理后的状态包含 resultsExpired/cleanedAt，hasReport 为 false；results/report 返回 RESULTS_EXPIRED，过期清理预览返回 STALE_PREVIEW。新 retention/1 侧文件不改变 job/2；详细权限和原子记录语义见[存储维护](storage.md)。

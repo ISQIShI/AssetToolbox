@@ -1,6 +1,6 @@
 # 外部 Agent、CLI 与 MCP
 
-状态：已实现统一应用 API /2、结构化 CLI、桌面公共作业接口、stdio MCP，以及按需启动的本机 HTTP API / MCP Streamable HTTP。源码为 `resource-core/application/`、`resource-core/cli.js`、`agent-mcp/server.mjs`；决策见 [ADR 0009](../decisions/0009-agent-interfaces.md)、[0010](../decisions/0010-local-http.md) 和 [0011](../decisions/0011-unified-application.md)。不需要模型密钥；stdio 保持默认，HTTP 启动与认证见[专门指南](http.md)。
+状态：已实现统一应用 API /3、结构化 CLI、桌面公共作业接口、stdio MCP，以及按需启动的本机 HTTP API / MCP Streamable HTTP。源码为 `resource-core/application/`、`resource-core/cli.js`、`agent-mcp/server.mjs`；决策见 [ADR 0009](../decisions/0009-agent-interfaces.md)、[0010](../decisions/0010-local-http.md) 和 [0011](../decisions/0011-unified-application.md)。不需要模型密钥；stdio 保持默认，HTTP 启动与认证见[专门指南](http.md)。
 
 ## 接入与目录授权
 
@@ -30,7 +30,7 @@
 
 ## 统一动作
 
-CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST /api/v2/<action>`。三者直接调用同一应用服务，MCP 不执行 shell 或解析 CLI 文本。桌面直接使用相同公共动作和作业 DTO，通过启动上下文区分权限和生命周期；专属设置独立，见[统一应用接口](application.md)。
+CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST /api/v3/<action>`。三者直接调用同一应用服务，MCP 不执行 shell 或解析 CLI 文本。桌面直接使用相同公共动作和作业 DTO，通过启动上下文区分权限和生命周期；专属设置独立，见[统一应用接口](application.md)。
 
 | action | 输入 | 返回及用途 |
 | --- | --- | --- |
@@ -39,7 +39,9 @@ CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST
 | submit | `{request, idempotencyKey}` | 创建作业；MCP 立即返回 jobId，CLI 等待最终状态 |
 | status / cancel | `{jobId}` | 进度/结果或协作取消请求 |
 | jobs / tasks | `{offset?, limit?}` | 当前权限内的作业/持久任务；tasks 包含桌面创建的任务 |
-| results | `{jobId, kind?, offset?, limit?}` | 完成后查询 files、audio 或 restore 明细，默认 files |
+| results | `{jobId, kind?, offset?, limit?}` | 完成后查询 files、audio 或 restore 明细，默认 files；已清理返回 RESULTS_EXPIRED |
+| storage-preview | `{retentionDays?,offset?,limit?}` | 本地人工预览旧作业明细，默认 30 天 |
+| storage-clean | `{retentionDays,selection}` | 本地按预览 ID/摘要清理；policy 上下文拒绝上述两项 |
 
 分页默认 50、最大 100；返回 `items/total/nextOffset`，末页 nextOffset 为 null。当前会先读入整个报告再截取，尚不适合超大单批报告。status 返回摘要和 taskId，不重复发送整个音频报告、恢复列表或文件内容。
 
@@ -63,7 +65,7 @@ CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST
 .\runtime\node.exe resource-core/cli.js api jobs --policy resource-core/data/automation-policy.json
 ```
 
-`--input -` 读取 UTF-8 stdin JSON；省略 input 等价于 `{}`。stdout 只有一个 `asset-toolbox.response/2` JSON，启动回执与日志写 stderr。成功响应 `{schema,ok:true,result}`；拒绝响应 `{schema,ok:false,error:{code,message}}`。CLI submit 始终等待，便于脚本可靠取得退出码；另一个 CLI 进程可通过相同 policy 的 jobs/status/cancel 查询和取消。
+`--input -` 读取 UTF-8 stdin JSON；省略 input 等价于 `{}`。stdout 只有一个 `asset-toolbox.response/3` JSON，启动回执与日志写 stderr。成功响应 `{schema,ok:true,result}`；拒绝响应 `{schema,ok:false,error:{code,message}}`。CLI submit 始终等待，便于脚本可靠取得退出码；另一个 CLI 进程可通过相同 policy 的 jobs/status/cancel 查询和取消。
 
 位置参数 CLI 是公共 submit 的本地适配，自动生成幂等键并等待；`api` 子命令也可显式使用 `--local` 代替 `--policy`。二者同样记录持久作业和任务。Agent 建议使用固定 policy；本地上下文和任意 shell 权限不受 Agent 目录限制。batch.js 仅为内部工作进程，不再提供用户 CLI。
 
@@ -81,6 +83,8 @@ stdio MCP 的 stdin 结束、会话正常关闭和 CLI 中断会请求取消，�
 
 HTTP 的单次请求或连接结束不触发作业取消，作业由服务进程持有，使用 cancel 或正常停止服务请求安全取消；与 stdio 区别见[HTTP 生命周期](http.md#生命周期与本机保护)。
 
-验证：核心 `application.test.js` 覆盖权限、联接、幂等、分页、真实 Sharp/FFmpeg、恢复/导出和跨入口锁；MCP `server.test.mjs` 验证 stdio，HTTP 见两套 `http` 测试。远程授权、OS 常驻服务、多作业并发、流式报告和自动清理仍未实现。
+验证：核心 `application.test.js` 覆盖权限、联接、幂等、分页、恢复/导出和跨入口锁，`codecs.test.js` 另验真实 Sharp/FFmpeg；MCP `server.test.mjs` 验证 stdio，HTTP 见两套 `http` 测试。远程授权、OS 常驻服务、多作业并发、流式报告和自动清理仍未实现。
 
-应用、响应和作业现为 /2；HTTP /api/v1 返回 410，旧 automation 作业不读取、不迁移；公共输入不再接受桌面 taskFile/start/poll。素材任务和报告版本不变。详见[版本拒绝](application.md#版本与验证)。
+应用及响应现为 /3，作业仍为 job/2；HTTP /api/v1 和 /api/v2 返回 410，旧 automation 作业不读取、不迁移；公共输入不再接受桌面 taskFile/start/poll。素材任务和报告版本不变。详见[版本拒绝](application.md#版本与验证)。
+
+手动存储维护仅允许桌面或 `--local` CLI；两种 MCP、HTTP、带 policy 的 CLI 均返回 PERMISSION_DENIED。作业被清理后返回 resultsExpired，原幂等键仍有效；不能把 RESULTS_EXPIRED 当作可以自动重新提交的理由。详见[存储维护](storage.md)。

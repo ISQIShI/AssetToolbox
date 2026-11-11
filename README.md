@@ -65,7 +65,7 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 .\runtime\node.exe resource-core/cli.js "D:\Assets" --pipeline pipeline.json --output "D:\Results"
 ```
 
-上述快捷命令与桌面、CLI API、MCP 和 HTTP 使用同一应用 /2 服务，返回结构化响应并创建持久 jobId；处理还生成 taskId，可续跑和恢复。API 的本机人工调用可显式使用 --local，外部 Agent 使用固定 --policy。
+上述快捷命令与桌面、CLI API、MCP 和 HTTP 使用同一应用 /3 服务，返回结构化响应并创建持久 jobId；处理还生成 taskId，可续跑和恢复。API 的本机人工调用可显式使用 --local，外部 Agent 使用固定 --policy。
 
 ```powershell
 .\runtime\node.exe resource-core/cli.js api submit --local --input request.json
@@ -75,4 +75,10 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 
 续跑 request.json 示例：`{"request":{"mode":"resume","taskId":"<任务 ID>"},"idempotencyKey":"resume-001"}`；status.json 为 `{"jobId":"<作业 ID>"}`。恢复先提交 restore-preview，再从 results 的 restore 分页选择 `{path,backupHash,targetHash}`，执行时显式传非空 selection；省略或空数组均拒绝。batch.js 仅为内部 worker，旧批处理 CLI 不再支持。退出码 0 完成、1 失败、2 取消（失败优先）。
 
-应用 /2、HTTP /api/v2 和持久 job/2 不迁移旧 /1 作业；素材任务/报告及 settings 版本不变，桌面须使用配套新 EXE 与核心。详细契约和最终架构见[统一应用接口](docs/architecture/application.md)。
+应用/响应 /3、HTTP /api/v3，旧 /api/v1 和 /api/v2 明确拒绝；持久 job/2 不变，不迁移旧 /1 作业；素材任务/报告及 settings 版本不变，桌面须使用配套新 EXE 与核心。详细契约和最终架构见[统一应用接口](docs/architecture/application.md)。
+
+## 存储维护
+
+在“工具 → 存储维护”展开面板，默认保留最近 30 天。先点击“预览清理范围”，查看每项可清理或受保护的原因，再勾选需要清理的记录并执行；不会默认全选或定时删除。修改保留天数需重新预览，翻页清空选择。
+
+仅清理成功旧作业的报告和执行明细；素材、输出、任务、备份、依赖以及作业身份/幂等记录保留。清理后旧报告和逐文件结果不可再查询，已有备份仍可检查恢复。部分失败须重新预览，不能直接重复旧请求。详细规则见[存储维护](docs/architecture/storage.md)。

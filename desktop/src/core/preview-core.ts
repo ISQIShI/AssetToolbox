@@ -115,6 +115,8 @@ function poll(id: string): JobState {
 export async function call(action: string, payload: any): Promise<unknown> {
     await new Promise(resolve => setTimeout(resolve, 60));
     switch (action) {
+        case 'storage-preview': return { items: [], total: 0, nextOffset: null, retentionDays: payload.retentionDays ?? 30, scannedAt: new Date().toISOString(), eligibleCount: 0, eligibleBytes: 0, protectedCount: 0 };
+        case 'storage-clean': throw new Error('浏览器预览不清理真实数据。');
         case 'bootstrap': return { config: structuredClone(config), definition: structuredClone(definition), warnings: [], root: 'D:\\Tools\\AssetToolbox\\resource-core', nodeVersion: '24.19.0' } satisfies Bootstrap;
         case 'providers': return structuredClone(providers);
         case 'tasks': return page(tasks, payload);

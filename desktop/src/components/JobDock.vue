@@ -68,6 +68,7 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
     </div>
 
     <AudioResults v-if="!running && state.audioResults?.length" :results="state.audioResults" :total="state.audioResultCount || state.audioResults.length" />
+    <p v-if="state.resultsExpired" class="small muted">报告与明细已清理；任务和备份保留。</p>
     <p v-if="running && state.current" class="current path">{{ state.current }}</p>
     <p v-if="running && job.kind === 'dependency' && state.message" class="small muted">{{ state.message }}</p>
     <div v-if="!running && (state.error || notes.length || state.cancelled || state.message)" class="details selectable">

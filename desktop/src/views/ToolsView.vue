@@ -5,6 +5,7 @@ import { useWorkbench } from '../core/workbench';
 import { isMissing } from '../core/model';
 import type { Provider } from '../core/types';
 import Icon from '../components/Icon.vue';
+import StorageMaintenance from '../components/StorageMaintenance.vue';
 
 const bench = useWorkbench();
 const { definition, boot, busy } = bench;
@@ -35,6 +36,7 @@ function supports(provider: Provider) {
 
     <div class="scroll">
       <div class="sheet">
+        <StorageMaintenance />
         <section class="block">
           <header class="block-head">
             <h2>处理工具</h2>

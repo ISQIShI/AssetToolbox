@@ -47,3 +47,5 @@ resource-core/data/dependencies/<provider-id>/
 更新核验清单时：从原渠道重新取包，核对版本、摘要与许可，检查固定依赖闭包，更新来源记录；实现行为变化必须升级提供方契约版本，让旧任务明确拒绝。自动获取不意味着允许再分发，下载目录仍受[分发核对](../distribution.md)约束。
 
 验证入口：`resource-core/tests/dependencies.test.js`、前端组件测试和原生 E2E。原生 E2E 会从真实渠道下载，离线/渠道故障时明确失败；不取消摘要验证来让测试通过。
+
+真实联网安装/更新验收独立运行 `desktop/` 中的 `npm run test:e2e:network`；普通 `test:e2e` 使用本地工具且禁止下载安装。核心 dependencies 测试仍离线验证来源、摘要、解包和文件边界。新存储维护不清理任何依赖目录，详见[测试分层](../testing.md)和[存储维护](storage.md)。

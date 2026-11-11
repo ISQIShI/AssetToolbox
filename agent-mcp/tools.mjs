@@ -5,6 +5,8 @@ const { respond } = application;
 import contract from '../resource-core/application/contract.js';
 
 const definitions = {
+    'storage-preview': { description: '预览旧作业明细的清理范围，默认保留 30 天。仅受信任本地上下文可用，现有 Agent policy 不授予存储维护权限。', readOnly: true },
+    'storage-clean': { description: '按预览 fingerprint 显式清理所选旧报告和明细；保留任务、备份与幂等记录。仅受信任本地上下文可用。', readOnly: false },
     capabilities: { description: '发现资源类型、操作、提供方、公共/专属参数 schema、依赖可用性及获取渠道。先调用此工具再构造 pipeline。', readOnly: true },
     validate: { description: '规范化请求并检查启动目录权限、参数和版本。不会扫描或执行素材；跨字段约束由核心判定。', readOnly: true },
     submit: { description: '提交预览、处理、续跑、重试、恢复或已核验依赖安装，立即返回 jobId。必填幂等键；相同键与请求不会重复执行。preview 只扫描，不测量音频。用 status 轮询至 done。', readOnly: false },

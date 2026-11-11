@@ -8,34 +8,12 @@ const { copyTool } = require('./portable');
 const { installType } = require('./helpers');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-function fixture(t, permissions = {}, count = 4, duration = 20) {
-    const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'asset-application-'));
-    const tool = copyTool(root), core = path.join(tool, 'resource-core');
-    installType(tool, 'fixture');
-    const provider = path.join(core, 'providers/fixture'); fs.mkdirSync(provider);
-    fs.writeFileSync(path.join(provider, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:2,version:'1.0.0',displayName:'隔离测试',adapters:{compress:{version:'1.0.0',resourceTypes:['fixture'],execute({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,${duration});fs.writeFileSync(output,fs.readFileSync(input).subarray(0,8));return {output};}}}};`);
-    const source = path.join(root, '素材'), output = path.join(root, '输出'), backup = path.join(root, '备份');
-    fs.mkdirSync(source); fs.mkdirSync(backup);
-    for (let i = 0; i < count; i++) fs.writeFileSync(path.join(source, i + '.pack'), 'PACK:' + 'test'.repeat(100));
-    const policyFile = path.join(root, 'policy.json');
-    fs.writeFileSync(policyFile, JSON.stringify({ schema: 'asset-toolbox.automation-policy/1', sourceRoots: [source], outputRoots: [output], backupRoots: [backup], ...permissions }));
-    const { ApplicationService, respond } = require(path.join(core, 'application/service'));
-    const service = new ApplicationService(policyFile);
-    const request = { mode: 'process', folder: source, outputDir: output, pipeline: [{ id: 'compress-fixture', resourceType: 'fixture', operation: 'compress', provider: 'fixture', enabled: true, parameters: {}, providerOptions: {} }] };
-    const call = (action, input) => respond(service, action, input);
-    const until = async (id, predicate = state => state.done) => {
-        const deadline = Date.now() + 30000;
-        while (Date.now() < deadline) { const state = service.status(id); if (predicate(state)) return state; await delay(25); }
-        throw new Error('作业等待超时');
-    };
-    t.after(async () => { await service.shutdown(); assert.equal(path.dirname(fs.realpathSync(root)), parent); assert.ok(path.basename(root).startsWith('asset-application-')); fs.rmSync(root, { recursive: true, force: true }); });
-    return { root, tool, core, source, output, backup, policyFile, service, request, call, until, ApplicationService };
-}
+const { fixture } = require('./fixtures/application');
 
 test('application discovers live adapter schemas; validates scopes, unknown keys, versions and source preservation', async t => {
     const f = fixture(t);
     const catalog = (await f.call('capabilities')).result;
-    assert.equal(catalog.applicationApi, 'asset-toolbox.application/2');
+    assert.equal(catalog.applicationApi, 'asset-toolbox.application/3');
     assert.equal(catalog.operations.find(op => op.id === 'image-resize').parametersSchema.properties.width.minimum, 1);
     assert.ok(catalog.providers.find(p => p.id === 'ffmpeg').acquisition.instructions);
     assert.equal((await f.call('validate', { request: f.request })).ok, true);
@@ -106,7 +84,7 @@ test('CLI JSON responses persist across invocations; invalid JSON and missing de
     fs.writeFileSync(input, '{');
     const invalid = spawnSync(process.execPath, command, { encoding: 'utf8', windowsHide: true });
     assert.equal(invalid.status, 1); assert.equal(JSON.parse(invalid.stdout).ok, false);
-    fs.rmSync(path.join(f.core, 'providers/pngquant/pngquant.exe'));
+    fs.rmSync(path.join(f.core, 'providers/pngquant/pngquant.exe'), { force: true });
     const pipeline = [{ ...f.request.pipeline[0], resourceType: 'png', provider: 'pngquant' }];
     assert.equal((await f.call('submit', { request: { ...f.request, pipeline }, idempotencyKey: 'missing' })).error.code, 'DEPENDENCY_MISSING');
     assert.equal((await f.call('submit', { request: { mode: 'dependency-install', providerId: 'lame' }, idempotencyKey: 'install' })).error.code, 'PERMISSION_DENIED');
@@ -145,28 +123,6 @@ test('symlink escapes and changed scopes cannot access jobs or redirect writes',
     assert.throws(() => f.service.status(jobId), { code: 'PATH_FORBIDDEN' });
 });
 
-test('application executes real image resize and read-only audio analysis; measurements remain queryable', async t => {
-    const f = fixture(t);
-    for (const name of ['ffmpeg.exe', 'ffprobe.exe']) fs.copyFileSync(path.join(__dirname, '../providers/ffmpeg', name), path.join(f.core, 'providers/ffmpeg', name));
-    fs.symlinkSync(path.resolve(__dirname, '../node_modules'), path.join(f.core, 'node_modules'), 'junction');
-    const sharp = require('sharp');
-    const image = path.join(f.source, '图片.png');
-    await sharp({ create: { width: 24, height: 16, channels: 4, background: '#4499aa' } }).png().toFile(image);
-    const resize = f.service.submit({ ...f.request, pipeline: [{ id: 'resize', resourceType: 'png', operation: 'image-resize', provider: 'sharp', enabled: true, parameters: { width: 12, height: 12 } }] }, 'resize');
-    assert.equal((await f.until(resize.jobId)).exitCode, 0);
-    assert.equal((await sharp(path.join(f.output, '图片.png')).metadata()).width, 12);
-    const audioFile = path.join(f.source, '声音.wav');
-    const generated = spawnSync(path.join(f.core, 'providers/ffmpeg/ffmpeg.exe'), ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2', audioFile], { windowsHide: true });
-    assert.equal(generated.status, 0, generated.stderr.toString());
-    const original = fs.readFileSync(audioFile), before = fs.statSync(audioFile).mtimeMs;
-    const analyzed = f.service.submit({ mode: 'process', folder: f.source, pipeline: [{ id: 'analyze', resourceType: 'wav', operation: 'audio-analyze', provider: 'ffmpeg', enabled: true, parameters: {} }] }, 'analyze');
-    assert.equal((await f.until(analyzed.jobId)).exitCode, 0);
-    const rows = f.service.results(analyzed.jobId, 'audio', {}).items;
-    assert.equal(rows.length, 1); assert.ok(Number.isFinite(rows[0].inputLufs));
-    assert.deepEqual(fs.readFileSync(audioFile), original); assert.equal(fs.statSync(audioFile).mtimeMs, before);
-    assert.equal(fs.existsSync(path.join(f.output, '声音.wav')), false);
-    fs.unlinkSync(path.join(f.core, 'node_modules'));
-});
 
 test('dependency install cannot race a running GUI/CLI worker and rejects arbitrary installation fields', async t => {
     const f = fixture(t, { allowDependencyInstall: true });

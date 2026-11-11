@@ -1,0 +1,47 @@
+name: 源码验证
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: source-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: 安装锁定的 npm 依赖
+        shell: pwsh
+        run: |
+          npm ci --prefix resource-core --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --prefix desktop --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --prefix agent-mcp --ignore-scripts --no-audit --no-fund
+          exit $LASTEXITCODE
+      - name: 核心源码与文件安全
+        run: npm run test:source --prefix resource-core
+      - name: MCP 双传输与跨入口契约
+        run: npm test --prefix agent-mcp
+      - name: 前端交互
+        run: npm test --prefix desktop
+      - name: 类型与生产前端
+        run: npm run build:web --prefix desktop
+      - name: 文档与源码发布边界
+        shell: pwsh
+        run: |
+          node scripts/check-docs.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/check-release.mjs --source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check

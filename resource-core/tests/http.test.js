@@ -10,12 +10,14 @@ const { copyTool } = require('./portable');
 const { installType } = require('./helpers');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function fixture(t) {
+async function fixture(t, gated = false) {
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'asset-http-'));
     const core = path.join(copyTool(root), 'resource-core');
     installType(path.dirname(core), 'fixture');
     const provider = path.join(core, 'providers/fixture'); fs.mkdirSync(provider);
-    fs.writeFileSync(path.join(provider, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:2,version:'1.0.0',displayName:'HTTP 测试',adapters:{compress:{version:'1.0.0',resourceTypes:['fixture'],execute({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,100);fs.writeFileSync(output,fs.readFileSync(input).subarray(0,8));return {output};}}}};`);
+    const gate = path.join(root, 'release-worker');
+    const barrier = gated ? `if (++count === 2) { fs.writeFileSync(${JSON.stringify(gate + '.waiting')}, ''); const deadline = Date.now() + 20000; while (!fs.existsSync(${JSON.stringify(gate)})) { if (Date.now() > deadline) throw Error('测试同步超时'); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10); } }` : '';
+    fs.writeFileSync(path.join(provider, 'index.js'), `const fs=require('node:fs');let count=0;module.exports={apiVersion:2,version:'1.0.0',displayName:'HTTP 测试',adapters:{compress:{version:'1.0.0',resourceTypes:['fixture'],execute({input,output}){${barrier}Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,100);fs.writeFileSync(output,fs.readFileSync(input).subarray(0,8));return {output};}}}};`);
     const source = path.join(root, '素材'), output = path.join(root, '结果'); fs.mkdirSync(source);
     for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(source, i + '.pack'), 'PACK:' + 'data'.repeat(100));
     const policyFile = path.join(root, 'policy.json');
@@ -25,10 +27,10 @@ async function fixture(t) {
     const { createHttpServer } = require(path.join(core, 'application/http'));
     const server = createHttpServer({ service, token, port: 0 });
     const { url } = await server.listen();
-    t.after(async () => { await server.close(); assert.equal(path.dirname(fs.realpathSync(root)), parent); assert.ok(path.basename(root).startsWith('asset-http-')); fs.rmSync(root, { recursive: true, force: true }); });
+    t.after(async () => { fs.writeFileSync(gate, ''); await server.close(); assert.equal(path.dirname(fs.realpathSync(root)), parent); assert.ok(path.basename(root).startsWith('asset-http-')); fs.rmSync(root, { recursive: true, force: true }); });
     const request = { mode: 'process', folder: source, outputDir: output, pipeline: [{ id: 'compress', resourceType: 'fixture', operation: 'compress', provider: 'fixture', enabled: true, parameters: {}, providerOptions: {} }] };
     const call = async (action, input = {}) => {
-        const response = await fetch(url + '/api/v2/' + action, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+        const response = await fetch(url + '/api/v3/' + action, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
         return { status: response.status, body: await response.json() };
     };
     const until = async (jobId, predicate = state => state.done) => {
@@ -36,7 +38,11 @@ async function fixture(t) {
         while (Date.now() < deadline) { const { body } = await call('status', { jobId }); assert.equal(body.ok, true, JSON.stringify(body)); if (predicate(body.result)) return body.result; await delay(25); }
         throw new Error('HTTP 作业等待超时');
     };
-    return { root, core, source, output, policyFile, service, token, server, url, request, call, until };
+    const waitForBoundary = async () => {
+        const deadline = Date.now() + 15000;
+        while (!fs.existsSync(gate + '.waiting')) { assert.ok(Date.now() < deadline, '工作进程未到达第二个文件'); await delay(25); }
+    };
+    return { root, core, source, output, policyFile, service, token, server, url, request, call, until, gate, waitForBoundary };
 }
 function raw(url, { headers = {}, body = '{}', method = 'POST', chunks } = {}) {
     return new Promise((resolve, reject) => {
@@ -50,7 +56,7 @@ function raw(url, { headers = {}, body = '{}', method = 'POST', chunks } = {}) {
 }
 
 test('HTTP requires token, correct Host and no browser Origin, and exposes only Agent actions', async t => {
-    const f = await fixture(t), endpoint = f.url + '/api/v2/capabilities';
+    const f = await fixture(t), endpoint = f.url + '/api/v3/capabilities';
     assert.equal(f.server.server.address().address, '127.0.0.1');
     assert.equal((await raw(endpoint)).status, 401);
     assert.equal((await raw(endpoint, { headers: { Authorization: 'Bearer ' + 'x'.repeat(43) } })).status, 401);
@@ -63,6 +69,9 @@ test('HTTP requires token, correct Host and no browser Origin, and exposes only 
     assert.equal((await f.call('bootstrap')).status, 404); assert.equal((await f.call('save')).status, 404);
     const oldApi = await raw(f.url + '/api/v1/capabilities', { headers });
     assert.equal(oldApi.status, 410); assert.equal(JSON.parse(oldApi.text).error.code, 'UNSUPPORTED_VERSION');
+    assert.equal((await raw(f.url + '/api/v2/capabilities', { headers })).status, 410);
+    assert.equal((await f.call('storage-preview')).status, 403);
+    assert.equal((await f.call('storage-clean', { retentionDays: 30, selection: [{ jobId: 'a'.repeat(64), fingerprint: 'b'.repeat(64) }] })).status, 403);
     assert.equal((await f.call('validate', { request: f.request, desktop: true })).status, 400);
     assert.equal((await f.call('validate', { request: { ...f.request, outputDir: f.root } })).status, 403);
     assert.equal((await f.call('status', { jobId: '0'.repeat(64) })).status, 404);
@@ -71,7 +80,7 @@ test('HTTP requires token, correct Host and no browser Origin, and exposes only 
 });
 
 test('HTTP rejects malformed, oversized and compressed inputs before application dispatch', async t => {
-    const f = await fixture(t), endpoint = f.url + '/api/v2/capabilities';
+    const f = await fixture(t), endpoint = f.url + '/api/v3/capabilities';
     const headers = { Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json' };
     assert.equal((await raw(endpoint, { headers, body: '{' })).status, 400);
     assert.equal((await raw(endpoint, { headers, body: Buffer.from([0xff]) })).status, 400);
@@ -101,13 +110,18 @@ test('HTTP submit survives request completion, shares idempotency with CLI and r
 });
 
 test('HTTP cancellation and graceful server shutdown keep resumable task journals', async t => {
-    const f = await fixture(t), { body } = await f.call('submit', { request: f.request, idempotencyKey: 'cancel' }); const { jobId } = body.result;
-    await f.until(jobId, state => state.processed >= 1);
+    const f = await fixture(t, true), { body } = await f.call('submit', { request: f.request, idempotencyKey: 'cancel' }); const { jobId } = body.result;
+    await f.waitForBoundary();
     assert.equal((await f.call('cancel', { jobId })).status, 200);
+    fs.writeFileSync(f.gate, '');
     const stopped = await f.until(jobId); assert.equal(stopped.cancelled, true); assert.ok(stopped.task.completed < 8);
+    fs.unlinkSync(f.gate);
+    fs.unlinkSync(f.gate + '.waiting');
     const resumed = await f.call('submit', { request: { mode: 'resume', taskId: stopped.taskId }, idempotencyKey: 'resume' });
-    await f.until(resumed.body.result.jobId, state => state.processed >= 1);
-    await f.server.close();
+    await f.waitForBoundary();
+    const closing = f.server.close();
+    fs.writeFileSync(f.gate, '');
+    await closing;
     const final = f.service.status(resumed.body.result.jobId); assert.equal(final.done, true); assert.equal(final.cancelled, true);
     const tasks = require(path.join(f.core, 'tasks')).listTasks(); assert.equal(tasks[0].canResume, true);
     const release = require(path.join(f.core, 'application/lock')).acquire(); release();
@@ -149,7 +163,7 @@ test('standalone HTTP entry needs no MCP package; occupied ports fail cleanly wi
 test('aborted request bodies do not submit work or poison subsequent HTTP requests', async t => {
     const f = await fixture(t);
     await new Promise(resolve => {
-        const req = http.request(f.url + '/api/v2/submit', { method: 'POST', headers: { Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json', 'Content-Length': 500 } });
+        const req = http.request(f.url + '/api/v3/submit', { method: 'POST', headers: { Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json', 'Content-Length': 500 } });
         req.on('error', () => {}); req.on('close', resolve);
         req.write('{"request":'); setTimeout(() => req.destroy(), 40);
     });

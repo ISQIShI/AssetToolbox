@@ -15,6 +15,7 @@
 | 0008 | [只读操作与安全音频处理](0008-audio-observation.md) | 已采用，目录 API 3、操作 API 2、固定增益与原文件保护 |
 | 0009 | [共享应用接口、CLI 与本地 MCP](0009-agent-interfaces.md) | 已采用，启动权限、幂等作业、分页结果及跨入口互斥 |
 | 0010 | [统一应用门面与本机 HTTP](0010-local-http.md) | 已采用，保留 stdio、扩展 HTTP API 与 Streamable HTTP，补齐桌面应用上下文 |
-| 0011 | [统一公共作业契约与上下文](0011-unified-application.md) | 已采用，公共作业 /2、持久 ID、权限/生命周期及跨入口一致性验收 |
+| 0011 | [统一公共作业契约与上下文](0011-unified-application.md) | 已采用；应用/响应版本及结果保留由 0012 修订 |
+| 0012 | [手动存储维护与测试分层](0012-storage-retention-and-test-layers.md) | 已采用，应用/响应 /3、job/2、30 天手动清理及分层 CI |
 
 新增记录复制[模板](template.md)，递增编号并更新此索引。提议通过后再把结论写入当前架构文档；被取代记录保留历史，并链接新的决策。

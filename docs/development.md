@@ -34,7 +34,9 @@ Vite 热更新只监听前端相关文件，排除 `src-tauri/`，避免 Windows
 | `desktop/` | `npm run build` | Tauri release 构建，不生成安装包；前置执行 build:web，随后复制根目录 EXE |
 | `desktop/` | `npm test` | Vitest + Vue Test Utils + jsdom |
 | `desktop/` | `npm run test:e2e` | Playwright 连接真实 WebView2；先构建当前源码 |
-| `resource-core/` | `npm test` | Node 内置测试框架；先安装核心依赖 |
+| `resource-core/` | `npm test` | Node 全量测试；核心依赖及真实本地编码器必须齐全 |
+| `resource-core/` | `npm run test:source` / `npm run test:codecs` | 无外部 EXE 源码测试 / 真实编码器验收 |
+| `desktop/` | `npm run test:e2e:network` | 单独验收真实依赖下载、校验、安装及更新 |
 | `agent-mcp/` | `npm ci --ignore-scripts` | 安装独立的官方 MCP SDK 与测试客户端，锁定来源和摘要 |
 | `agent-mcp/` | `npm test` | 官方客户端真实 stdio / Streamable HTTP、新旧协议、执行与生命周期测试 |
 | 仓库根目录 | `.\runtime\node.exe --test resource-core/tests/*.test.js` | 使用便携 Node 运行同一核心套件 |
@@ -73,7 +75,7 @@ HTTP 改动增加 `node --test tests/http.test.js`：真实回环 socket、令�
 | Rust、桥接、打包、跨进程契约 | 核心测试、组件测试、当前源码 release 构建和原生 E2E |
 | 编码器变更 | 真实格式样本、输出解码、大小与原文件保护、对应核心回归 |
 
-没有数值覆盖率门槛，也没有配置 ESLint、Prettier、commitlint 或 CI。`build:web` 的类型检查不是 lint。缺少工具时明确记录未执行项，不将静态阅读替代为“测试通过”。
+没有数值覆盖率门槛，也没有配置 ESLint、Prettier 或 commitlint。源码 CI 已配置，见[测试分层](testing.md)。`build:web` 的类型检查不是 lint。缺少工具时明确记录未执行项，不将静态阅读替代为“测试通过”。
 
 测试在系统临时目录写隔离副本；不要对用户配置、原素材、报告或历史任务执行测试。如果受限环境阻止 rename、链接或进程启动，先查看实际错误并验证环境影响，不能为了通过测试删除安全断言或改用真实素材目录。
 
@@ -126,3 +128,5 @@ PR 说明应包含具体问题、最终行为、关联问题、验证命令/结�
 若 Rust 宏 DLL 加载报 Windows 4551，先只读检查 CodeIntegrity/Operational 与 `CiTool.exe --list-policies --json`，确认具体策略，不能仅凭“Enterprise signing level”推断设备受组织管理。本次实际阻断来自 Smart App Control 的 VerifiedAndReputableDesktop 策略；用户自行关闭后恢复本机验证。项目脚本不改系统安全策略，不添加排除规则。
 
 保留 SAC 的场景可参考[已归档的独立开发环境备选方案](archive/windows-native-validation-vm.md)，它没有在本机实施。无论采用哪种环境，解除阻碍后必须重新构建，并在最新 EXE 上执行原生 E2E；旧 EXE 和浏览器替代测试不能作为新版本原生通过的证据。
+
+源码 CI 与各层命令、环境要求统一见[测试分层](testing.md)。仓库根执行 `node scripts/check-docs.cjs` 检查相对文档链接；存储维护测试只操作生成素材和隔离数据。

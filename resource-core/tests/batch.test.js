@@ -58,7 +58,7 @@ test('preview finds a blocked parent directory and missing enabled encoder; disa
     const output = path.join(root, 'result'); fs.mkdirSync(output); fs.writeFileSync(path.join(output, '子目录'), 'file');
     assert.equal(core.scanFolder(source, { outputDir: output }).conflicts, 5);
     fs.writeFileSync(path.join(source, 'a.png'), 'fixture');
-    fs.unlinkSync(path.join(tool, 'resource-core/providers/pngquant/pngquant.exe'));
+    fs.rmSync(path.join(tool, 'resource-core/providers/pngquant/pngquant.exe'), { force: true });
     assert.ok(core.scanFolder(source).issues.some(issue => /pngquant/.test(issue)));
     assert.equal(core.scanFolder(source, { pngEnabled: false }).issues.length, 0);
 });
@@ -173,4 +173,3 @@ test('transient Windows locks on progress status do not fail a completed task', 
         assert.equal(JSON.parse(fs.readFileSync(path.join(job, 'status.json'))).done, true);
     } finally { fs.renameSync = originalRename; }
 });
-

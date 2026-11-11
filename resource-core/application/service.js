@@ -129,6 +129,8 @@ class ApplicationService {
     }
     rawStatus(id) {
         const meta = this.metadata(id);
+        const expired = require('./storage').expiredState(meta.directory);
+        if (expired) return expired;
         if (this.session.job?.id === id) {
             const state = this.session.poll(id);
             if (state.errorCode === 'INTERRUPTED' && state.task?.id) state.task = require('../tasks').loadTask(this.taskFile(state.task.id)).info();
@@ -159,6 +161,7 @@ class ApplicationService {
     reportLocation(id) {
         const state = this.rawStatus(id);
         if (!state.done) fail('NOT_READY', '作业结束后读取报告');
+        if (state.resultsExpired) fail('RESULTS_EXPIRED', '报告与明细已按保留策略清理，作业身份和任务记录仍保留');
         if (!state.reportDirectory) fail('NOT_FOUND', '此作业没有报告');
         const root = path.join(__dirname, '..', 'data', 'reports'), filename = path.join(state.reportDirectory, 'report.json');
         if (!within(root, state.reportDirectory) || fs.realpathSync(filename) !== filename) fail('PATH_FORBIDDEN', '报告路径无效');
@@ -167,6 +170,7 @@ class ApplicationService {
     results(id, kind, pagination) {
         const state = this.rawStatus(id);
         if (!state.done) fail('NOT_READY', '作业结束后读取明细');
+        if (state.resultsExpired) fail('RESULTS_EXPIRED', '报告与明细已按保留策略清理，不能用同一幂等键重新执行');
         if (!['files', 'audio', 'restore'].includes(kind)) fail('INVALID_REQUEST', 'kind 必须为 files、audio 或 restore');
         if (kind === 'restore') return page(state.preview?.files || [], pagination);
         const filename = path.join(this.reportLocation(id), 'report.json');
@@ -179,6 +183,8 @@ class ApplicationService {
         record(input, ACTION_FIELDS[action]);
         if (inputSchemas[action].required.some(key => !Object.hasOwn(input, key))) fail('INVALID_REQUEST', '请求缺少必需字段');
         switch (action) {
+            case 'storage-preview': return require('./storage').preview(this, input);
+            case 'storage-clean': return require('./storage').clean(this, input);
             case 'capabilities': return { ...capabilities(), policy: this.policy };
             case 'validate': {
                 const request = this.normalize(input.request);
@@ -213,6 +219,6 @@ class ApplicationService {
 }
 async function respond(service, action, input) {
     try { return { schema: RESPONSE, ok: true, result: await service.dispatch(action, input) }; }
-    catch (error) { return { schema: RESPONSE, ok: false, error: { code: ['INVALID_REQUEST', 'UNSUPPORTED_VERSION', 'PATH_FORBIDDEN', 'PERMISSION_DENIED', 'NOT_FOUND', 'BUSY', 'DEPENDENCY_MISSING', 'MANUAL_INSTALL_REQUIRED', 'IDEMPOTENCY_CONFLICT', 'NOT_READY'].includes(error.code) ? error.code : 'INVALID_REQUEST', message: error.message } }; }
+    catch (error) { return { schema: RESPONSE, ok: false, error: { code: ['INVALID_REQUEST', 'UNSUPPORTED_VERSION', 'PATH_FORBIDDEN', 'PERMISSION_DENIED', 'NOT_FOUND', 'BUSY', 'DEPENDENCY_MISSING', 'MANUAL_INSTALL_REQUIRED', 'IDEMPOTENCY_CONFLICT', 'NOT_READY', 'RESULTS_EXPIRED', 'STALE_PREVIEW'].includes(error.code) ? error.code : 'INVALID_REQUEST', message: error.message } }; }
 }
 module.exports = { ApplicationService, respond, capabilities, page, ACTION_FIELDS };
