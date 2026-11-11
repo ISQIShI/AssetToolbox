@@ -7,7 +7,7 @@ import ToolsView from '../src/views/ToolsView.vue';
 import { createWorkbench, workbenchKey } from '../src/core/workbench';
 import { call, openProviderSource } from '../src/core/api';
 import { config, definition, missingProvider, task } from './fixtures';
-import { createStep, processingRequest, resetStep, retargetStep, sizeChange, stepChoices, taskStatus } from '../src/core/model';
+import { createStep, processingRequest, resetStep, retargetStep, sizeChange, stepGroups, taskStatus } from '../src/core/model';
 import type { Step, RestoreFile, RestorePreview } from '../src/core/types';
 
 vi.mock('../src/core/api', () => ({ call: vi.fn(), chooseFolder: vi.fn(), openReport: vi.fn(), openProviderSource: vi.fn() }));
@@ -176,8 +176,20 @@ describe('模型', () => {
         expect(sizeChange(2048)).toBe('−2.0 KB');
         expect(sizeChange(-100)).toBe('+100 B');
         expect(sizeChange(0)).toBe('0 B');
-        expect(stepChoices(definition).map(item => item.label)).toEqual(['PNG 压缩', 'PNG 图片缩放']);
+        expect(stepGroups(definition).map(item => [item.operation.displayName, item.resourceTypes.map(type => type.id)])).toEqual([['压缩', ['png']], ['图片缩放', ['png']]]);
         expect(taskStatus(task)).toEqual({ label: '可继续', tone: 'warn' });
         expect(taskStatus({ ...task, canResume: false, failed: 0 })).toEqual({ label: '已完成', tone: 'ok' });
+    });
+
+    it('groups dynamic operations without duplicate providers or unsupported formats, retaining missing tools', () => {
+        const custom = { ...definition.operations[0]!, id: 'custom', displayName: '扩展操作' };
+        const groups = stepGroups({
+            ...definition,
+            resourceTypes: [...definition.resourceTypes, definition.resourceTypes[0]!, { ...definition.resourceTypes[0]!, id: 'other' }],
+            operations: [...definition.operations, custom, custom, { ...custom, id: 'unsupported' }],
+            providers: [definition.providers[0]!, definition.providers[0]!, { ...missingProvider(), supports: [{ resourceType: 'png', operation: 'custom' }] }],
+        });
+        expect(groups.map(group => group.operation.id)).toEqual(['compress', 'image-resize', 'custom']);
+        expect(groups.every(group => group.resourceTypes.length === 1 && group.resourceTypes[0]!.id === 'png')).toBe(true);
     });
 });

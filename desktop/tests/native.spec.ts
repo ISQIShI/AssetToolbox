@@ -184,8 +184,41 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await station('output').click();
         await page.getByLabel('另存到新文件夹', { exact: false }).check();
         await page.getByLabel('另存文件夹', { exact: true }).fill(imageOutput);
-        await page.locator('.rail .adder button').click();
-        await button('PNG 图片缩放').click();
+        // 真实目录按操作分组；两种窗口尺寸与主题下选择器不越界，键盘可完成添加。
+        const addStep = page.locator('.adder > .station-button');
+        const picker = page.getByRole('dialog', { name: '添加步骤', exact: true });
+        async function pickerFits() {
+            const box = await picker.boundingBox(), viewport = page.viewportSize()!;
+            expect(box).not.toBeNull();
+            expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.y).toBeGreaterThanOrEqual(0);
+            expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+            expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+            expect(box!.height).toBeLessThanOrEqual(360);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        }
+        for (const [width, height] of [[1220, 850], [840, 620]]) {
+            await page.setViewportSize({ width, height });
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+                await addStep.click();
+                await expect(picker.locator('.choice')).toHaveCount(6);
+                await pickerFits();
+                await page.screenshot({ path: info.outputPath(`step-picker-${width}-${theme}.png`), fullPage: true });
+                await picker.getByRole('button', { name: '图片缩放', exact: true }).click();
+                await expect(picker.getByRole('button', { name: 'PNG', exact: true })).toBeVisible();
+                await pickerFits();
+                await page.screenshot({ path: info.outputPath(`step-formats-${width}-${theme}.png`), fullPage: true });
+                await page.keyboard.press('Escape'); await expect(addStep).toBeFocused();
+            }
+        }
+        await page.setViewportSize({ width: 1220, height: 850 });
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+        await addStep.click();
+        await page.getByLabel('搜索操作或格式').fill('缩放');
+        await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+        await page.getByLabel('搜索资源类型').fill('.png');
+        await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+        await expect(picker).toHaveCount(0);
         await expect(page.locator('.editor h2')).toHaveText('PNG 图片缩放');
         await page.getByLabel('目标宽度', { exact: true }).fill('20');
         await page.getByLabel('目标高度', { exact: true }).fill('20');
@@ -203,7 +236,9 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         fs.writeFileSync(path.join(adapterSource, 'a.pack'), 'PACK:axxxxxxxxxxxxxxxxx');
         await station('source').click(); await page.getByLabel('来源文件夹', { exact: true }).fill(adapterSource);
         await station('output').click(); await page.getByLabel('另存文件夹', { exact: true }).fill(adapterOutput);
-        await page.locator('.rail .adder button').click(); await button('测试资源 测试裁切').click();
+        await addStep.click();
+        await picker.getByRole('button', { name: '测试裁切', exact: true }).click();
+        await picker.getByRole('button', { name: '测试资源', exact: true }).click();
         await page.getByLabel('处理工具', { exact: true }).selectOption('extra');
         await page.getByLabel('保留长度', { exact: true }).fill('8');
         await page.getByLabel('追加字符', { exact: true }).fill('?');

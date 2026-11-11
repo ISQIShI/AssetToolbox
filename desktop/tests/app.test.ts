@@ -108,10 +108,14 @@ it('blocks processing while an enabled step lacks its tool, and unblocks when th
 it('adds a step from the catalog menu, selects it, and removes it again', async () => {
     await mountApp();
     await wrapper.find('.adder .station-button').trigger('click');
-    await wrapper.findAll('.choice').find(item => item.text() === 'PNG 图片缩放')!.trigger('click');
+    expect(wrapper.findAll('.choice').map(item => item.attributes('aria-label'))).toEqual(['压缩', '图片缩放']);
+    await wrapper.find('.choice[aria-label="图片缩放"]').trigger('click');
+    await wrapper.find('.choice[aria-label="PNG"]').trigger('click');
+    expect(wrapper.find('.step-picker').exists()).toBe(false);
     expect(wrapper.findAll('.rail [data-step-id]')).toHaveLength(2);
     expect(wrapper.find('.editor h2').text()).toBe('PNG 图片缩放');
     expect(wrapper.find('.editor').text()).toContain('目标宽度');
+    expect(wrapper.find('input[type="number"]').element).toHaveProperty('value', '512');
     await button('上移').trigger('click');
     expect(wrapper.find('.rail [data-step-id]').text()).toContain('PNG 图片缩放');
     await button('删除步骤').trigger('click');
@@ -149,9 +153,71 @@ it('returns keyboard focus to the add-step button when Escape dismisses its choi
     const choice = wrapper.find('.choice');
     (choice.element as HTMLButtonElement).focus();
     await choice.trigger('keydown', { key: 'Escape' });
-    expect(wrapper.find('.choices').exists()).toBe(false);
+    expect(wrapper.find('.step-picker').exists()).toBe(false);
     expect(document.activeElement).toBe(add.element);
     expect(add.attributes('aria-expanded')).toBe('false');
+});
+
+it('searches operations and formats, supports back navigation and keeps a cancelled selection out of the pipeline', async () => {
+    await mountApp();
+    const add = wrapper.find('.adder .station-button');
+    await add.trigger('click');
+    const search = wrapper.find('input[aria-label="搜索操作或格式"]');
+    expect(document.activeElement).toBe(search.element);
+    await search.setValue(' .PNG ');
+    expect(wrapper.findAll('.choice')).toHaveLength(2);
+    await search.setValue('缩放');
+    expect(wrapper.findAll('.choice')).toHaveLength(1);
+    await search.trigger('keydown', { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(wrapper.find('.choice').element);
+    await wrapper.find('.choice').trigger('click');
+    const formats = wrapper.find('input[aria-label="搜索资源类型"]');
+    expect(document.activeElement).toBe(formats.element);
+    await formats.setValue('jpg');
+    expect(wrapper.findAll('.choice')).toHaveLength(0);
+    expect(wrapper.find('[role="status"]').text()).toContain('没有匹配项');
+    await formats.setValue('png');
+    await formats.trigger('keydown', { key: 'ArrowUp' });
+    await wrapper.find('.choice').trigger('keydown', { key: 'ArrowLeft' });
+    expect(wrapper.find('input[aria-label="搜索操作或格式"]').exists()).toBe(true);
+    await wrapper.find('.choice').trigger('click');
+    await wrapper.find('[aria-label="返回操作列表"]').trigger('click');
+    expect(wrapper.findAll('.choice')).toHaveLength(2);
+    await wrapper.find('.step-picker').trigger('keydown', { key: 'Escape' });
+    expect(document.activeElement).toBe(add.element);
+    expect(wrapper.findAll('.rail [data-step-id]')).toHaveLength(1);
+    await add.trigger('click');
+    expect(wrapper.find('input[aria-label="搜索操作或格式"]').element).toHaveProperty('value', '');
+});
+
+it('dismisses the picker when focus leaves, the user clicks outside, the window resizes or a job starts', async () => {
+    await mountApp();
+    const add = wrapper.find('.adder .station-button');
+    await add.trigger('click');
+    (button('扫描预览').element as HTMLButtonElement).focus();
+    await flushPromises();
+    expect(wrapper.find('.step-picker').exists()).toBe(false);
+    await add.trigger('click');
+    await wrapper.find('.runbar').trigger('pointerdown');
+    expect(wrapper.find('.step-picker').exists()).toBe(false);
+    await add.trigger('click');
+    window.dispatchEvent(new Event('resize')); await flushPromises();
+    expect(wrapper.find('.step-picker').exists()).toBe(false);
+    await add.trigger('click');
+    await button('扫描预览').trigger('click'); await flushPromises();
+    expect(wrapper.find('.step-picker').exists()).toBe(false);
+    expect(add.attributes('disabled')).toBeDefined();
+});
+
+it('allows configuring a missing tool while preserving the execution guard', async () => {
+    catalog.providers = [missingProvider()];
+    await mountApp();
+    await wrapper.find('.adder .station-button').trigger('click');
+    await wrapper.find('.choice[aria-label="图片缩放"]').trigger('click');
+    await wrapper.find('.choice[aria-label="PNG"]').trigger('click');
+    expect(wrapper.findAll('.rail [data-step-id]')).toHaveLength(2);
+    expect(wrapper.find('.editor').text()).toContain('缺少依赖');
+    expect(button('开始处理').attributes('disabled')).toBeDefined();
 });
 
 it('checks a task backup, then restores exactly the selected files with hashes', async () => {

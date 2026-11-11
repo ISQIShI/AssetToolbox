@@ -1,5 +1,5 @@
 // 纯函数：请求构造、步骤生成、格式化与恢复勾选。界面组件只调用这里，不自行拼协议结构。
-import type { Configuration, Definition, JobRequest, Provider, RestoreFile, RestoreScope, Selection, Step, Support, Task } from './types';
+import type { Configuration, Definition, JobRequest, Operation, Provider, ResourceType, RestoreFile, RestoreScope, Selection, Step, Task } from './types';
 
 export function bytes(value?: number | null): string {
     if (value == null) return '—';
@@ -31,13 +31,19 @@ export function date(value?: string): string {
     return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—';
 }
 
-/** 目录中全部“资源类型 + 操作”组合，按资源类型、操作顺序去重，供添加步骤菜单使用。 */
-export function stepChoices(definition: Definition): (Support & { label: string })[] {
-    const seen = new Set<string>(), result: (Support & { label: string })[] = [];
-    for (const type of definition.resourceTypes) for (const operation of definition.operations) {
-        const key = `${type.id}/${operation.id}`;
-        if (seen.has(key) || !definition.providers.some(provider => provider.supports.some(s => s.resourceType === type.id && s.operation === operation.id))) continue;
-        seen.add(key); result.push({ resourceType: type.id, operation: operation.id, label: `${type.displayName} ${operation.displayName}` });
+/** 按操作组织可添加步骤；多个提供方的同一组合只出现一次，缺依赖项仍可配置。 */
+export function stepGroups(definition: Definition): { operation: Operation; resourceTypes: ResourceType[] }[] {
+    const seen = new Set<string>(), result: ReturnType<typeof stepGroups> = [];
+    for (const operation of definition.operations) {
+        if (seen.has(operation.id)) continue;
+        seen.add(operation.id);
+        const types = new Set<string>();
+        const resourceTypes = definition.resourceTypes.filter(type => {
+            if (types.has(type.id) || !definition.providers.some(provider => provider.supports.some(s => s.resourceType === type.id && s.operation === operation.id))) return false;
+            types.add(type.id);
+            return true;
+        });
+        if (resourceTypes.length) result.push({ operation, resourceTypes });
     }
     return result;
 }

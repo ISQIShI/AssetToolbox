@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // 处理线：来源 → 各步骤 → 写入 →（扫描结果）。文件沿竖线自上而下经过每个站点，编号即执行顺序。
-import { computed, onUnmounted, ref, useId } from 'vue';
+import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue';
 import { useWorkbench } from '../core/workbench';
-import { folderName, isMissing, providerOf, stepChoices, stepTitle } from '../core/model';
+import { folderName, isMissing, providerOf, stepGroups, stepTitle } from '../core/model';
+import type { ResourceType } from '../core/types';
 import Icon from './Icon.vue';
 
 const bench = useWorkbench();
@@ -12,8 +13,17 @@ const addButton = ref<HTMLButtonElement>();
 const menu = ref<HTMLElement>();
 const menuStyle = ref<Record<string, string>>({});
 const menuId = useId();
+const search = ref<HTMLInputElement>();
+const query = ref('');
+const operationId = ref('');
 
-const choices = computed(() => definition.value ? stepChoices(definition.value) : []);
+const groups = computed(() => definition.value ? stepGroups(definition.value) : []);
+const selectedGroup = computed(() => groups.value.find(group => group.operation.id === operationId.value));
+const term = computed(() => query.value.trim().toLocaleLowerCase());
+const matches = (value: string) => value.toLocaleLowerCase().includes(term.value);
+const matchesType = (type: ResourceType) => matches([type.displayName, type.id, ...type.extensions].join(' '));
+const filteredGroups = computed(() => groups.value.filter(group => matches(`${group.operation.displayName} ${group.operation.id}`) || group.resourceTypes.some(matchesType)));
+const filteredTypes = computed(() => selectedGroup.value?.resourceTypes.filter(matchesType) || []);
 const full = computed(() => (config.value?.pipeline.length || 0) >= 64);
 const steps = computed(() => config.value && definition.value ? config.value.pipeline.map((step, index) => {
     const provider = providerOf(definition.value!, step);
@@ -28,7 +38,7 @@ const outputLabel = computed(() => {
     return value.backupEnabled ? `备份到 ${value.backupDir.trim() ? folderName(value.backupDir) : '（未选择）'}` : '不备份';
 });
 
-// 添加菜单是浮在处理线之上的弹出菜单：按触发按钮的位置定位，点击别处、Esc 或窗口变化时关闭。
+// 分两级选择，避免将格式与操作的组合全部平铺；搜索只影响选择器，不改变目录与配置。
 function outside(event: Event) {
     const target = event.target as Node;
     if (!menu.value?.contains(target) && !addButton.value?.contains(target)) close(false);
@@ -36,10 +46,14 @@ function outside(event: Event) {
 function open() {
     const rect = addButton.value!.getBoundingClientRect();
     const below = window.innerHeight - rect.bottom;
-    menuStyle.value = below >= 200 || below >= rect.top
-        ? { left: `${rect.left + 8}px`, top: `${rect.bottom + 2}px`, maxHeight: `${Math.max(120, below - 12)}px` }
-        : { left: `${rect.left + 8}px`, bottom: `${window.innerHeight - rect.top + 2}px`, maxHeight: `${Math.max(120, rect.top - 12)}px` };
+    const left = `${Math.max(12, Math.min(rect.left + 8, window.innerWidth - 332))}px`;
+    menuStyle.value = below >= 360 || below >= rect.top
+        ? { left, top: `${rect.bottom + 2}px`, maxHeight: `${Math.min(360, below - 12)}px` }
+        : { left, bottom: `${window.innerHeight - rect.top + 2}px`, maxHeight: `${Math.min(360, rect.top - 12)}px` };
+    operationId.value = '';
+    query.value = '';
     adding.value = true;
+    void nextTick(() => search.value?.focus());
     document.addEventListener('pointerdown', outside, true);
     window.addEventListener('resize', dismiss);
 }
@@ -50,19 +64,36 @@ function close(refocus: boolean) {
     if (refocus) addButton.value?.focus();
 }
 function dismiss() { close(false); }
-function choose(resourceType: string, operation: string) { bench.addStep(resourceType, operation); close(false); }
+function choose(resourceType: string, operation: string) { bench.addStep(resourceType, operation); close(true); }
+function selectOperation(id: string) {
+    operationId.value = id;
+    query.value = '';
+    void nextTick(() => search.value?.focus());
+}
+function focusOut(event: FocusEvent) {
+    if (event.relatedTarget && event.relatedTarget !== addButton.value && !menu.value?.contains(event.relatedTarget as Node)) close(false);
+}
 function menuKey(event: KeyboardEvent) {
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    if (event.key === 'ArrowLeft' && selectedGroup.value && document.activeElement !== search.value) {
+        event.preventDefault(); selectOperation(''); return;
+    }
+    const arrow = event.key === 'ArrowDown' || event.key === 'ArrowUp';
+    const edge = event.key === 'Home' || event.key === 'End';
+    if (!arrow && !(edge && document.activeElement !== search.value)) return;
     event.preventDefault();
     const items = Array.from(menu.value!.querySelectorAll<HTMLButtonElement>('.choice'));
     const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
+    const target = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+        : index < 0 ? (event.key === 'ArrowDown' ? 0 : items.length - 1)
+        : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items[target]?.focus();
 }
+watch([busy, full], ([isBusy, isFull]) => { if (isBusy || isFull) close(false); });
 onUnmounted(() => close(false));
 </script>
 
 <template>
-  <nav class="rail" aria-label="处理顺序">
+  <nav class="rail" aria-label="处理顺序" @scroll.self="dismiss">
     <div class="rail-heading"><strong>处理线</strong><span>{{ steps.length }} 个步骤</span></div>
     <ol class="line">
       <li class="station endpoint">
@@ -87,15 +118,39 @@ onUnmounted(() => close(false));
       </li>
 
       <li class="station adder">
-        <button ref="addButton" type="button" class="station-button" aria-haspopup="menu" :aria-controls="menuId" :aria-expanded="adding" :disabled="busy || full || !choices.length" @click="adding ? close(false) : open()">
+        <button ref="addButton" type="button" class="station-button" aria-haspopup="dialog" :aria-controls="menuId" :aria-expanded="adding" :disabled="busy || full || !groups.length" @click="adding ? close(false) : open()">
           <span class="node plus" aria-hidden="true"><Icon name="plus" :size="12" /></span>
           <span class="text"><span class="title">添加步骤</span><span v-if="full" class="sub">已达到 64 步上限</span></span>
         </button>
-        <ul v-if="adding" :id="menuId" ref="menu" class="choices" :style="menuStyle" aria-label="可添加的步骤" @keydown.esc.stop="close(true)" @keydown="menuKey">
-          <li v-for="choice in choices" :key="`${choice.resourceType}/${choice.operation}`">
-            <button type="button" class="choice" @click="choose(choice.resourceType, choice.operation)">{{ choice.label }}</button>
-          </li>
-        </ul>
+        <section v-if="adding" :id="menuId" ref="menu" class="step-picker" :style="menuStyle" role="dialog" aria-label="添加步骤" @focusout="focusOut" @keydown.esc.stop.prevent="close(true)" @keydown="menuKey">
+          <div class="picker-heading">
+            <button v-if="selectedGroup" type="button" class="button quiet small icon-only" aria-label="返回操作列表" title="返回操作列表" @click="selectOperation('')"><Icon class="back" name="chevron" /></button>
+            <strong>{{ selectedGroup ? selectedGroup.operation.displayName : '选择操作' }}</strong>
+            <span>{{ selectedGroup ? '选择资源类型' : '再选资源类型' }}</span>
+          </div>
+          <div class="picker-search">
+            <input ref="search" v-model="query" class="input" type="search" :aria-label="selectedGroup ? '搜索资源类型' : '搜索操作或格式'" :placeholder="selectedGroup ? '搜索资源类型…' : '搜索操作或格式…'" />
+          </div>
+          <ul class="choices" :aria-label="selectedGroup ? '资源类型' : '处理操作'">
+            <template v-if="!selectedGroup">
+              <li v-for="group in filteredGroups" :key="group.operation.id">
+                <button type="button" class="choice" :aria-label="group.operation.displayName" :title="group.operation.description" @click="selectOperation(group.operation.id)">
+                  <span class="choice-text"><span>{{ group.operation.displayName }}</span><small>{{ group.resourceTypes.map(type => type.displayName).join('、') }}</small></span>
+                  <Icon name="chevron" :size="12" />
+                </button>
+              </li>
+            </template>
+            <template v-else>
+              <li v-for="type in filteredTypes" :key="type.id">
+                <button type="button" class="choice" :aria-label="type.displayName" @click="choose(type.id, selectedGroup!.operation.id)">
+                  <span class="choice-text"><span>{{ type.displayName }}</span><small class="extensions">{{ type.extensions.join('、') }}</small></span>
+                  <Icon name="plus" :size="12" />
+                </button>
+              </li>
+            </template>
+          </ul>
+          <p v-if="!(selectedGroup ? filteredTypes.length : filteredGroups.length)" class="picker-empty" role="status">没有匹配项，试试其他关键词。</p>
+        </section>
       </li>
 
       <li class="station endpoint">
@@ -197,9 +252,22 @@ onUnmounted(() => close(false));
 .sub { color: var(--text-2); font-size: var(--t-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub .tone { display: inline-flex; align-items: center; gap: var(--s-1); }
 
-/* 弹出菜单 */
-.choices { position: fixed; z-index: 20; list-style: none; min-width: 200px; margin: 0; padding: var(--s-1); overflow-y: auto; border: 1px solid var(--border-soft); border-radius: var(--r-float); background: var(--control); box-shadow: var(--shadow-float); }
-.choice { display: block; width: 100%; height: 28px; padding: 0 var(--s-3); border: 0; border-radius: var(--r-control); background: none; text-align: left; white-space: nowrap; }
+/* 定高上限，只滚动选项，标题与搜索始终可见。 */
+.step-picker { position: fixed; z-index: 20; display: flex; flex-direction: column; width: 320px; max-width: calc(100vw - 24px); padding: var(--s-1); border: 1px solid var(--border-soft); border-radius: var(--r-float); background: var(--control); box-shadow: var(--shadow-float); }
+.picker-heading { display: flex; flex-shrink: 0; align-items: center; gap: var(--s-2); min-height: var(--control-height); padding: 0 var(--s-2); }
+.picker-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.picker-heading > span { margin-left: auto; flex-shrink: 0; font-size: var(--t-small); color: var(--text-2); }
+.back { transform: rotate(180deg); }
+.picker-search { flex-shrink: 0; padding: var(--s-1) var(--s-2) var(--s-2); }
+.picker-search input { width: 100%; }
+.choices { list-style: none; min-height: 0; margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; }
+.choice { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); width: 100%; min-height: 44px; padding: var(--s-1) var(--s-2); border: 0; border-radius: var(--r-control); background: none; text-align: left; }
+.choice-text { display: grid; min-width: 0; }
+.choice-text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.choice small { color: var(--text-2); font-size: var(--t-small); }
+.extensions { font-family: var(--font-mono); }
+.choice > .icon { flex-shrink: 0; color: var(--text-2); }
 .choice:hover, .choice:focus-visible { background: var(--hover); outline: none; }
 .choice:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.picker-empty { margin: 0; padding: var(--s-3) var(--s-2); color: var(--text-2); }
 </style>
