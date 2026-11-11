@@ -1,6 +1,6 @@
 # 项目状态
 
-核验日期：2026-11-10（America/Los_Angeles）。应用版本 1.0.0；当前目录 API 3、提供方 API 2、操作 API 1/2、配置 schema /2。仓库：[ISQIShI/AssetToolbox](https://github.com/ISQIShI/AssetToolbox)。本轮基于 `2ffca4f` 实现音频操作；源码已验证，原生构建被本机应用控制策略阻断，尚不能视为完整原生交付。
+核验日期：2026-11-10（America/Los_Angeles）。应用版本 1.0.0；当前目录 API 3、提供方 API 2、操作 API 1/2、配置 schema /2。仓库：[ISQIShI/AssetToolbox](https://github.com/ISQIShI/AssetToolbox)。音频实现提交为 `36c6a1a`；用户自行关闭 Smart App Control 后，已完成本机原生 release 构建和最新 EXE 的两项原生 E2E，之前的验收阻碍已解除。
 
 ## 音频分析、增益与响度归一化（本轮）
 
@@ -15,19 +15,20 @@
 
 | 检查 | 结果 |
 | --- | --- |
-| 核心全量 | 便携 Node 24.19.0：110 通过、0 失败/跳过，约 37 秒；含只读契约拒绝、原文件保护、立体声固定倍率、峰值限制/拒绝、多格式、静音/短音/损坏、前后分析、回滚/恢复与取消 |
-| 前端 | 30 项组件/应用测试通过；类型检查和生产 build:web 通过 |
-| 浏览器真实核心集成 | Edge + 生产前端 + 隔离 DesktopBridge/FFmpeg：1 项综合测试通过，约 10 秒；只模拟原生窗口 IPC。覆盖分析、另存、限制/拒绝、归一化、报告与缺 FFprobe 指引，不等同原生 E2E |
-| 截图 | 1220×850、840×620 浅色/深色无横向溢出；已查看紧凑窗口两种外观，结果面板可滚动 |
-| 原生构建 | 未通过：Rust 1.99.1 加载 zerofrom_derive / schemars_derive 编译宏 DLL 时被 Windows 应用控制拦截（4551）。定向清理及完整 release 缓存重建后仍复现；CodeIntegrity 3033/3077 确认不满足签名策略。未修改系统安全设置 |
-| 原生 E2E | 未执行：没有本轮成功构建的 EXE。已补充 audio.spec.ts 原生路径；不能用旧 EXE 的结果代替 |
-| 源码与文档 | check-release.mjs --source 通过；30 篇 Markdown 的相对链接检查无失效项；第三方工具、运行时数据和测试素材均未跟踪 |
+| 核心全量 | 音频实现提交前：便携 Node 24.19.0，110 通过、0 失败/跳过，约 37 秒；含只读契约拒绝、原文件保护、立体声固定倍率、峰值限制/拒绝、多格式、静音/短音/损坏、前后分析、回滚/恢复与取消。本次原生补验未改核心代码，未重复全量核心测试 |
+| 前端 | 本次重新运行 30 项组件/应用测试通过；原生构建前置的类型检查和生产 build:web 通过。开发 Node 26.13.0 |
+| 浏览器真实核心集成 | 先前 Edge + 生产前端 + 隔离 DesktopBridge/FFmpeg：1 项通过，约 10 秒；只模拟原生窗口 IPC。本次不启用浏览器替代路径 |
+| 截图 | 最新 EXE 生成 1220×850、840×620 音频结果截图，浅色/深色无横向溢出；已查看宽屏和紧凑窗口两种外观，结果面板可滚动 |
+| 原生构建 | 本次 npm run build 通过；Rust 1.99.1 release 编译约 2 分 04 秒，生成根目录新 EXE，便携 Node/Sharp 加载校验通过 |
+| 原生 E2E | 最新 EXE 上 npm run test:e2e：2 通过、0 失败，约 52 秒；audio.spec.ts 8.7 秒，覆盖只读分析、限制增益、超峰拒绝、响度达标、源文件不变、报告与缺 FFprobe 获取指引；native.spec.ts 42.7 秒，覆盖真实 LAME/Sharp 下载安装及更新、多操作适配、缩放、取消/续跑/重试、选择性恢复、重启与关闭 |
+| 源码与文档 | check-release.mjs --source 通过；31 篇 Markdown 的相对链接检查无失效项；第三方工具、运行时数据和测试素材均未跟踪 |
 
-日志位于 `.local/audio-review/`，浏览器截图位于 `desktop/test-results/`。只使用生成素材与隔离副本。根目录 EXE 保持上一版，9,014,784 字节，SHA-256 `f26a8b626856c41ee089e166cb63cf0603c7b6a1d66235b950574e806bde7279`，**不包含本轮新增前端**。
+本次构建与原生测试日志位于 `.local/native-audio-review/`，截图位于 `desktop/test-results/`；先前核心/浏览器日志保留在 `.local/audio-review/`。只使用生成素材与隔离副本，未发现需要修改产品代码或测试断言的问题。根目录 EXE 已更新，9,015,808 字节，SHA-256 `89459aa5f2d6ea60797449b6228148d45bbfff7b0af57355fcd2368dab0ff51b`，包含音频前端并已完成原生验收；二进制仍只留本地。
 
-### 待完成与边界
+### 环境处置与当前边界
 
-- 在满足组织代码签名策略的 Windows 构建环境中，于 `desktop/` 执行 `npm run build`，随后清除 `ASSET_TOOLBOX_AUDIO_BROWSER` 并执行 `npm run test:e2e`（两个原生综合用例）。记录新 EXE 哈希后才能完成原生验收。
+- 原阻碍来自 SAC 的 VerifiedAndReputableDesktop 策略拦截 Rust 宏 DLL（Windows 4551），不应据事件中的 Enterprise 字样认定为组织管理。用户自行关闭 SAC 后，本次只读确认状态为 0、对应策略不再 Enforced；未由项目脚本修改安全设置。未实施的[独立开发环境方案](archive/windows-native-validation-vm.md)已归档，不属于待办。
+- 原生 E2E 明确清除 ASSET_TOOLBOX_AUDIO_BROWSER，直接启动新 EXE。当前结果验证本机环境下的功能，不代表未签名产物已获得 SAC 信任；重新启用 SAC 或对外分发时仍需另行核对签名与环境条件。
 - 不支持多音轨/环绕声、跨格式转换、动态压缩、波形编辑或 FFmpeg 自动安装。每次 FFmpeg 调用有 120 秒限时；测量精度及质量边界见音频专题。
 - 有损格式非零处理会重新编码，标签/封面/循环标记不保留；建议使用无损母版，并保留原文件。源仓库仍为 MIT，第三方工具遵循各自许可；本轮只做本地提交，未推送或发布二进制。
 

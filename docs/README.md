@@ -25,6 +25,8 @@
 | [职责扩展与 Cordis 评估](plans/resource-processing-and-cordis.md) | 多操作扩展瓶颈、官方论文依据、框架收益和阶段性建议；历史评估；当前契约已实现，Cordis 未接入 |
 | [架构决策记录](decisions/README.md) | 重要设计变更的背景、方案、代价及替代关系 |
 
+历史备选：[保留 SAC 的独立 Windows 开发环境](archive/windows-native-validation-vm.md)。方案未实施；用户已选择在本机完成原生验证，归档内容不属于当前待办。
+
 ## 专题原始说明
 
 - [桌面开发与发布](../desktop/README.md)：原生窗口开发、便携构建及测试入口。

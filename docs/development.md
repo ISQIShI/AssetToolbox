@@ -117,4 +117,6 @@ PR 说明应包含具体问题、最终行为、关联问题、验证命令/结�
 
 独立浏览器集成验证（不能替代原生验收）：先在 desktop 执行 `npm run build:web`，再于 PowerShell 设置 `$env:ASSET_TOOLBOX_AUDIO_BROWSER='1'` 并执行 `npx playwright test audio.spec.ts`。使用已安装 Edge、生产前端、隔离真实核心与 FFmpeg，只模拟原生窗口 IPC。完成后执行 `Remove-Item Env:ASSET_TOOLBOX_AUDIO_BROWSER`；普通 `npm run test:e2e` 必须不带该变量。
 
-若 Rust 宏 DLL 加载报 Windows 4551，可只读检查 CodeIntegrity/Operational 日志。正常重建仍被签名策略阻断时，需在符合组织签名策略的构建环境完成构建；不关闭应用控制或添加不受审查的排除规则，也不把旧 EXE 测试记为新版本通过。
+若 Rust 宏 DLL 加载报 Windows 4551，先只读检查 CodeIntegrity/Operational 与 `CiTool.exe --list-policies --json`，确认具体策略，不能仅凭“Enterprise signing level”推断设备受组织管理。本次实际阻断来自 Smart App Control 的 VerifiedAndReputableDesktop 策略；用户自行关闭后恢复本机验证。项目脚本不改系统安全策略，不添加排除规则。
+
+保留 SAC 的场景可参考[已归档的独立开发环境备选方案](archive/windows-native-validation-vm.md)，它没有在本机实施。无论采用哪种环境，解除阻碍后必须重新构建，并在最新 EXE 上执行原生 E2E；旧 EXE 和浏览器替代测试不能作为新版本原生通过的证据。
