@@ -1,6 +1,6 @@
 # 外部 Agent、CLI 与 MCP
 
-状态：已实现本地应用 API /1、结构化 CLI 和 stdio MCP。源码为 `resource-core/application/`、`resource-core/cli.js`、`agent-mcp/server.mjs`；决策见 [ADR 0009](../decisions/0009-agent-interfaces.md)。不需要模型密钥，也不启动 HTTP 服务。
+状态：已实现应用 API /1、结构化 CLI、桌面应用门面、stdio MCP，以及按需启动的本机 HTTP API / MCP Streamable HTTP。源码为 `resource-core/application/`、`resource-core/cli.js`、`agent-mcp/server.mjs`；决策见 [ADR 0009](../decisions/0009-agent-interfaces.md)和 [0010](../decisions/0010-local-http.md)。不需要模型密钥；stdio 保持默认，HTTP 启动与认证见[专门指南](http.md)。
 
 ## 接入与目录授权
 
@@ -30,7 +30,7 @@
 
 ## 统一动作
 
-CLI 动作为下表 action，MCP 对应 `asset_<action>`。两者直接调用同一应用服务，MCP 不执行 shell 或解析 CLI 文本。
+CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST /api/v1/<action>`。三者直接调用同一应用服务，MCP 不执行 shell 或解析 CLI 文本。桌面也已接入该门面，使用受信任本地上下文；桌面专属设置命令不公开给 Agent，见[HTTP 专题的统一边界](http.md#统一应用服务边界)。
 
 | action | 输入 | 返回及用途 |
 | --- | --- | --- |
@@ -73,10 +73,12 @@ CLI 动作为下表 action，MCP 对应 `asset_<action>`。两者直接调用同
 
 幂等键为 1–128 个英文、数字或 `._:-`，作用域由规范化权限配置决定；同键同规范化请求返回同一个持久 jobId，同键不同请求明确冲突。键在启动前落盘，不自动回收；启动失败或中断也不会静默重执行。失败后先查 taskId 和报告：已有任务优先 resume/retry，确定需要新作业时才使用新键。不同键不保证业务去重。
 
-jobId 对应一次预览/执行；taskId 对应可多次续跑、重试和恢复的素材任务。自动化作业存入 `data/automation/<scope>/<jobId>/`，包含 /1 job 记录、request/status/cancel、worker/exit 记录；桌面仍使用临时会话 ID。两者共用 `JobSession` 和批处理进程，自动化不会保存桌面 settings。
+jobId 对应一次预览/执行；taskId 对应可多次续跑、重试和恢复的素材任务。自动化作业存入 `data/automation/<scope>/<jobId>/`，包含 /1 job 记录、request/status/cancel、worker/exit 记录；桌面仍使用临时会话 ID。各入口通过应用服务共用 `JobSession` 和批处理进程，自动化不会保存桌面 settings。
 
 同一 Windows 用户、同一核心安装的 GUI、CLI 和 MCP 通过系统临时目录中的安装路径哈希锁串行执行作业，包括预览和依赖安装；冲突返回 BUSY。原有每任务锁继续保留。不同安装副本、不同用户或直接调用 engine 库不共享此锁，不能据此并发操作同一素材。失效 PID 锁可回收；无法确认的锁保守拒绝。
 
-MCP stdin 结束、正常关闭和 CLI 中断会请求取消，当前文件完成后停止。父进程死亡时仍存活的工作进程会在文件边界检查并停止；Windows 强杀可能同时结束进程树，此时返回 INTERRUPTED 并从任务日志刷新进度，靠既有提交意图与哈希机制续跑，不能宣称正常取消或整批成功。没有跨宿主常驻队列。已完成结果、备份和断点保留，取消不回滚已完成文件。界面任务历史可以看到 Agent 素材任务，但未增加跨窗口的实时作业面板。
+stdio MCP 的 stdin 结束、会话正常关闭和 CLI 中断会请求取消，当前文件完成后停止。父进程死亡时仍存活的工作进程会在文件边界检查并停止；Windows 强杀可能同时结束进程树，此时返回 INTERRUPTED 并从任务日志刷新进度，靠既有提交意图与哈希机制续跑，不能宣称正常取消或整批成功。没有跨宿主常驻队列。已完成结果、备份和断点保留，取消不回滚已完成文件。界面任务历史可以看到 Agent 素材任务，但未增加跨窗口的实时作业面板。
 
-验证：核心 `application.test.js` 覆盖权限、联接、幂等、分页、真实 Sharp/FFmpeg、恢复/导出和跨入口锁；MCP `server.test.mjs` 使用官方客户端验证发现、执行、新旧协议、断连与重连。HTTP、远程授权、常驻服务、多作业并发、流式报告和自动清理仍未实现。
+HTTP 的单次请求或连接结束不触发作业取消，作业由服务进程持有，使用 cancel 或正常停止服务请求安全取消；与 stdio 区别见[HTTP 生命周期](http.md#生命周期与本机保护)。
+
+验证：核心 `application.test.js` 覆盖权限、联接、幂等、分页、真实 Sharp/FFmpeg、恢复/导出和跨入口锁；MCP `server.test.mjs` 验证 stdio，HTTP 见两套 `http` 测试。远程授权、OS 常驻服务、多作业并发、流式报告和自动清理仍未实现。

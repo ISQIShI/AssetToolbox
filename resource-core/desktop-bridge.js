@@ -1,50 +1,12 @@
-// Tauri 与现有核心之间的 JSON Lines 接口。仅使用标准输入输出，不监听网络端口。
-const fs = require('node:fs');
-const path = require('node:path');
-
-const { JobSession } = require('./application/job-session');
-function normalizeConfiguration(payload) {
-    const config = require('./settings').validateConfiguration(payload);
-    for (const key of ['sourceDir', 'outputDir', 'backupDir']) {
-        const value = config[key].trim().replace(/^"|"$/g, '');
-        config[key] = value ? path.resolve(path.dirname(__dirname), value) : '';
-    }
-    return config;
-}
-class DesktopBridge extends JobSession {
-    bootstrap() {
-        const warnings = [];
-        let config = null, definition = null, configError = null;
-        try {
-            const settings = require('./settings');
-            config = settings.loadConfiguration();
-            definition = require('./framework/registry').describe();
-        } catch (error) { configError = error.message; }
-        return { config, definition, warnings, configError, root: path.dirname(__dirname), nodeVersion: process.version };
-    }
-    async dispatch(action, payload = {}) {
-        switch (action) {
-            case 'bootstrap': return this.bootstrap();
-            case 'tasks': return require('./tasks').listTasks();
-            case 'providers': return require('./framework/registry').describe().providers;
-            case 'provider-source': {
-                const provider = require('./framework/registry').providers.get(payload.id);
-                if (!provider?.acquisition?.url) throw new Error('此提供方没有登记获取渠道');
-                return provider.acquisition.url;
-            }
-            case 'normalize': return normalizeConfiguration(payload);
-            case 'save': return require('./settings').saveConfiguration(normalizeConfiguration(payload));
-            case 'start': return this.start(payload);
-            case 'poll': return this.poll(payload.id);
-            case 'cancel': return this.cancel(payload.id);
-            case 'report': {
-                const state = this.poll(payload.id);
-                if (!state.done || !state.reportDirectory || !fs.statSync(state.reportDirectory).isDirectory()) throw new Error('本次任务尚无报告');
-                return state.reportDirectory;
-            }
-            default: throw new Error('未知桌面操作：' + action);
-        }
-    }
+// 桌面 JSON Lines 传输适配；业务服务集中在 application/。
+const { ApplicationService } = require('./application/service');
+class DesktopBridge {
+    constructor() { this.application = ApplicationService.forDesktop(); }
+    async dispatch(action, payload = {}) { return this.application.dispatch(action, payload); }
+    start(request) { return this.application.dispatch('start', request); }
+    poll(id) { return this.application.dispatch('poll', { id }); }
+    cancel(id) { return this.application.dispatch('cancel', { id }); }
+    shutdown() { return this.application.shutdown(); }
 }
 
 if (require.main === module) {

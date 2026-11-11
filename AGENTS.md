@@ -13,7 +13,7 @@
 - `resource-types/`、`operations/`、`providers/` 位于核心目录内，分别定义格式识别、处理语义、工具实现；`framework/` 负责发现、schema 和进程调用。
 - `resource-core/tests/`、`desktop/tests/`：核心、组件及原生 E2E 测试；`docs/`：架构、流程和决策。
 - `resource-core/data/`：运行时配置、任务、报告，禁止提交。
-- `resource-core/application/`：共享作业与 Agent 应用接口；`agent-mcp/`：独立 stdio MCP 包，`examples/`：接入样例。
+- `resource-core/application/`：统一应用服务、共享作业与 HTTP API；`agent-mcp/`：独立 stdio/HTTP MCP 包，`examples/`：接入样例。
 
 ## 开发命令与风格
 
@@ -21,7 +21,7 @@ Windows x64 环境按 `.nvmrc`、`rust-toolchain.toml`、`.vsconfig` 配置。�
 
 核心目录：`npm test`。桌面目录：`npm run dev` 启动原生开发；`npm test` 跑组件测试；`npm run typecheck` 检查类型；`npm run build` 构建并校验便携依赖；`npm run test:e2e` 验证刚构建的 EXE。详细前提见[开发指南](docs/development.md)。
 
-Agent 接口改动必读[自动化专题](docs/architecture/automation.md)及 [ADR 0009](docs/decisions/0009-agent-interfaces.md)。MCP 目录独立执行 `npm ci --ignore-scripts`、`npm test`；保持官方 SDK 锁文件。CLI/MCP 共用应用服务，不能通过 shell 拼接参数或各写一套处理逻辑。权限来自启动配置，禁止工具参数扩权；转换另存或授权备份覆盖，恢复带显式预览哈希。保留幂等键、分页、跨入口执行锁及断连安全取消；stdout 仅输出协议数据。不要把应用目录限制描述为 OS 沙箱。
+Agent 接口改动必读[自动化专题](docs/architecture/automation.md)、[HTTP 专题](docs/architecture/http.md)及 [ADR 0009](docs/decisions/0009-agent-interfaces.md)/[0010](docs/decisions/0010-local-http.md)。MCP 目录独立执行 `npm ci --ignore-scripts`、`npm test`；保持官方 SDK 锁文件。结构化 CLI、桌面桥接、HTTP 和 MCP 共用 ApplicationService；不能通过 shell 拼接参数或各写一套处理逻辑。权限来自启动上下文，禁止工具参数扩权或通过 HTTP 暴露桌面设置。转换另存或授权备份覆盖，恢复带显式预览哈希。保留幂等键、分页和跨入口锁；stdio 断连取消，HTTP 连接断开不取消已提交作业，服务退出才请求取消。保留默认 stdio，HTTP 只能显式启动、回环监听并验证令牌/Host/Origin/正文上限；MCP 两种传输共用工具工厂，HTTP 每请求创建协议实例。不要把应用目录限制描述为 OS 沙箱。
 
 JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分号。组件用 PascalCase，函数及参数用 camelCase，扩展和步骤 ID 用 `[a-z][a-z0-9-]*`。TypeScript 严格模式；没有独立 lint/格式化工具。
 

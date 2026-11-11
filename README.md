@@ -4,7 +4,7 @@
 
 开发者从 [AGENTS.md](AGENTS.md)、[文档索引](docs/README.md)、[项目状态](docs/project-status.md)开始。本版本使用全新契约，不读取或迁移旧版配置、任务、资源模块和 CLI。
 
-外部 Agent 可使用结构化 CLI 或本地 stdio MCP，进行能力发现、预览/处理、取消、续跑、结果查询和受控依赖安装。两入口共用执行核心，默认保留原文件。配置步骤、权限范围和可复制样例见[Agent 接入指南](docs/architecture/automation.md)。
+外部 Agent 可使用结构化 CLI、stdio MCP，或额外启动本机 HTTP API / MCP Streamable HTTP，进行能力发现、预览/处理、取消、续跑、结果查询和受控依赖安装。各入口与桌面桥接共用应用服务，外部转换默认保留原文件。见[Agent 接入指南](docs/architecture/automation.md)及[HTTP 启动与认证](docs/architecture/http.md)；stdio 仍为默认，HTTP 不随桌面自动启动。
 
 ## 许可与源码获取
 

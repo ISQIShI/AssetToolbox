@@ -33,3 +33,5 @@ LAME 官方只提供源码，Windows 包来自其 Links 页面指向的第三方
 | Zod | [官方仓库](https://github.com/colinhacks/zod)，4.6.7 | MIT，保留[原许可证](third-party/licenses/zod-4.6.7-LICENSE.txt)。 |
 
 这次只提交自有适配代码、锁文件及许可文本，不发布第三方包产物。未来分发 MCP 的 node_modules 或打包代码时须带上实际依赖闭包的全部声明；测试客户端及其传递依赖不应混入生产部署。源码仍为 MIT，当前便携二进制分发限制保持不变。
+
+HTTP 扩展增加官方 `@modelcontextprotocol/node` 2.1.2，其 peer 要求 server ^2.4.0，保留现有 server/client 2.4.0；包内 LICENSE 与上述 SDK 文本 SHA-256 一致，仍适用 Apache/MIT 过渡说明。传递依赖 Hono 4.13.17、@hono/node-server 2.1.6 均为 MIT，保留 [Hono 原许可证](third-party/licenses/hono-4.13.17-LICENSE.txt)及 [Node 适配器原许可证](third-party/licenses/hono-node-server-2.1.6-LICENSE.txt)。官方来源为 [Hono](https://github.com/honojs/hono)与 [node-server](https://github.com/honojs/node-server)，精确 npm URL/摘要见同一锁文件。只运行 HTTP API 的核心入口无需这些 npm 包。

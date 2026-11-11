@@ -12,6 +12,8 @@ const { copyTool } = require(path.join(project, 'resource-core/tests/portable.js
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function freePort(): Promise<number> { const server = createServer(); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve)); const port = (server.address() as { port: number }).port; await new Promise<void>(resolve => server.close(() => resolve())); return port; }
 test('native portable app: config + dynamic providers + image resize + save-as + cancel/resume/retry + selective restore + relaunch', async ({}, info) => {
+    // 安装会串行下载多个包（每包最多 60 秒），网络等待不能使用普通作业的 30 秒限时。
+    test.setTimeout(600000);
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'asset-native-test-'));
     const tool = copyTool(root, true, true), source = path.join(root, '中文 素材'), backup = path.join(root, '原图备份'), output = path.join(root, '另存 结果');
     fs.mkdirSync(path.join(tool, 'runtime')); fs.copyFileSync(path.join(project, 'runtime/node.exe'), path.join(tool, 'runtime/node.exe'));
@@ -55,7 +57,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect.poll(async () => (await page.locator('.dock').getAttribute('data-job-id', { timeout: 200 }).catch(() => null)) || observedJob).not.toBe(observedJob);
         observedJob = (await page.locator('.dock').getAttribute('data-job-id'))!;
     }
-    async function done(alreadyStarted = false) { if (!alreadyStarted) await started(); await expect(page.locator('.dock')).toHaveAttribute('data-state', 'done', { timeout: 30000 }); }
+    async function done(alreadyStarted = false, timeout = 30000) { if (!alreadyStarted) await started(); await expect(page.locator('.dock')).toHaveAttribute('data-state', 'done', { timeout }); }
     const processedCount = async () => Number((await page.locator('.dock .count').innerText()).split('/')[0].trim());
     async function close() {
         await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('plugin:window|close', { label: 'main' })).catch(cause => { if (!/closed|destroyed/i.test(String(cause))) throw cause; });
@@ -73,7 +75,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
             await provider.getByRole('button', { name: '获取并安装', exact: true }).click();
             await started();
             if (id === 'lame') await page.screenshot({ path: info.outputPath('dependency-progress.png'), fullPage: true });
-            await done(true);
+            await done(true, id === 'sharp' ? 330000 : 75000);
             await expect(page.locator('.dock')).toContainText('已安装并通过完整性校验');
             await expect(provider).toContainText('已安装核验版本');
             await expect(provider.locator('.state')).toHaveText('可用');
@@ -87,7 +89,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await button('刷新依赖状态').click();
         const lame = page.locator('[data-provider-id="lame"]');
         if (!(await lame.locator('details').getAttribute('open') !== null)) await lame.locator('summary').click();
-        await lame.getByRole('button', { name: '更新到核验版本', exact: true }).click(); await done();
+        await lame.getByRole('button', { name: '更新到核验版本', exact: true }).click(); await done(false, 75000);
         await expect(lame).toContainText('已安装核验版本');
         expect(JSON.parse(fs.readFileSync(recordFile, 'utf8')).directory).not.toBe(previous.directory);
         expect(fs.existsSync(path.join(tool, 'resource-core/data/dependencies/lame/installs', previous.directory))).toBe(true);

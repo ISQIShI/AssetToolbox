@@ -1,6 +1,6 @@
 # ADR 0009：共享应用接口、CLI 与本地 MCP
 
-状态：已采用。日期：2026-11-10。部分修订 [0001](0001-local-process-architecture.md) 的入口划分及 [0005](0005-managed-dependencies.md) 的跨实例并发行为。
+状态：已采用；入口统一和 HTTP 支持由 [0010](0010-local-http.md) 补充。日期：2026-11-10。部分修订 [0001](0001-local-process-architecture.md) 的入口划分及 [0005](0005-managed-dependencies.md) 的跨实例并发行为。下文“暂不做 HTTP”保留为首版决策背景，不是当前能力限制。
 
 ## 背景
 

@@ -104,7 +104,7 @@ test('current versus changed approved catalog is explicit and unknown requests c
     assert.equal(management('lame', root).state, 'current');
     const bridge = new DesktopBridge();
     for (const request of [{ mode: 'dependency-install', providerId: 'lame', url: 'https://evil.test' }, { mode: 'dependency-install', providerId: '../lame' }, { mode: 'dependency-install', providerId: '__proto__' }, { mode: 'dependency-install', providerId: 'jpg-c' }]) await assert.rejects(bridge.dispatch('start', request));
-    bridge.job = { exited: false }; await assert.rejects(bridge.dispatch('start', { mode: 'dependency-install', providerId: 'lame' }), /等待/);
+    bridge.application.session.job = { exited: false }; await assert.rejects(bridge.dispatch('start', { mode: 'dependency-install', providerId: 'lame' }), /等待/);
     assert.equal(management('pngquant', root).automatic, false); assert.equal(management('jpg-c', root).automatic, false);
 });
 

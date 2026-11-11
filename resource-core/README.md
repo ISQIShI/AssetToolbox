@@ -10,7 +10,7 @@ Node CommonJS 核心，实现资源处理流水线、任务和安全恢复。当
 | `framework/` | 注册、schema、无 shell 进程执行 |
 | `framework/dependencies/` | 固定清单、下载/解包/摘要验证、独立安装进程与受管理运行时 |
 | `engine.js`、`cli.js` | 扫描、流水线、统一安全提交及直接 CLI |
-| `application/` | 共享作业执行、启动权限、幂等/分页、结构化 CLI；[外部 Agent 接入](../docs/architecture/automation.md) |
+| `application/` | 统一应用门面、桌面/Agent 上下文、启动权限、幂等/分页、结构化 CLI 及[本机 HTTP API](../docs/architecture/http.md)；[外部 Agent 接入](../docs/architecture/automation.md) |
 | `batch.js`、`desktop-bridge.js` | 持久任务编排、JSON Lines、进度和取消 |
 | `settings.js`、`tasks.js`、`restore.js` | 原子配置、日志/锁、哈希恢复 |
 | `data/` | 运行时配置、任务和报告，不提交 |

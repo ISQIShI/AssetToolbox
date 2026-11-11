@@ -35,14 +35,14 @@ class JobSession {
             job.child.stderr.on('data', data => { job.stderr = (job.stderr + data.toString()).slice(-8000); });
             job.completion = new Promise(resolve => {
                 job.child.on('error', error => { job.error = error.message; });
-            job.child.once('close', code => {
-                job.exited = true; job.code = code;
-                if (persistent) {
-                    try { fs.writeFileSync(path.join(directory, 'exit.json'), JSON.stringify({ code, error: job.error || job.stderr }), { flag: 'wx' }); }
-                    catch (error) { job.error = error.message; }
-                }
-                resolve();
-            });
+                job.child.once('close', code => {
+                    job.exited = true; job.code = code;
+                    if (persistent) {
+                        try { fs.writeFileSync(path.join(directory, 'exit.json'), JSON.stringify({ code, error: job.error || job.stderr }), { flag: 'wx' }); }
+                        catch (error) { job.error = error.message; }
+                    }
+                    resolve();
+                });
             });
             return { id: job.id };
         } catch (error) {

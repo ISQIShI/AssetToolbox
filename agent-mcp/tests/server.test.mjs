@@ -21,7 +21,7 @@ async function fixture(t) {
     const provider = path.join(core, 'providers/fixture'); fs.mkdirSync(provider);
     fs.writeFileSync(path.join(provider, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:2,version:'1.0.0',displayName:'MCP 测试',adapters:{compress:{version:'1.0.0',resourceTypes:['fixture'],execute({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,150);fs.writeFileSync(output,fs.readFileSync(input).subarray(0,8));return {output};}}}};`);
     const serverRoot = path.join(tool, 'agent-mcp'); fs.mkdirSync(serverRoot);
-    fs.copyFileSync(path.join(packageRoot, 'server.mjs'), path.join(serverRoot, 'server.mjs'));
+    for (const file of ['server.mjs', 'tools.mjs']) fs.copyFileSync(path.join(packageRoot, file), path.join(serverRoot, file));
     fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(serverRoot, 'node_modules'), 'junction');
     const source = path.join(root, '素材'), output = path.join(root, '输出'); fs.mkdirSync(source);
     for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(source, i + '.pack'), 'PACK:' + 'test'.repeat(100));

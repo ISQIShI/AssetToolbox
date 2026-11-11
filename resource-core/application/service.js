@@ -5,6 +5,8 @@ const { JobSession } = require('./job-session');
 const { acquire, alive } = require('./lock');
 const { fail, record, canonical, loadPolicy, authorize, within } = require('./policy');
 const ROOT = path.join(__dirname, '..', 'data', 'automation');
+const DESKTOP = Symbol('trusted-desktop');
+const ACTION_FIELDS = Object.freeze({ capabilities: [], validate: ['request'], submit: ['request', 'idempotencyKey'], status: ['jobId'], cancel: ['jobId'], results: ['jobId', 'kind', 'offset', 'limit'], jobs: ['offset', 'limit'], tasks: ['offset', 'limit'] });
 const fingerprint = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const read = filename => JSON.parse(fs.readFileSync(filename, 'utf8'));
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
@@ -35,11 +37,15 @@ function capabilities() {
 
 class ApplicationService {
     constructor(policyFile) {
-        this.policy = loadPolicy(policyFile);
-        this.scope = fingerprint(stable(this.policy));
-        this.directory = path.join(ROOT, this.scope);
+        this.desktop = policyFile === DESKTOP;
+        if (!this.desktop) {
+            this.policy = loadPolicy(policyFile);
+            this.scope = fingerprint(stable(this.policy));
+            this.directory = path.join(ROOT, this.scope);
+        }
         this.session = new JobSession();
     }
+    static forDesktop() { return new ApplicationService(DESKTOP); }
     taskFile(id) {
         if (typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(id)) fail('INVALID_REQUEST', '无效任务 ID');
         const root = require('../tasks').TASK_ROOT, filename = path.join(root, id, 'task.json');
@@ -164,10 +170,10 @@ class ApplicationService {
         if (report.schema !== 'asset-toolbox.report/1') fail('UNSUPPORTED_VERSION', '报告版本不支持');
         return { ...page(kind === 'audio' ? report.audioResults || [] : report.files, pagination), summary: report.summary, error: report.error || null };
     }
-    async dispatch(action, input = {}) {
-        const keys = { capabilities: [], validate: ['request'], submit: ['request', 'idempotencyKey'], status: ['jobId'], cancel: ['jobId'], results: ['jobId', 'kind', 'offset', 'limit'], jobs: ['offset', 'limit'], tasks: ['offset', 'limit'] };
-        if (!Object.hasOwn(keys, action)) fail('INVALID_REQUEST', '未知应用操作');
-        record(input, keys[action]);
+    dispatch(action, input = {}) {
+        if (this.desktop) return require('./desktop-actions').dispatchDesktop(this, action, input, capabilities);
+        if (!Object.hasOwn(ACTION_FIELDS, action)) fail('INVALID_REQUEST', '未知应用操作');
+        record(input, ACTION_FIELDS[action]);
         switch (action) {
             case 'capabilities': return { ...capabilities(), policy: this.policy };
             case 'validate': {
@@ -201,4 +207,4 @@ async function respond(service, action, input) {
     try { return { schema: 'asset-toolbox.response/1', ok: true, result: await service.dispatch(action, input) }; }
     catch (error) { return { schema: 'asset-toolbox.response/1', ok: false, error: { code: ['INVALID_REQUEST', 'UNSUPPORTED_VERSION', 'PATH_FORBIDDEN', 'PERMISSION_DENIED', 'NOT_FOUND', 'BUSY', 'DEPENDENCY_MISSING', 'MANUAL_INSTALL_REQUIRED', 'IDEMPOTENCY_CONFLICT', 'NOT_READY'].includes(error.code) ? error.code : 'INVALID_REQUEST', message: error.message } }; }
 }
-module.exports = { ApplicationService, respond, capabilities, page };
+module.exports = { ApplicationService, respond, capabilities, page, ACTION_FIELDS };

@@ -1,8 +1,36 @@
 # 项目状态
 
-核验日期：2026-11-10（America/Los_Angeles）。应用版本 1.0.0；目录 API 3、提供方 API 2、操作 API 1/2、配置 schema /2，新增 Agent 应用接口 /1。仓库：[ISQIShI/AssetToolbox](https://github.com/ISQIShI/AssetToolbox)。本轮从 `be29bf6` 开始实现外部 Agent 接入；音频实现与原生验收记录保留如下。
+核验日期：2026-11-10（America/Los_Angeles）。应用版本 1.0.0；目录 API 3、提供方 API 2、操作 API 1/2、配置 schema /2、Agent 应用接口 /1。仓库：[ISQIShI/AssetToolbox](https://github.com/ISQIShI/AssetToolbox)。本轮从 `05b40ea` 开始统一应用入口并扩展本机 HTTP，保留默认 stdio；此前记录保留为历史基线。
 
-## 外部 Agent 接入（本轮）
+## 统一应用服务与额外 HTTP 支持（本轮）
+
+- CLI API、桌面桥接、HTTP API 与 MCP 双传输均进入 ApplicationService。桌面设置等业务移入应用层，桥接只转发 IPC；桌面受信任上下文与 Agent policy 上下文分开，网络不能选择或调用桌面专属能力。底层继续共用 JobSession、工作进程和执行锁。
+- 原 `agent-mcp/server.mjs --policy ...` 保持 stdio，不需要令牌、不监听端口。额外 `--transport http` 同时提供 `/api/v1/<action>` 与 `/mcp`；核心也有无需 MCP 包的独立 HTTP API 入口。工具与 schema 共用工厂，HTTP 每请求使用独立 MCP 协议实例。
+- HTTP 固定监听 127.0.0.1，使用本地随机 Bearer 令牌和启动 policy；验证 Host、Origin、重复安全头、UTF-8/JSON、1 MiB 正文及连接边界。拒绝浏览器 Origin，不提供 CORS、公开监听或每请求扩权。令牌生成不打印内容、不覆盖已有文件。
+- HTTP submit 返回 202/jobId，断开请求或客户端不会取消已提交作业；显式 cancel 或正常停止服务才请求文件边界取消。stdio 断连取消语义不变。同 policy 的 CLI/MCP/HTTP 共用持久作业、幂等与分页结果，API 与 MCP 联合服务还共用同一应用实例。
+- 新增 [HTTP 专题](architecture/http.md)、[ADR 0010](decisions/0010-local-http.md)，更新 AGENTS、架构、协议、开发指南、模块说明和索引。新增官方 Node 适配器 2.1.2，保留 SDK server/client 2.4.0；锁文件与 Hono 传递依赖许可已补齐。
+
+### 本轮验证
+
+| 检查 | 结果 |
+| --- | --- |
+| 核心全量 | 便携 Node 24.19.0：126 通过、0 失败/跳过，约 29.3 秒；含新增 HTTP 7 项真实 socket 测试。最后修正关闭期间 Host 取端口的空值边界后，HTTP 7 项定向回归再次通过 |
+| MCP 双传输 | 官方客户端 5 项通过；原 stdio 3 项保留，新增 HTTP 2 项覆盖传统/2026-07-28 协议、SSE、并发请求隔离、共享幂等、断连继续、显式取消/续跑及认证/正文上限。开发 Node 26.13.0 与便携 Node 24.19.0 均通过；最终便携回归约 5.6 秒 |
+| 前端 | 30 项组件/应用测试、独立 typecheck 及构建前置类型检查/生产构建通过 |
+| 原生构建 | npm run build 通过；Rust 1.99.1 release 约 1 分 22 秒，便携 Node/Sharp 加载校验通过 |
+| 原生 E2E | 最新 EXE 音频用例通过（7.8 秒）；综合用例首次因 Sharp 下载超过测试的 30 秒等待失败。按安装器每包 60 秒及探测预算单独设置安装等待后，定向复验通过（41.1 秒，整次 41.6 秒）。最终两项均有通过记录；未启用浏览器替代路径，未重复音频用例 |
+| 源码/文档/依赖 | 源码发布检查通过；36 篇 Markdown 相对链接无失效项；新增 MCP 依赖使用 ignore-scripts 安装，npm audit 0 漏洞；第三方包、凭据与运行时数据未跟踪 |
+
+日志位于忽略目录 `.local/http-review/`。全部使用生成素材与隔离副本。修复 HTTP 提前拒绝请求后未读正文可能影响复用连接的问题，并保留大小、摘要、原文件与恢复安全断言。原生综合测试只延长真实安装等待，普通作业仍为 30 秒。根目录新 EXE 9,015,808 字节，SHA-256 `014f8f4db6caf232696c3fd1cf1c03e9fc45e3b3753750be1cd15410734624ef`，只留本地；最终 HTTP 关闭边界调整位于外置 Node 核心，不改变 EXE 内容。
+
+### 当前边界
+
+- HTTP 为使用者显式启动的单用户本机进程，尚未配置用户真实素材 policy、生成生产令牌或注册到具体 Agent 宿主；stdio 与 HTTP 可分别启动并共存，不随桌面自动监听。
+- 静态令牌不是 OAuth；所有持有该令牌的客户端共享同一授权主体。未实现远程监听、浏览器客户端、文件上传/下载、多用户、OS 常驻服务、并行队列或自动记录清理。结果分页仍需整体读取报告，目录 policy 不替代 OS 沙箱。
+- 原人工位置参数 CLI 仍直接进入引擎，不属于受限 Agent API。桌面与 Agent 的消息格式、权限和临时/持久作业身份不同，统一的是应用入口及执行设施。
+- 本轮仅本地提交，未推送远端或发布二进制；第三方工具分发限制不变。
+
+## 外部 Agent 首版（历史基线，05b40ea）
 
 - 新增 CommonJS 应用服务和结构化 CLI，独立 `agent-mcp/` 使用官方 SDK 2.4.0；八个 MCP 工具直接调用同一服务，覆盖发现、校验、提交、查询、取消、任务历史和分页结果。支持现有图片/音频操作、续跑/重试、显式恢复/备份导出和受控依赖安装。
 - DesktopBridge 抽出共享 JobSession，GUI、CLI、MCP 工作进程按同一用户/核心安装互斥；保留原任务锁、提交意图、哈希、原子替换和文件边界取消。预览锁放在系统临时目录，保持素材及项目目录的只读预览边界。
