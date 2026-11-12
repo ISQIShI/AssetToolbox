@@ -9,6 +9,7 @@ import ProcessView from './views/ProcessView.vue';
 import TasksView from './views/TasksView.vue';
 import RestoreView from './views/RestoreView.vue';
 import ToolsView from './views/ToolsView.vue';
+import JobsView from './views/JobsView.vue';
 import JobDock from './components/JobDock.vue';
 import TitleBar from './components/TitleBar.vue';
 import Icon, { type IconName } from './components/Icon.vue';
@@ -22,6 +23,7 @@ const tabs = computed<{ id: Page; label: string; icon: IconName; missing?: numbe
     { id: 'tasks', label: '任务', icon: 'tasks' },
     { id: 'restore', label: '恢复', icon: 'restore' },
     { id: 'tools', label: '工具', icon: 'tools', missing: missingProviders.value.length },
+    { id: 'jobs', label: '作业', icon: 'tasks' },
 ]);
 const context = computed(() => config.value?.sourceDir.trim() ? folderName(config.value.sourceDir) : '');
 const resumable = computed(() => tasks.value.filter(task => task.canResume).length);
@@ -39,10 +41,10 @@ function go(target: Page) {
     if (target === 'tasks') bench.refreshTasks().catch(bench.fail);
 }
 
-// 快捷键：Ctrl+1–4 切换工作区，Ctrl+S 保存处理配置。
+// 快捷键：Ctrl+1–5 切换工作区，Ctrl+S 保存处理配置。
 function shortcut(event: KeyboardEvent) {
     if (!event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) return;
-    const index = ['1', '2', '3', '4'].indexOf(event.key);
+    const index = ['1', '2', '3', '4', '5'].indexOf(event.key);
     if (index >= 0) { event.preventDefault(); go(tabs.value[index]!.id); return; }
     if (event.key.toLowerCase() === 's') {
         event.preventDefault();
@@ -91,6 +93,7 @@ onUnmounted(() => { window.removeEventListener('keydown', shortcut); bench.stop(
           <ProcessView v-else-if="page === 'process'" />
           <TasksView v-else-if="page === 'tasks'" />
           <RestoreView v-else-if="page === 'restore'" />
+          <JobsView v-else-if="page === 'jobs'" />
           <ToolsView v-else />
         </main>
 

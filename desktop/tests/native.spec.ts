@@ -35,7 +35,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true }); fs.writeFileSync(settingsPath, JSON.stringify(config));
     // 常规原生回归不访问下载渠道；若误调用安装器，隔离副本立即失败。
     fs.writeFileSync(path.join(tool, 'resource-core/framework/dependencies/download.js'), "exports.download=async()=>{throw Error('离线原生回归禁止下载，请运行 network 项目')};");
-    let child: ChildProcess | undefined, browser: Browser | undefined, page!: Page;
+    let child: ChildProcess | undefined, external: ChildProcess | undefined, browser: Browser | undefined, page!: Page;
     const errors: string[] = [];
     async function launch() {
         const port = await freePort();
@@ -253,6 +253,41 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect(page.getByLabel('替换前备份原文件', { exact: false })).toBeChecked();
         expect(fs.readFileSync(settingsPath, 'utf8')).toContain('中文 配置');
         expect(errors).toEqual([]);
+        // CLI 创建作业，桌面通过公共列表观察，不产生新的提交。
+        const cliPreview = spawnSync(path.join(tool, 'runtime/node.exe'), [path.join(tool, 'resource-core/cli.js'), 'api', 'submit', '--local', '--input', '-'], { input: JSON.stringify({ request: { mode: 'preview', folder: source, pipeline: config.pipeline }, idempotencyKey: 'job-center-native' }), encoding: 'utf8', windowsHide: true, timeout: 15000 });
+        expect(cliPreview.status, cliPreview.stderr).toBe(0);
+        const externalJobId = JSON.parse(cliPreview.stdout).result.jobId;
+        await tab('作业').click();
+        await page.locator('.job-row').filter({ hasText: externalJobId }).click();
+        await expect(page.locator('.job-detail')).toContainText('已完成');
+        await page.locator('.job-row').filter({ hasText: completedJobId }).click();
+        await expect(page.locator('.job-detail')).toContainText('逐文件结果');
+        await page.screenshot({ path: info.outputPath('jobs-1220-light.png') });
+        await page.setViewportSize({ width: 840, height: 620 });
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: info.outputPath('jobs-840-dark.png') });
+        await page.setViewportSize({ width: 1220, height: 850 });
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+        // 观察运行中的 CLI：关闭观察窗口不取消，重启桌面后可以显式取消。
+        const externalSource = path.join(root, '外部作业素材'); fs.mkdirSync(externalSource);
+        for (let i = 0; i < 40; i++) fs.writeFileSync(path.join(externalSource, i + '.pack'), 'PACK:x' + 'test'.repeat(100));
+        external = spawn(path.join(tool, 'runtime/node.exe'), [path.join(tool, 'resource-core/cli.js'), 'api', 'submit', '--local', '--input', '-'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+        let receipt = '', externalOutput = '';
+        external.stderr!.on('data', chunk => { receipt += chunk; }); external.stdout!.on('data', chunk => { externalOutput += chunk; });
+        external.stdin!.end(JSON.stringify({ request: { mode: 'process', folder: externalSource, outputDir: path.join(root, '外部作业结果'), pipeline: config.pipeline }, idempotencyKey: 'job-center-running' }));
+        await expect.poll(() => receipt.includes('jobId')).toBe(true);
+        const runningId = JSON.parse(receipt.trim().split('\n').find(line => line.includes('jobId'))!).jobId;
+        await button('刷新作业').click(); await page.locator('.job-row').filter({ hasText: runningId }).click();
+        await expect(page.locator('.job-detail')).toContainText('运行中');
+        await close(); expect(external.exitCode).toBeNull();
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v2', runningId, 'cancel'))).toBe(false);
+        await launch(); await tab('作业').click();
+        await page.locator('.job-row').filter({ hasText: runningId }).click();
+        await button('取消此作业').click();
+        await expect(page.locator('.job-detail')).toContainText('已取消');
+        await expect.poll(() => external!.exitCode).not.toBeNull();
+        expect(JSON.parse(externalOutput).result.state.cancelled).toBe(true);
         // 只给隔离副本中的已完成作业模拟 45 天前时间；真实配置与素材不参与清理验收。
         const oldJob = path.join(tool, 'resource-core/data/jobs/v2', completedJobId);
         const jobFile = path.join(oldJob, 'job.json'), oldMeta = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
@@ -293,6 +328,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await page?.screenshot({ path: info.outputPath('failure.png'), fullPage: true }).catch(() => {});
         throw cause;
     } finally {
+        if (external && external.exitCode === null) { const exited = new Promise<void>(resolve => external!.once('exit', () => resolve())); external.kill(); await exited; }
         if (browser) await browser.close().catch(() => {});
         if (child && child.exitCode === null) { const exited = new Promise<void>(resolve => child!.once('exit', () => resolve())); child.kill(); await exited; }
         await sleep(1800);

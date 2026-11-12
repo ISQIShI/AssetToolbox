@@ -68,3 +68,6 @@ flowchart TD
 ## 存储维护与结果过期
 
 `storage-preview/storage-clean` 调用共享存储维护模块，只有无 policy 的受信任本地上下文可以执行；目录授权不等于全局清理权。默认保留 30 天，必须预览并显式选择。清理后 status 保留最终摘要，返回 resultsExpired/cleanedAt，hasReport 为 false；results 和打开报告返回 RESULTS_EXPIRED。幂等重放仍返回原作业，不再次执行；任务和备份可继续恢复。详细范围、摘要/锁及中断行为见[存储维护](storage.md)和 [ADR 0012](../decisions/0012-storage-retention-and-test-layers.md)。
+
+
+桌面已接入公共查询与取消，观察生命周期独立于执行所有者；未增加 API 或存储版本。跨会话执行竞争、串行队列与有限并行的比较见[统一作业中心与入口冲突](job-center.md)。

@@ -120,6 +120,7 @@ export async function call(action: string, payload: any): Promise<unknown> {
         case 'bootstrap': return { config: structuredClone(config), definition: structuredClone(definition), warnings: [], root: 'D:\\Tools\\AssetToolbox\\resource-core', nodeVersion: '24.19.0' } satisfies Bootstrap;
         case 'providers': return structuredClone(providers);
         case 'tasks': return page(tasks, payload);
+        case 'jobs': return page([...jobs].map(([jobId, job]) => ({ jobId, mode: job.request.mode, createdAt: new Date(job.started).toISOString() })).reverse(), payload);
         case 'normalize': return JSON.parse(JSON.stringify(payload));
         case 'save': config = JSON.parse(JSON.stringify(payload)); return structuredClone(config);
         case 'submit': { const jobId = crypto.randomUUID(); jobs.set(jobId, { request: payload.request, started: Date.now(), cancelled: false }); return { jobId, replayed: false }; }

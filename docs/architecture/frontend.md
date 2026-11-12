@@ -132,3 +132,7 @@ JobDock 中 AudioResults 展示前 100 条步骤测量、请求/实际增益、�
 ## 存储维护面板
 
 工具页的 `StorageMaintenance.vue` 负责天数、分页和显式选择；默认 30 天、折叠、不勾选。`workbench.ts` 调用公共 storage-preview/storage-clean，维护独立 maintenanceBusy 并纳入 busy；期间禁止其他操作，关闭窗口等待维护结束。修改天数使预览失效，翻页清空选择；STALE_PREVIEW 清除旧预览且不自动重试。清理后刷新状态，JobDock 对 resultsExpired 显示明细已清理。浏览器预览仅展示空清单，不模拟删除。参见[存储维护](storage.md)。
+
+## 统一作业中心
+
+`JobsView.vue` / `core/job-center.ts` 调用公共 jobs/status/results/cancel。观察状态独立于 workbench 的 ActiveJob；不提交、不接管作业，页面卸载只停止刷新。Ctrl+5 打开作业工作区，原 Ctrl+1–4 不变。每页 20 个作业、50 条文件结果，2 秒刷新，本页搜索/状态筛选；已清理结果有独立提示。报告按 ID 打开，关联任务进入原任务页。详见[作业中心及冲突设计](job-center.md)。

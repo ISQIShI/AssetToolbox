@@ -29,7 +29,7 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 
 | 入口 | 职责 |
 | --- | --- |
-| `desktop/src/App.vue`、`core/workbench.ts`、`views/`、`components/` | 自绘标题栏、活动栏与状态栏，四个工作区、处理线与步骤编辑、全局作业栏、任务与恢复，见[前端架构](frontend.md) |
+| `desktop/src/App.vue`、`core/workbench.ts`、`views/`、`components/` | 自绘标题栏、活动栏与状态栏，五个工作区、处理线与步骤编辑、全局作业栏、任务与恢复，见[前端架构](frontend.md) |
 | `desktop/src-tauri/src/main.rs` | 本地宿主、目录对话框、报告打开、退出协作 |
 | `desktop-bridge.js` | 桌面 JSON Lines 传输与应用服务委托 |
 | `application/`、`../agent-mcp/` | 统一公共作业、权限/生命周期上下文、持久 jobId、JobSession、HTTP API 及 MCP 双传输；见[统一应用接口](application.md)、[自动化专题](automation.md)和[HTTP 专题](http.md) |
@@ -41,7 +41,7 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 
 表中核心入口位于 `resource-core/`。Sharp 为核心唯一直接 npm 依赖；核心、桌面 npm 和 Rust 依赖各有锁文件。完整便携部署包含核心 node_modules，构建脚本通过便携 Node 验证 Sharp 可加载。
 
-MCP 单独使用 SDK 2.4.0 与 Zod，不加入桌面核心依赖；按需携带 `agent-mcp/` 及其 node_modules。GUI 与 Agent 素材任务共用历史，实时作业面板仍属于各自会话。原生桥接 JSON Lines 与 MCP 是两个不同协议，不能互换连接。
+MCP 单独使用 SDK 2.4.0 与 Zod，不加入桌面核心依赖；按需携带 `agent-mcp/` 及其 node_modules。GUI 与 Agent 素材任务共用历史，桌面作业中心可观察所有授权可见的持久作业；底部作业栏仍属于本会话。原生桥接 JSON Lines 与 MCP 是两个不同协议，不能互换连接。
 
 ## 数据流与安全
 

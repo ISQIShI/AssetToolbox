@@ -53,3 +53,6 @@ JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分�
 ## 测试分层与存储维护
 
 相关改动必读[测试分层](docs/testing.md)、[存储维护](docs/architecture/storage.md)及 [ADR 0012](docs/decisions/0012-storage-retention-and-test-layers.md)。源码 CI 不代替本地编码器或原生验收；新增核心测试必须登记分层清单，不通过缺依赖自动跳过。存储默认保留 30 天，只允许预览后显式选择清理；保护素材、输出、任务、备份、依赖和幂等身份，禁止递归删任务目录。维护动作只允许受信任本地上下文，现有 policy 不授权全局清理；保留摘要重验、锁、retention 记录和 RESULTS_EXPIRED 语义。
+
+
+作业中心相关改动必读[作业中心与入口冲突](docs/architecture/job-center.md)。观察状态独立于本会话 ActiveJob；关闭观察窗口或离开页面不能取消其他入口作业。排队和并行仍属设计方案，不得写成现有能力。

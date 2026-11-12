@@ -7,7 +7,7 @@ import { bytes, createStep, isMissing, processingRequest, providerOf } from './m
 import type { StoragePreview, StorageResult, StorageSelection } from './types';
 import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, ResultPage, RestoreFile, AudioResult, RestorePreview, RestoreScope, ScanPreview, Selection, Step, Task } from './types';
 
-export type Page = 'process' | 'tasks' | 'restore' | 'tools';
+export type Page = 'process' | 'tasks' | 'restore' | 'tools' | 'jobs';
 export type JobKind = 'preview' | 'process' | 'resume' | 'retry' | 'restore-check' | 'restore' | 'dependency';
 export interface ActiveJob { id: string; kind: JobKind; title: string; state: JobState; cancelRequested: boolean }
 export type RestoreSource = { kind: 'task'; taskId: string } | { kind: 'export'; backupDir: string; outputDir: string };
