@@ -9,7 +9,7 @@ import AudioResults from './AudioResults.vue';
 const bench = useWorkbench();
 const { job, closing } = bench;
 
-const phases: Record<string, string> = { starting: '正在启动', scanning: '正在扫描', checking: '正在检查', processing: '正在处理', restoring: '正在恢复', downloading: '正在下载', verifying: '正在校验', installing: '正在安装', finished: '正在收尾' };
+const phases: Record<string, string> = { queued: '排队等待', starting: '正在启动', scanning: '正在扫描', checking: '正在检查', processing: '正在处理', restoring: '正在恢复', downloading: '正在下载', verifying: '正在校验', installing: '正在安装', finished: '正在收尾' };
 const state = computed(() => job.value!.state);
 const running = computed(() => !state.value.done);
 const percent = computed(() => state.value.total ? Math.min(100, Math.round(state.value.processed / state.value.total * 100)) : 0);

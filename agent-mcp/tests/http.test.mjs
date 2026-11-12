@@ -142,7 +142,7 @@ test('desktop, CLI, stdio MCP, HTTP and HTTP MCP share schemas, durable jobs, ca
     };
     const calls = [desktop, cli, async (action, input = {}) => (await stdio.callTool({ name: 'asset_' + action, arguments: input })).structuredContent, async (action, input) => (await f.api(action, input)).body, remote.call];
     const catalogs = await Promise.all(calls.map(call => call('capabilities')));
-    for (const response of catalogs) { assert.equal(response.schema, 'asset-toolbox.response/3'); assert.deepEqual(response.result.inputSchemas, catalogs[0].result.inputSchemas); }
+    for (const response of catalogs) { assert.equal(response.schema, 'asset-toolbox.response/4'); assert.deepEqual(response.result.inputSchemas, catalogs[0].result.inputSchemas); }
     for (const call of calls.slice(1)) {
         assert.equal((await call('storage-preview')).error.code, 'PERMISSION_DENIED');
         assert.equal((await call('storage-clean', { retentionDays: 30, selection: [{ jobId: 'a'.repeat(64), fingerprint: 'b'.repeat(64) }] })).error.code, 'PERMISSION_DENIED');

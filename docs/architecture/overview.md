@@ -8,12 +8,13 @@ AssetToolbox 1.0.0 是 Windows 便携资源处理工具，使用 Vue 3/TypeScrip
 flowchart TD
     UI[Vue / WebView2] -->|Tauri invoke| Host[Rust 宿主]
     Host -->|JSON Lines| Bridge[Node 桌面会话]
-    CLI[结构化 CLI] --> Application[ApplicationService /3 唯一公共作业用例]
+    CLI[结构化 CLI] --> Application[ApplicationService /4 唯一公共作业用例]
     MCP[MCP stdio / Streamable HTTP] --> Application
     HTTP[本机 HTTP API] --> Application
     Bridge --> Application
     Application --> Storage[本地存储维护 / 预览与显式清理]
-    Application --> Session[JobSession / 持久作业进程]
+    Application --> Queue[Queue / 提交锁内派发 FIFO 队首]
+    Queue --> Session[JobSession / 持久作业进程]
     Session --> Worker[batch.js 工作进程 / 安装级执行锁]
     Worker --> Engine[engine.js 流水线]
     Engine --> Catalog[类型 / 操作 / 提供方]
@@ -58,3 +59,5 @@ MCP 单独使用 SDK 2.4.0 与 Zod，不加入桌面核心依赖；按需携带 
 当前只支持同格式、一入一出、逐文件串行；扩展为可信本地代码，无权限隔离、热重载、依赖注入。没有 Cordis。新数据根和 schema 不兼容历史数据，见[持久化](persistence.md)。后续扩展优先遵循契约，出现生命周期或服务依赖需求后再评估框架收益。
 
 [存储维护](storage.md)直接复用应用服务，默认保留 30 天，人工预览和选择后清理成功旧作业明细；任务、备份与幂等身份保留。当前实现同步扫描/哈希，未实现流式报告或定时清理。[测试分层](../testing.md)区分源码 CI、真实编码器、原生离线及联网安装验收。
+
+ApplicationService 现由 Queue 在提交锁内调度原持有者的 FIFO 队首，再进入 JobSession；只有确认 worker 退出才开始下一项。单安装并发度 1，无常驻后台服务。详见[持久串行队列](queue.md)。

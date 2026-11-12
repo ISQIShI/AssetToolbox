@@ -9,7 +9,7 @@ const { rows, total, offset, next, selected, results, resultOffset, loading, err
 const query = ref(''), filter = ref('all');
 const resultLabels: Record<string, string> = { processed: '已处理', compressed: '已压缩', skipped: '保持原样', failed: '失败', copied: '已复制', restored: '已恢复', recoverable: '可恢复', conflict: '冲突', analyzed: '已分析' };
 const resultLabel = (value: unknown) => resultLabels[String(value)] || String(value || '—');
-const visible = computed(() => rows.value.filter(row => `${row.jobId} ${jobModes[row.mode] || row.mode}`.includes(query.value.trim()) && (filter.value === 'all' || (filter.value === 'running' ? row.state && !row.state.done : row.state?.done))));
+const visible = computed(() => rows.value.filter(row => `${row.jobId} ${jobModes[row.mode] || row.mode}`.includes(query.value.trim()) && (filter.value === 'all' || (filter.value === 'queued' ? row.state?.phase === 'queued' && !row.state.done : filter.value === 'running' ? row.state && !row.state.done && row.state.phase !== 'queued' : row.state?.done))));
 async function report() { if (selected.value) try { await openReport(selected.value.jobId); } catch (cause) { error.value = String(cause); } }
 function task() { const id = selected.value?.state?.task?.id; if (id) { bench.selectedTaskId.value = id; bench.showTask(); } }
 onMounted(center.start); onUnmounted(center.stop);
@@ -22,7 +22,7 @@ onMounted(center.start); onUnmounted(center.stop);
     <p v-if="error" role="alert" class="callout danger selectable">{{ error }}</p>
     <div class="columns">
       <aside aria-label="作业列表">
-        <div class="commands"><input v-model="query" class="input" aria-label="搜索本页作业" placeholder="搜索本页编号或操作"><select v-model="filter" class="input" aria-label="筛选本页状态"><option value="all">全部状态</option><option value="running">运行中</option><option value="done">已结束</option></select></div>
+        <div class="commands"><input v-model="query" class="input" aria-label="搜索本页作业" placeholder="搜索本页编号或操作"><select v-model="filter" class="input" aria-label="筛选本页状态"><option value="all">全部状态</option><option value="queued">排队中</option><option value="running">运行中</option><option value="done">已结束</option></select></div>
         <button v-for="row in visible" :key="row.jobId" class="job-row" :aria-current="selected?.jobId === row.jobId ? 'true' : undefined" @click="center.select(row)"><strong>{{ jobModes[row.mode] || row.mode }}</strong><span>{{ jobLabel(row.state) }}</span><small>{{ date(row.createdAt) }}</small><code>{{ row.jobId }}</code><small v-if="row.error">{{ row.error }}</small></button>
         <p v-if="!visible.length" class="muted">{{ loading ? '正在读取作业…' : '本页没有匹配的作业。' }}</p>
         <div class="commands"><button class="button" :disabled="loading || offset === 0" @click="center.changePage(Math.max(0, offset - 20))">上一页</button><button class="button" :disabled="loading || next === null" @click="center.changePage(next!)">下一页</button><span>{{ offset + 1 }} / {{ Math.max(1, total) }}</span></div>
@@ -30,6 +30,7 @@ onMounted(center.start); onUnmounted(center.stop);
       <article v-if="selected" class="job-detail">
         <header class="commands"><h2>{{ jobModes[selected.mode] || selected.mode }}</h2><span>{{ jobLabel(selected.state) }}</span></header>
         <code class="selectable">{{ selected.jobId }}</code>
+        <p v-if="selected.state?.phase === 'queued'" role="status">排队位置 {{ selected.state.queuePosition }}（含执行中作业），可随时取消等待。</p>
         <p v-if="selected.state">进度：{{ selected.state.processed }} / {{ selected.state.total }}<span v-if="selected.state.current"> · {{ selected.state.current }}</span></p>
         <p v-if="selected.state?.error || selected.error" class="callout danger selectable">{{ selected.state?.error || selected.error }}</p>
         <p v-if="selected.state?.resultsExpired" class="callout">报告与明细已清理，作业身份与任务记录仍保留。</p>

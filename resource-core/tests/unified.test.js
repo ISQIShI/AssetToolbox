@@ -82,7 +82,7 @@ test('shortcut CLI adapts into durable jobs and keeps provider loading logs out 
     const pipeline = path.join(f.root, 'pipeline.json'); fs.writeFileSync(pipeline, JSON.stringify(f.request.pipeline));
     const result = spawnSync(process.execPath, [path.join(f.core, 'cli.js'), f.source, '--pipeline', pipeline, '--output', f.output], { encoding: 'utf8', windowsHide: true, timeout: 15000 });
     assert.equal(result.status, 0, result.stderr); assert.match(result.stderr, /提供方加载诊断/);
-    const response = JSON.parse(result.stdout); assert.equal(response.schema, 'asset-toolbox.response/3');
+    const response = JSON.parse(result.stdout); assert.equal(response.schema, 'asset-toolbox.response/4');
     assert.equal(response.result.state.task.completed, 8);
     assert.equal(f.server.dispatch('status', { jobId: response.result.jobId }).taskId, response.result.state.taskId);
     assert.equal(fs.readFileSync(path.join(f.source, '0.pack'), 'utf8'), 'PACK:' + 'test'.repeat(100));

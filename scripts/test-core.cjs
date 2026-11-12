@@ -4,7 +4,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..', 'resource-core');
 const profiles = {
-    source: ['adapters', 'application', 'batch', 'contract', 'dependencies', 'desktop', 'http', 'restore-preview', 'restore', 'resume', 'unified', 'storage'],
+    source: ['adapters', 'application', 'batch', 'contract', 'dependencies', 'desktop', 'http', 'restore-preview', 'restore', 'resume', 'unified', 'storage', 'queue'],
     codecs: ['audio', 'codecs', 'compress', 'resize', 'resources'],
 };
 const selected = process.argv[2];

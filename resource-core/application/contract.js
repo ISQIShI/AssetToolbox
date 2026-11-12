@@ -1,6 +1,6 @@
-const API = 'asset-toolbox.application/3';
-const RESPONSE = 'asset-toolbox.response/3';
-const JOB = 'asset-toolbox.job/2';
+const API = 'asset-toolbox.application/4';
+const RESPONSE = 'asset-toolbox.response/4';
+const JOB = 'asset-toolbox.job/3';
 const object = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 const string = { type: 'string' };
 const parameters = { type: 'object', additionalProperties: { anyOf: [string, { type: 'number' }, { type: 'boolean' }] } };

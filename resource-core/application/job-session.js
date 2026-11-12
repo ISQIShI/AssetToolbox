@@ -3,10 +3,9 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 // 仅管理已由应用服务校验并落盘的作业进程，不定义第二套业务请求。
 class JobSession {
-    constructor() { this.job = null; this.closing = false; }
+    constructor() { this.job = null; this.jobs = new Map(); this.closing = false; }
     start(request, persistent) {
         if (this.closing) throw new Error('应用正在退出');
-        if (this.job && !this.job.exited) throw new Error('请等待当前任务结束');
         this.cleanup();
         const { directory, id } = persistent;
         const job = { id, directory, exited: false, state: { phase: 'starting', done: false, processed: 0, total: 0 }, stderr: '' };
@@ -16,8 +15,7 @@ class JobSession {
             job.child = spawn(process.execPath, [path.join(__dirname, '..', request.mode === 'dependency-install' ? 'framework/dependencies/worker.js' : 'batch.js'), filename], {
                 cwd: path.join(__dirname, '..'), windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'],
             });
-            this.job = job;
-            fs.writeFileSync(path.join(directory, 'worker.json'), JSON.stringify({ pid: job.child.pid }));
+            this.job = job; this.jobs.set(id, job);
             job.child.stderr.on('data', data => { job.stderr = (job.stderr + data.toString()).slice(-8000); });
             job.completion = new Promise(resolve => {
                 job.child.on('error', error => { job.error = error.message; });
@@ -28,14 +26,15 @@ class JobSession {
                     resolve();
                 });
             });
+            fs.writeFileSync(path.join(directory, 'worker.json'), JSON.stringify({ pid: job.child.pid }));
             return { id: job.id };
         } catch (error) {
             throw error;
         }
     }
     current(id) {
-        if (!this.job || this.job.id !== id) throw new Error('任务会话已失效，请从任务历史继续');
-        return this.job;
+        if (!this.jobs.has(id)) throw new Error('任务会话已失效，请从任务历史继续');
+        return this.jobs.get(id);
     }
     poll(id) {
         const job = this.current(id);
@@ -53,11 +52,13 @@ class JobSession {
         return { requested: true };
     }
     cleanup() {
+        for (const [id, job] of this.jobs) if (job.exited) this.jobs.delete(id);
         if (this.job?.exited) this.job = null;
     }
     async shutdown() {
         this.closing = true;
-        if (this.job && !this.job.exited) { this.cancel(this.job.id); await this.job.completion; }
+        for (const job of this.jobs.values()) if (!job.exited) this.cancel(job.id);
+        await Promise.all([...this.jobs.values()].map(job => job.completion));
         this.cleanup();
     }
 }

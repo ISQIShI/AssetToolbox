@@ -1,12 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { createHash } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const { JobSession } = require('./job-session');
 const { acquire, alive } = require('./lock');
 const { fail, record, canonical, within } = require('./policy');
 const { localContext, policyContext, assertContext } = require('./context');
 const { API, RESPONSE, JOB, ACTION_FIELDS, inputSchemas } = require('./contract');
-const ROOT = path.join(__dirname, '..', 'data', 'jobs', 'v2');
+const ROOT = path.join(__dirname, '..', 'data', 'jobs', 'v3');
 const fingerprint = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const read = filename => JSON.parse(fs.readFileSync(filename, 'utf8'));
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
@@ -42,6 +42,8 @@ class ApplicationService {
         this.scope = this.context.scope;
         this.directory = ROOT;
         this.session = new JobSession();
+        this.owner = randomUUID(); this.owned = new Set();
+        this.queue = new (require('./queue').Queue)(this);
     }
     static forDesktop() { return new ApplicationService(localContext({ settings: true })); }
     taskFile(id) {
@@ -90,10 +92,15 @@ class ApplicationService {
     metadata(id) {
         if (typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id)) fail('INVALID_REQUEST', '无效作业 ID');
         const directory = path.join(this.directory, id);
-        if (!fs.existsSync(directory)) fail('NOT_FOUND', '没有该 /2 作业；不读取或迁移旧 /1 作业');
+        if (!fs.existsSync(directory)) fail('NOT_FOUND', '没有该 /3 作业；不读取或迁移旧作业');
         if (fs.realpathSync(directory) !== directory) fail('PATH_FORBIDDEN', '作业目录不能是链接');
         const meta = read(path.join(directory, 'job.json'));
-        if (meta.schema !== JOB || meta.id !== id) fail('UNSUPPORTED_VERSION', '作业格式不支持');
+        if (meta.schema !== JOB || meta.id !== id || !Number.isSafeInteger(meta.sequence) || meta.sequence < 1 || typeof meta.owner !== 'string' || !meta.publicRequest) fail('UNSUPPORTED_VERSION', '作业格式不支持');
+        const dispatchFile = path.join(directory, 'dispatch.json');
+        if (fs.existsSync(dispatchFile)) {
+            const claim = read(dispatchFile);
+            if (claim.schema !== 'asset-toolbox.dispatch/1' || claim.sequence !== meta.sequence || claim.owner !== meta.owner) fail('UNSUPPORTED_VERSION', '启动声明格式不支持');
+        }
         // 重新授权，防止重启后目录链接发生变化。
         this.context.authorize(meta.request);
         return { ...meta, directory };
@@ -108,7 +115,9 @@ class ApplicationService {
                 if (this.metadata(id).requestHash !== requestHash) fail('IDEMPOTENCY_CONFLICT', '同一幂等键已用于不同请求');
                 return { jobId: id, replayed: true, state: this.status(id) };
             }
-            if (this.session.closing || (this.session.job && !this.session.job.exited)) fail('BUSY', '本会话已有活动作业或正在退出');
+            if (this.session.closing) fail('BUSY', '本会话正在退出');
+            const queue = require('./queue').inventory(this.directory);
+            if (queue.filter(item => item.pending).length >= 100) fail('BUSY', '队列已满（最多 100 个未结束作业）');
             // 在占用幂等键之前检查依赖；仅预览允许列出缺失项。
             if (request.mode === 'process') {
                 const catalog = require('../framework/registry').describe();
@@ -116,33 +125,44 @@ class ApplicationService {
                 if (missing.length) fail('DEPENDENCY_MISSING', missing.map(provider => provider.id + '：' + provider.availability.reason + '；' + provider.acquisition?.instructions).join('\n'));
             }
             fs.mkdirSync(directory, { recursive: true });
-            const meta = { schema: JOB, id, scope: this.scope, requestHash, request, createdAt: new Date().toISOString(), ownerPid: process.pid };
+            const meta = { schema: JOB, id, scope: this.scope, requestHash, request, createdAt: new Date().toISOString(), ownerPid: process.pid, owner: this.owner, sequence: queue.reduce((max, item) => Math.max(max, item.sequence), 0) + 1, publicRequest: input };
             writeExclusive(path.join(directory, 'job.json'), meta);
-            try {
-                this.session.start(request.mode === 'dependency-install' || !this.policy ? request : { ...request, _automationPolicy: this.policy }, { directory, id });
-            } catch (error) {
-                fs.writeFileSync(path.join(directory, 'status.json'), JSON.stringify({ phase: 'finished', done: true, exitCode: 1, error: error.message, errorCode: 'START_FAILED' }));
-                throw error;
-            }
+            this.owned.add(id); this.queue.wake();
             return { jobId: id, replayed: false };
         } finally { unlock(); }
+    }
+    startQueued(meta) {
+        try {
+            const request = this.normalize(meta.publicRequest);
+            if (JSON.stringify(stable(request)) !== JSON.stringify(stable(meta.request))) fail('INVALID_REQUEST', '排队期间请求或适配器版本发生变化');
+            writeExclusive(path.join(meta.directory, 'dispatch.json'), { schema: 'asset-toolbox.dispatch/1', sequence: meta.sequence, owner: this.owner, at: new Date().toISOString() });
+            this.session.start(request.mode === 'dependency-install' || !this.policy ? request : { ...request, _automationPolicy: this.policy }, { directory: meta.directory, id: meta.id });
+        } catch (error) {
+            writeExclusive(path.join(meta.directory, 'status.json'), { phase: 'finished', done: true, exitCode: 1, error: error.message, errorCode: error.code || 'START_FAILED' });
+            this.owned.delete(meta.id);
+        }
     }
     rawStatus(id) {
         const meta = this.metadata(id);
         const expired = require('./storage').expiredState(meta.directory);
         if (expired) return expired;
-        if (this.session.job?.id === id) {
+        if (this.session.jobs.has(id)) {
             const state = this.session.poll(id);
+            if (state.done) this.owned.delete(id);
             if (state.errorCode === 'INTERRUPTED' && state.task?.id) state.task = require('../tasks').loadTask(this.taskFile(state.task.id)).info();
             return state;
         }
-        let state = { phase: 'starting', done: false };
+        let state = { phase: fs.existsSync(path.join(meta.directory, 'dispatch.json')) ? 'starting' : 'queued', done: false, sequence: meta.sequence };
+        if (!fs.existsSync(path.join(meta.directory, 'dispatch.json')) && alive(meta.ownerPid) && !fs.existsSync(path.join(meta.directory, 'status.json'))) {
+            const pending = require('./queue').inventory(this.directory).filter(item => item.pending);
+            return { ...state, queuePosition: pending.findIndex(item => item.id === id) + 1, message: this.queueError || '等待前序作业结束' };
+        }
         try { state = read(path.join(meta.directory, 'status.json')); }
         catch (error) { if (!['ENOENT', 'EBUSY', 'EACCES', 'EPERM'].includes(error.code)) throw error; }
         let worker;
         try { worker = read(path.join(meta.directory, 'worker.json')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
         const exited = fs.existsSync(path.join(meta.directory, 'exit.json'));
-        if (!exited && worker && alive(worker.pid)) return { ...state, done: false };
+        if (!exited && worker && (alive(worker.pid) || alive(meta.ownerPid))) return { ...state, done: false };
         if (state.done) return state;
         if (!exited && !worker && alive(meta.ownerPid)) return state;
         if (state.task?.id) {
@@ -195,7 +215,14 @@ class ApplicationService {
             case 'status': return this.status(input.jobId);
             case 'cancel': {
                 const meta = this.metadata(input.jobId);
-                if (!this.rawStatus(input.jobId).done) fs.writeFileSync(path.join(meta.directory, 'cancel'), '');
+                const release = acquire('submission');
+                try {
+                    const dispatched = fs.existsSync(path.join(meta.directory, 'dispatch.json'));
+                    const statusFile = path.join(meta.directory, 'status.json');
+                    if (fs.existsSync(path.join(meta.directory, 'exit.json')) || (!dispatched && fs.existsSync(statusFile) && read(statusFile).done)) return { jobId: input.jobId, requested: true };
+                    if (!dispatched) writeExclusive(statusFile, { phase: 'finished', done: true, cancelled: true, exitCode: 2, processed: 0, total: 0 });
+                    else fs.writeFileSync(path.join(meta.directory, 'cancel'), '');
+                } finally { release(); }
                 return { jobId: input.jobId, requested: true };
             }
             case 'results': return this.results(input.jobId, input.kind || 'files', input);
@@ -214,11 +241,31 @@ class ApplicationService {
             }
         }
     }
-    shutdown() { return this.session.shutdown(); }
+    async shutdown() {
+        this.queue.stop(); this.session.closing = true;
+        for (const id of this.owned) {
+            // 与调度争用同一锁，退出期间不会将等待项升级为运行项。
+            for (;;) {
+                try { this.dispatch('cancel', { jobId: id }); break; }
+                catch (error) { if (error.code !== 'BUSY') { this.queueError = error.message; break; } await new Promise(resolve => setTimeout(resolve, 25)); }
+            }
+        }
+        await this.session.shutdown(); this.owned.clear();
+    }
     disconnect() { return this.context.lifetime === 'connection' ? this.shutdown() : Promise.resolve(); }
 }
 async function respond(service, action, input) {
-    try { return { schema: RESPONSE, ok: true, result: await service.dispatch(action, input) }; }
+    try {
+        const deadline = Date.now() + 5000;
+        for (;;) {
+            try { return { schema: RESPONSE, ok: true, result: await service.dispatch(action, input) }; }
+            catch (error) {
+                if (!['submit', 'cancel'].includes(action) || error.lockName !== 'submission' || Date.now() >= deadline) throw error;
+                // 短暂登记/派发竞争在公共入口内等待；队列满、关闭及执行锁拒绝不自动重试。
+                await new Promise(resolve => setTimeout(resolve, 15 + Math.floor(Math.random() * 20)));
+            }
+        }
+    }
     catch (error) { return { schema: RESPONSE, ok: false, error: { code: ['INVALID_REQUEST', 'UNSUPPORTED_VERSION', 'PATH_FORBIDDEN', 'PERMISSION_DENIED', 'NOT_FOUND', 'BUSY', 'DEPENDENCY_MISSING', 'MANUAL_INSTALL_REQUIRED', 'IDEMPOTENCY_CONFLICT', 'NOT_READY', 'RESULTS_EXPIRED', 'STALE_PREVIEW'].includes(error.code) ? error.code : 'INVALID_REQUEST', message: error.message } }; }
 }
 module.exports = { ApplicationService, respond, capabilities, page, ACTION_FIELDS };

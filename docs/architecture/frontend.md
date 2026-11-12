@@ -127,7 +127,7 @@ stateDiagram-v2
 
 JobDock 中 AudioResults 展示前 100 条步骤测量、请求/实际增益、是否达标和峰值警告，null 明确显示不可测，失败文件标注未提交。完整结果从报告打开；作业栏限制高度并允许内部滚动。原生测试见 audio.spec.ts。
 
-公共调用使用应用 /3；上表 submit 的输入还必填 idempotencyKey，由前端为每次明确提交生成 UUID。所有任务选中值和续跑/恢复参数使用 taskId，任务列表与恢复 results 取完分页；音频完成后从 results 获取前 100 条。状态用 hasReport，原生打开报告按 jobId 由应用服务核验。旧 start/poll 与 taskFile 不再发送，见[统一应用接口](application.md)。
+公共调用使用应用 /4；上表 submit 的输入还必填 idempotencyKey，由前端为每次明确提交生成 UUID。所有任务选中值和续跑/恢复参数使用 taskId，任务列表与恢复 results 取完分页；音频完成后从 results 获取前 100 条。状态用 hasReport，原生打开报告按 jobId 由应用服务核验。旧 start/poll 与 taskFile 不再发送，见[统一应用接口](application.md)。
 
 ## 存储维护面板
 
@@ -136,3 +136,5 @@ JobDock 中 AudioResults 展示前 100 条步骤测量、请求/实际增益、�
 ## 统一作业中心
 
 `JobsView.vue` / `core/job-center.ts` 调用公共 jobs/status/results/cancel。观察状态独立于 workbench 的 ActiveJob；不提交、不接管作业，页面卸载只停止刷新。Ctrl+5 打开作业工作区，原 Ctrl+1–4 不变。每页 20 个作业、50 条文件结果，2 秒刷新，本页搜索/状态筛选；已清理结果有独立提示。报告按 ID 打开，关联任务进入原任务页。详见[作业中心及冲突设计](job-center.md)。
+
+作业中心与底部作业栏区分 queued 和运行阶段，显示含执行中的队列位置；新增排队筛选，等待可显式取消。后台公共接口升级 /4，桌面仍一次配置一个本会话作业，其他入口占用时可以排队。

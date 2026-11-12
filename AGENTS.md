@@ -21,7 +21,7 @@ Windows x64 环境按 `.nvmrc`、`rust-toolchain.toml`、`.vsconfig` 配置。�
 
 核心目录：`npm run test:source` 不要求外部编码器；`npm run test:codecs` 验证真实工具；`npm test` 全量执行，缺工具明确失败。桌面目录：`npm run dev` 启动原生开发；`npm test` 跑组件测试；`npm run typecheck` 检查类型；`npm run build` 构建并校验便携依赖；`npm run test:e2e` 验证刚构建的 EXE；`npm run test:e2e:network` 单独验证真实下载安装/更新。详细前提见[开发指南](docs/development.md)。
 
-应用接口改动必读[统一应用接口](docs/architecture/application.md)、[自动化专题](docs/architecture/automation.md)、[HTTP 专题](docs/architecture/http.md)及 [ADR 0009](docs/decisions/0009-agent-interfaces.md)/[0010](docs/decisions/0010-local-http.md)/[0011](docs/decisions/0011-unified-application.md)。MCP 目录独立执行 `npm ci --ignore-scripts`、`npm test`；保持官方 SDK 锁文件。全部 CLI（含快捷命令）、桌面桥接、HTTP 和 MCP 必须复用 ApplicationService 的同一套 /3 公共作业动作；禁止桌面专用 start/poll 分支或入口直接调用 JobSession/引擎。统一 jobId/taskId、幂等提交和分页结果，权限及生命周期由启动上下文注入，MCP schema 取自 contract.js；不能通过 shell 拼接参数或各写一套处理逻辑。权限来自启动上下文，禁止工具参数扩权或通过 HTTP 暴露桌面设置。转换另存或授权备份覆盖，恢复带显式预览哈希。保留幂等键、分页和跨入口锁；stdio 断连取消，HTTP 连接断开不取消已提交作业，服务退出才请求取消自己拥有的作业。保留默认 stdio，HTTP 只能显式启动、回环监听并验证令牌/Host/Origin/正文上限；MCP 两种传输共用工具工厂，HTTP 每请求创建协议实例。不要把应用目录限制描述为 OS 沙箱。
+应用接口改动必读[统一应用接口](docs/architecture/application.md)、[自动化专题](docs/architecture/automation.md)、[HTTP 专题](docs/architecture/http.md)及 [ADR 0009](docs/decisions/0009-agent-interfaces.md)/[0010](docs/decisions/0010-local-http.md)/[0011](docs/decisions/0011-unified-application.md)。MCP 目录独立执行 `npm ci --ignore-scripts`、`npm test`；保持官方 SDK 锁文件。全部 CLI（含快捷命令）、桌面桥接、HTTP 和 MCP 必须复用 ApplicationService 的同一套 /4 公共作业动作；禁止桌面专用 start/poll 分支或入口直接调用 JobSession/引擎。统一 jobId/taskId、幂等提交和分页结果，权限及生命周期由启动上下文注入，MCP schema 取自 contract.js；不能通过 shell 拼接参数或各写一套处理逻辑。权限来自启动上下文，禁止工具参数扩权或通过 HTTP 暴露桌面设置。转换另存或授权备份覆盖，恢复带显式预览哈希。保留幂等键、分页和跨入口锁；stdio 断连取消，HTTP 连接断开不取消已提交作业，服务退出才请求取消自己拥有的作业。保留默认 stdio，HTTP 只能显式启动、回环监听并验证令牌/Host/Origin/正文上限；MCP 两种传输共用工具工厂，HTTP 每请求创建协议实例。不要把应用目录限制描述为 OS 沙箱。
 
 JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分号。组件用 PascalCase，函数及参数用 camelCase，扩展和步骤 ID 用 `[a-z][a-z0-9-]*`。TypeScript 严格模式；没有独立 lint/格式化工具。
 
@@ -55,4 +55,4 @@ JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分�
 相关改动必读[测试分层](docs/testing.md)、[存储维护](docs/architecture/storage.md)及 [ADR 0012](docs/decisions/0012-storage-retention-and-test-layers.md)。源码 CI 不代替本地编码器或原生验收；新增核心测试必须登记分层清单，不通过缺依赖自动跳过。存储默认保留 30 天，只允许预览后显式选择清理；保护素材、输出、任务、备份、依赖和幂等身份，禁止递归删任务目录。维护动作只允许受信任本地上下文，现有 policy 不授权全局清理；保留摘要重验、锁、retention 记录和 RESULTS_EXPIRED 语义。
 
 
-作业中心相关改动必读[作业中心与入口冲突](docs/architecture/job-center.md)。观察状态独立于本会话 ActiveJob；关闭观察窗口或离开页面不能取消其他入口作业。排队和并行仍属设计方案，不得写成现有能力。
+作业中心相关改动必读[作业中心与入口冲突](docs/architecture/job-center.md)。观察状态独立于本会话 ActiveJob；关闭观察窗口或离开页面不能取消其他入口作业。持久 FIFO 已实现，并发度 1；有限并行尚未实现。队列改动必读[持久串行队列](docs/architecture/queue.md)及 [ADR 0013](docs/decisions/0013-persistent-fifo.md)，保留原持有会话、提交锁、序号、启动声明、退出确认及取消边界。

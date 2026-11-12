@@ -13,7 +13,7 @@ const { fixture } = require('./fixtures/application');
 test('application discovers live adapter schemas; validates scopes, unknown keys, versions and source preservation', async t => {
     const f = fixture(t);
     const catalog = (await f.call('capabilities')).result;
-    assert.equal(catalog.applicationApi, 'asset-toolbox.application/3');
+    assert.equal(catalog.applicationApi, 'asset-toolbox.application/4');
     assert.equal(catalog.operations.find(op => op.id === 'image-resize').parametersSchema.properties.width.minimum, 1);
     assert.ok(catalog.providers.find(p => p.id === 'ffmpeg').acquisition.instructions);
     assert.equal((await f.call('validate', { request: f.request })).ok, true);
@@ -97,8 +97,9 @@ test('desktop and external jobs contend on the same process lock; stale owners c
     const { jobId } = f.service.submit(f.request, 'active');
     await f.until(jobId, state => state.processed >= 1);
     const other = await bridge.dispatch('submit', { request: { ...f.request, mode: 'preview' }, idempotencyKey: 'competing' });
+    assert.equal((await bridge.dispatch('status', { jobId: other.jobId })).phase, 'queued');
     while (!(await bridge.dispatch('status', { jobId: other.jobId })).done) await delay(20);
-    assert.equal((await bridge.dispatch('status', { jobId: other.jobId })).errorCode, 'BUSY');
+    assert.equal((await bridge.dispatch('status', { jobId: other.jobId })).exitCode, 0);
     await f.until(jobId);
     const lockModule = path.join(f.core, 'application/lock');
     const child = spawn(process.execPath, ['-e', `require(${JSON.stringify(lockModule)}).acquire();process.stdout.write('locked');setInterval(()=>{},1000);`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -131,7 +132,10 @@ test('dependency install cannot race a running GUI/CLI worker and rejects arbitr
     const unlock = require(path.join(f.core, 'application/lock')).acquire();
     try {
         const { jobId } = f.service.submit({ mode: 'dependency-install', providerId: 'lame' }, 'busy-install');
-        const state = await f.until(jobId); assert.equal(state.errorCode, 'BUSY'); assert.equal(state.exitCode, 1);
+        await delay(250);
+        assert.equal(f.service.status(jobId).phase, 'queued');
+        f.service.dispatch('cancel', { jobId });
+        const state = await f.until(jobId); assert.equal(state.cancelled, true); assert.equal(state.exitCode, 2);
         assert.equal(fs.existsSync(path.join(f.core, 'data/dependencies')), false);
     } finally { unlock(); }
 });

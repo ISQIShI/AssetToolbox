@@ -4,7 +4,7 @@ import { call } from './api';
 import type { JobState, ResultPage } from './types';
 export interface JobRow { jobId: string; mode: string; createdAt: string; state?: JobState; error?: string }
 export const jobModes: Record<string, string> = { process: '处理资源', preview: '扫描预览', resume: '续跑', retry: '重试', restore: '恢复', 'restore-preview': '检查备份', 'restore-retry': '重试恢复', 'restore-export': '导出备份', 'restore-export-preview': '检查独立备份', 'dependency-install': '安装依赖' };
-export function jobLabel(state?: JobState) { return !state ? '无法读取' : !state.done ? '运行中' : state.cancelled ? '已取消' : state.exitCode || state.error ? '失败 / 中断' : state.resultsExpired ? '明细已清理' : '已完成'; }
+export function jobLabel(state?: JobState) { return !state ? '无法读取' : !state.done ? (state.phase === 'queued' ? '排队中' : '运行中') : state.cancelled ? '已取消' : state.exitCode || state.error ? '失败 / 中断' : state.resultsExpired ? '明细已清理' : '已完成'; }
 export function createJobCenter() {
     const rows = ref<JobRow[]>([]), offset = ref(0), total = ref(0), next = ref<number | null>(null);
     const selected = ref<JobRow>(), results = ref<ResultPage<Record<string, unknown>>>(), resultOffset = ref(0);

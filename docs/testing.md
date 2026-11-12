@@ -25,3 +25,5 @@ GitHub Actions 在 push、pull_request 和手动触发时使用 Windows runner�
 官方 Actions 固定提交摘要：[checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1) 对应 `3d3c42e5aac5ba805825da76410c181273ba90b1`；[setup-node v7.1.0](https://github.com/actions/setup-node/releases/tag/v7.1.0) 对应 `949feb2413d6458794dcd2491c4babbbce0c15c1`。升级时重新核对发布及提交来源。
 
 联网失败不能通过放宽 TLS、摘要或断言来解决；独立记录失败和重试结果。构建新 EXE 后必须重新运行原生验收。实际执行结果、未执行项及远端 CI 状态统一记录在[项目状态](project-status.md)。
+
+队列测试位于 resource-core/tests/queue.test.js，属于 source 层。覆盖 FIFO、多个持有者、等待取消/退出、死队首、启动不确定、适配器变化和容量。原生 E2E 另覆盖 CLI 占用下桌面排队、位置、等待取消及关闭等待会话。

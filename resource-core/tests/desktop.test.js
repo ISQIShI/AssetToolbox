@@ -46,7 +46,10 @@ test('stdio bridge discovers providers and preserves long Unicode configuration 
 test('real asynchronous jobs cancel, resume without repeats, retry failures and selectively restore from the existing journal', async t => {
     const f = fixture(t), { jobId: id } = await f.submit({ mode: 'process', folder: f.source, backupDir: f.backup });
     await f.until(id, state => state.processed >= 1);
-    await assert.rejects(f.submit({ mode: 'preview', folder: f.source }), /活动作业/);
+    const queued = await f.submit({ mode: 'preview', folder: f.source });
+    assert.equal((await f.rpc('status', { jobId: queued.jobId })).phase, 'queued');
+    await f.rpc('cancel', { jobId: queued.jobId });
+    assert.equal((await f.until(queued.jobId)).cancelled, true);
     await f.rpc('cancel', { jobId: id }); const stopped = await f.until(id);
     assert.equal(stopped.cancelled, true); assert.ok(stopped.task.completed > 0 && stopped.task.completed < 6);
     const state = await f.run({ mode: 'resume', taskId: stopped.taskId }); assert.equal(state.task.completed, 6);

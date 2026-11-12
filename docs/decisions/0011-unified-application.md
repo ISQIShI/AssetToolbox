@@ -1,6 +1,6 @@
 # ADR 0011：统一公共作业契约与上下文
 
-后续修订：应用/响应版本及结果保留语义由 [0012](0012-storage-retention-and-test-layers.md) 更新；下文保留实施当时背景，统一实现、上下文与持久 job/2 设计继续有效。
+后续修订：[0012](0012-storage-retention-and-test-layers.md) 更新结果保留语义，[0013](0013-persistent-fifo.md) 更新应用/作业版本与调度方式；下文保留实施当时背景，统一实现与上下文原则继续有效。
 
 状态：已采用。日期：2026-11-10。修订 [0009](0009-agent-interfaces.md) 和 [0010](0010-local-http.md) 的统一边界；保留 HTTP/stdio、目录授权及文件保护设计。
 
@@ -21,3 +21,5 @@
 桌面预览也会留下持久作业记录，需要将来另行设计清理；桌面必须配套新核心重建。共用业务不等于所有客户端拥有同等权限，HTTP 仍仅本机、令牌认证、受 policy 约束。
 
 验收必须包含真实桌面 JSON Lines、CLI、stdio MCP、普通 HTTP 与 HTTP MCP 的交叉提交/查询/取消/结果比较，以及上下文生命周期、越权拒绝、原生 EXE 与 CLI 状态一致。原方案的完整实现以[统一应用接口](../architecture/application.md)和这些测试为准。
+
+后续修订：[0013](0013-persistent-fifo.md) 增加持久 FIFO，升级应用/响应 /4、job/3；下文版本与立即启动描述保留为历史。

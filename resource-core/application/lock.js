@@ -15,7 +15,7 @@ function acquire(name = 'execution') {
     fs.mkdirSync(directory, { recursive: true });
     const token = randomUUID(), filename = path.join(directory, 'owner.json');
     const claim = path.join(directory, `claim-${process.pid}-${token}`);
-    const busy = () => Object.assign(new Error('另一入口正在执行作业，请结束后重试'), { code: 'BUSY' });
+    const busy = () => Object.assign(new Error('另一入口正在执行作业，请结束后重试'), { code: 'BUSY', lockName: name });
     fs.writeFileSync(claim, '', { flag: 'wx' });
     try {
         for (const entry of fs.readdirSync(directory)) {

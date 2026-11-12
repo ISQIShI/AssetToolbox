@@ -235,7 +235,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         const nativeStatus = await page.evaluate(jobId => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'status', payload: { jobId } }), completedJobId);
         const cliStatus = spawnSync(path.join(tool, 'runtime/node.exe'), [path.join(tool, 'resource-core/cli.js'), 'api', 'status', '--local', '--input', '-'], { input: JSON.stringify({ jobId: completedJobId }), encoding: 'utf8', windowsHide: true, timeout: 15000 });
         expect(cliStatus.status, cliStatus.stderr).toBe(0);
-        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/3');
+        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/4');
         expect(JSON.parse(cliStatus.stdout).result).toEqual(nativeStatus);
         expect(nativeStatus.taskId).toBe(adapterTask.id); expect(nativeStatus.task).not.toHaveProperty('taskFile');
         expect(nativeStatus.hasReport).toBe(true); expect(nativeStatus).not.toHaveProperty('reportDirectory');
@@ -280,8 +280,17 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         const runningId = JSON.parse(receipt.trim().split('\n').find(line => line.includes('jobId'))!).jobId;
         await button('刷新作业').click(); await page.locator('.job-row').filter({ hasText: runningId }).click();
         await expect(page.locator('.job-detail')).toContainText('运行中');
+        const queueRequest = { mode: 'preview', folder: source, pipeline: config.pipeline };
+        const queued = await page.evaluate(request => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'submit', payload: { request, idempotencyKey: 'native-queued' } }), queueRequest);
+        await button('刷新作业').click(); await page.locator('.job-row').filter({ hasText: queued.jobId }).click();
+        await expect(page.locator('.job-detail')).toContainText('排队位置 2');
+        await page.screenshot({ path: info.outputPath('queue-waiting.png') });
+        await button('取消此作业').click(); await expect(page.locator('.job-detail')).toContainText('已取消');
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v3', queued.jobId, 'worker.json'))).toBe(false);
+        const closingQueued = await page.evaluate(request => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'submit', payload: { request, idempotencyKey: 'native-closing-queued' } }), queueRequest);
         await close(); expect(external.exitCode).toBeNull();
-        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v2', runningId, 'cancel'))).toBe(false);
+        expect(JSON.parse(fs.readFileSync(path.join(tool, 'resource-core/data/jobs/v3', closingQueued.jobId, 'status.json'), 'utf8')).cancelled).toBe(true);
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v3', runningId, 'cancel'))).toBe(false);
         await launch(); await tab('作业').click();
         await page.locator('.job-row').filter({ hasText: runningId }).click();
         await button('取消此作业').click();
@@ -289,7 +298,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect.poll(() => external!.exitCode).not.toBeNull();
         expect(JSON.parse(externalOutput).result.state.cancelled).toBe(true);
         // 只给隔离副本中的已完成作业模拟 45 天前时间；真实配置与素材不参与清理验收。
-        const oldJob = path.join(tool, 'resource-core/data/jobs/v2', completedJobId);
+        const oldJob = path.join(tool, 'resource-core/data/jobs/v3', completedJobId);
         const jobFile = path.join(oldJob, 'job.json'), oldMeta = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
         const oldReport = JSON.parse(fs.readFileSync(path.join(oldJob, 'status.json'), 'utf8')).reportDirectory;
         const oldTime = new Date(Date.now() - 45 * 86400000);
