@@ -8,10 +8,13 @@ function alive(pid) {
     catch (error) { return error.code !== 'ESRCH'; }
 }
 
-// 与任务锁采用相同的竞争声明协议；串行化同一安装中的 GUI、CLI 和 MCP 作业。
-function acquire(name = 'execution') {
+function lockRoot() {
     const installation = createHash('sha256').update(fs.realpathSync(path.join(__dirname, '..')).toLowerCase()).digest('hex');
-    const directory = path.join(fs.realpathSync(require('node:os').tmpdir()), 'asset-toolbox-locks-' + installation, name);
+    return path.join(fs.realpathSync(require('node:os').tmpdir()), 'asset-toolbox-locks-' + installation);
+}
+// 注册共享执行占用与取得独占维护屏障使用同一短临界区。
+function acquireGate(name = 'execution') {
+    const directory = path.join(lockRoot(), name);
     fs.mkdirSync(directory, { recursive: true });
     const token = randomUUID(), filename = path.join(directory, 'owner.json');
     const claim = path.join(directory, `claim-${process.pid}-${token}`);
@@ -38,4 +41,50 @@ function acquire(name = 'execution') {
     } finally { fs.unlinkSync(claim); }
 }
 
-module.exports = { acquire, alive };
+function readers(cleanup = true) {
+    const directory = path.join(lockRoot(), 'readers');
+    if (!fs.existsSync(directory)) return [];
+    return fs.readdirSync(directory).flatMap(name => {
+        if (/^[a-f0-9-]+\.next$/.test(name)) return []; // 未原子公布的声明不授予执行权。
+        const filename = path.join(directory, name);
+        let item;
+        try { item = JSON.parse(fs.readFileSync(filename, 'utf8')); }
+        catch (error) { if (error.code === 'ENOENT') return []; throw error; }
+        if (item.schema !== 'asset-toolbox.execution/1' || !Number.isSafeInteger(item.pid) || item.pid < 1 || name !== item.token + '.json' || !/^[a-f0-9]{64}$/.test(item.jobId)) throw new Error('执行占用记录损坏，停止调度');
+        require('./resources').validate(item.resources);
+        if (!alive(item.pid)) { if (cleanup) fs.unlinkSync(filename); return []; }
+        return [item];
+    });
+}
+function acquire(name = 'execution') {
+    const release = acquireGate(name);
+    try {
+        if (name === 'execution' && readers().length) throw Object.assign(Error('仍有运行作业，不能取得独占执行屏障'), { code: 'BUSY', lockName: name });
+        return release;
+    } catch (error) { release(); throw error; }
+}
+function acquireShared(resources, jobId) {
+    const { conflicts, LIMIT, validate } = require('./resources'); validate(resources);
+    let release;
+    const deadline = Date.now() + 5000;
+    for (;;) {
+        try { release = acquireGate(); break; }
+        catch (error) {
+            if (error.code !== 'BUSY' || Date.now() >= deadline) throw error;
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+        }
+    }
+    try {
+        const active = readers();
+        if (active.length >= LIMIT || active.some(item => conflicts(resources, item.resources))) throw Object.assign(Error('执行资源仍被占用'), { code: 'BUSY' });
+        const directory = path.join(lockRoot(), 'readers'); fs.mkdirSync(directory, { recursive: true });
+        const token = randomUUID(), filename = path.join(directory, token + '.json');
+        const temporary = path.join(directory, token + '.next');
+        const fd = fs.openSync(temporary, 'wx');
+        try { fs.writeFileSync(fd, JSON.stringify({ schema: 'asset-toolbox.execution/1', pid: process.pid, token, jobId, resources })); fs.fsyncSync(fd); }
+        finally { fs.closeSync(fd); }
+        fs.renameSync(temporary, filename);
+        return () => { if (fs.existsSync(filename) && JSON.parse(fs.readFileSync(filename, 'utf8')).token === token) fs.unlinkSync(filename); };
+    } finally { release(); }
+}
+module.exports = { acquire, acquireGate, acquireShared, readers, alive };

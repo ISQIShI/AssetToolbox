@@ -1,6 +1,6 @@
 # AssetToolbox MCP
 
-独立的本地 MCP 入口；默认 stdio，另支持 Streamable HTTP。使用官方 SDK 直接调用 `resource-core/application` 的 /4 公共作业接口，不需要模型密钥。先安装核心依赖，再在此目录执行：
+独立的本地 MCP 入口；默认 stdio，另支持 Streamable HTTP。使用官方 SDK 直接调用 `resource-core/application` 的 /5 公共作业接口，不需要模型密钥。先安装核心依赖，再在此目录执行：
 
 ```powershell
 npm ci --ignore-scripts
@@ -17,4 +17,4 @@ SDK server/client 固定 2.4.0，Node HTTP 适配器固定 2.1.2（包元数据 
 
 当前公共契约声明 10 个动作，含 storage-preview/storage-clean；MCP 使用 policy 上下文，两个全局维护动作明确返回 PERMISSION_DENIED。已由本机操作者清理的作业仍保留身份与摘要，结果查询返回 RESULTS_EXPIRED，不能自动使用新幂等键重做。见[存储维护](../docs/architecture/storage.md)。
 
-当前 API /4、HTTP /api/v4。submit 可返回等待中的作业；查询 queued/queuePosition 后继续轮询至 done。stdio 退出取消自己所有等待和运行项，HTTP 客户端断开不取消，停止服务才取消。最多 100 个未结束作业，完整语义见[队列](../docs/architecture/queue.md)。
+当前 API /5、HTTP /api/v5。submit 可返回等待中的作业；查询 queued/queuePosition、waitReason 后继续轮询至 done，登记顺位不代表启动顺序。最多 2 项无资源冲突的作业并行，100 个未结束项；capabilities.scheduling 可发现预算。stdio 退出取消自己所有等待和运行项，HTTP 客户端断开不取消，停止服务才取消。完整语义见[队列](../docs/architecture/queue.md)。

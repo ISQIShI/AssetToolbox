@@ -26,4 +26,4 @@ GitHub Actions 在 push、pull_request 和手动触发时使用 Windows runner�
 
 联网失败不能通过放宽 TLS、摘要或断言来解决；独立记录失败和重试结果。构建新 EXE 后必须重新运行原生验收。实际执行结果、未执行项及远端 CI 状态统一记录在[项目状态](project-status.md)。
 
-队列测试位于 resource-core/tests/queue.test.js，属于 source 层。覆盖 FIFO、多个持有者、等待取消/退出、死队首、启动不确定、适配器变化和容量。原生 E2E 另覆盖 CLI 占用下桌面排队、位置、等待取消及关闭等待会话。
+队列测试位于 resource-core/tests/queue.test.js，属于 source 层。覆盖冲突 FIFO、多个持有者、等待取消/退出、死队首、启动不确定、适配器变化和容量。parallel.test.js 同属 source 层，覆盖真实并行/容量、目录别名、任务/备份/提供方资源、防饥饿、维护屏障、崩溃占用与启动失败。原生 E2E 另覆盖桌面与 CLI 同时处理、取消隔离、冲突排队原因、登记顺位及宿主等待桥接退出。

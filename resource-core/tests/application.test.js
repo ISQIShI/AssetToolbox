@@ -13,7 +13,7 @@ const { fixture } = require('./fixtures/application');
 test('application discovers live adapter schemas; validates scopes, unknown keys, versions and source preservation', async t => {
     const f = fixture(t);
     const catalog = (await f.call('capabilities')).result;
-    assert.equal(catalog.applicationApi, 'asset-toolbox.application/4');
+    assert.equal(catalog.applicationApi, 'asset-toolbox.application/5');
     assert.equal(catalog.operations.find(op => op.id === 'image-resize').parametersSchema.properties.width.minimum, 1);
     assert.ok(catalog.providers.find(p => p.id === 'ffmpeg').acquisition.instructions);
     assert.equal((await f.call('validate', { request: f.request })).ok, true);
@@ -102,9 +102,15 @@ test('desktop and external jobs contend on the same process lock; stale owners c
     assert.equal((await bridge.dispatch('status', { jobId: other.jobId })).exitCode, 0);
     await f.until(jobId);
     const lockModule = path.join(f.core, 'application/lock');
-    const child = spawn(process.execPath, ['-e', `require(${JSON.stringify(lockModule)}).acquire();process.stdout.write('locked');setInterval(()=>{},1000);`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    await new Promise(resolve => child.stdout.once('data', resolve));
-    child.kill(); await new Promise(resolve => child.once('close', resolve));
+    const child = spawn(process.execPath, ['-e', `const end=Date.now()+5000;for(;;){try{require(${JSON.stringify(lockModule)}).acquire();break;}catch(error){if(error.code!=='BUSY'||Date.now()>=end)throw error;Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,20);}}process.stdout.write('locked');setInterval(()=>{},1000);`], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const closed = new Promise(resolve => child.once('close', resolve));
+    try {
+        await new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(Error('测试锁拥有者启动超时')), 10000);
+            child.stdout.once('data', () => { clearTimeout(timer); resolve(); });
+            child.once('close', code => { clearTimeout(timer); reject(Error('测试锁拥有者提前退出：' + code)); });
+        });
+    } finally { child.kill(); await closed; }
     const unlock = require(lockModule).acquire(); unlock();
 });
 

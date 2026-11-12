@@ -12,7 +12,7 @@
 | `data/tasks/<id>/task.lock` 与 claim | PID/token 执行锁 |
 | `data/reports/<id>/report.json`、`files.csv` | `schema: asset-toolbox.report/1` 报告及 CSV |
 | `data/dependencies/<provider>/active.json`、`installs/<uuid>/` | `schema: 1` 受管理依赖启用记录与不可变副本，详见[依赖管理](dependencies.md)；不属于素材任务 |
-| `data/jobs/v3/<jobId>/` | 全部入口的 `asset-toolbox.job/3`、请求/状态/进程记录及取消标记；上下文作用域与幂等键派生 jobId，见[统一应用接口](application.md) |
+| `data/jobs/v4/<jobId>/` | 全部入口的 `asset-toolbox.job/4`、请求/状态/进程记录及取消标记；上下文作用域与幂等键派生 jobId，见[统一应用接口](application.md) |
 | 系统临时 `asset-toolbox-locks-<安装路径哈希>/` | GUI/CLI/MCP 执行互斥及提交锁，PID/token 与竞争声明；不改变只读预览的项目目录 |
 
 全部 data、日志和个人路径不提交。缺少设置时只返回默认值，不创建文件；损坏或不支持 schema 时明确报错，不静默退回旧配置。保存先严格校验，再写同目录排他临时文件、fsync、rename；失败清理临时文件并保留旧内容。单文件配置替代原分散设置。
@@ -70,12 +70,12 @@ claim 登记后排他取得 PID/token 锁；只在确认进程退出且锁未变
 
 步骤 `metadata.audio` 保存 before/after 测量、增益、峰值限制及警告；失败步骤也可记录已测数据。report.json 的 audioResults 为本次处理的完整音频结果，额外生成 UTF-8 audio.csv；界面状态仅带前 100 条。失败文件所有音频步骤标记 fileStatus:failed，不表示已提交。CSV 沿用公式注入防护，报告写入失败不抹掉处理结果。
 
-应用 /4 不读取或迁移旧 data/automation 作业；新存储中的 job/1 明确拒绝。预览也保留作业记录，但不创建素材任务或报告。当前没有自动清理作业记录；已完成作业可跨入口和重启查询，权限每次重新核验。
+应用 /5 不读取或迁移旧 data/automation 作业；新存储中的 job/1–3 明确拒绝。预览也保留作业记录，但不创建素材任务或报告。当前没有自动清理作业记录；已完成作业可跨入口和重启查询，权限每次重新核验。
 
 ## 作业清理记录
 
-应用及响应 /3 新增 `data/jobs/v3/<jobId>/retention.json`，schema 为 asset-toolbox.retention/1；job/3、素材 task/report 和 settings 格式不变。清理前先写持久状态摘要和批准的文件清单；清理后保留作业身份、幂等键、进程退出记录及全部任务/备份，明细查询明确过期。未知 retention 版本拒绝读取，不迁移；部分清理失败只能继续处理清单中内容未变的文件。当前支持手动预览/选择，仍无自动清理和流式报告读取，详见[存储维护](storage.md)。
+当前应用/响应 /5 将清理记录写入 `data/jobs/v4/<jobId>/retention.json`，schema 仍为 asset-toolbox.retention/1；不改变 job/4、素材 task/report 和 settings 格式。清理前先写持久状态摘要和批准的文件清单；清理后保留作业身份、幂等键、进程退出记录及全部任务/备份，明细查询明确过期。未知 retention 版本拒绝读取，不迁移；部分清理失败只能继续处理清单中内容未变的文件。当前支持手动预览/选择，仍无自动清理和流式报告读取，详见[存储维护](storage.md)。
 
 ## FIFO 持久记录
 
-job/3 位于 data/jobs/v3，新增 sequence、owner、publicRequest；启动前写 dispatch/1 的 dispatch.json，并 fsync。旧 job/1、job/2 不读写/迁移。序号、身份及 dispatch 始终保留，不属于存储清理明细。未知启动声明版本拒绝。出队、取消、崩溃和退出语义见[队列](queue.md)。
+job/4 位于 data/jobs/v4，保存 sequence、owner、publicRequest 及核心推导的 resources/1 读写集合；启动前写 dispatch/2 的 dispatch.json，并 fsync。旧 job/1–3 不读写/迁移。序号、身份及 dispatch 始终保留，不属于存储清理明细。未知启动声明版本拒绝。出队、取消、崩溃和退出语义见[队列](queue.md)。

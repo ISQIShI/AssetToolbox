@@ -4,14 +4,15 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { fixture } = require('./fixtures/application');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const directory = (f, id) => path.join(f.core, 'data/jobs/v3', id);
-test('FIFO spans owners and multiple submissions, persists identity and never overlaps execution', async t => {
-    const f = fixture(t, {}, 4, 100), other = new f.ApplicationService(f.policyFile); t.after(() => other.shutdown());
-    const first = f.service.submit(f.request, 'first');
-    const second = other.submit({ ...f.request, mode: 'preview' }, 'second');
-    const third = f.service.submit({ ...f.request, mode: 'preview' }, 'third');
+const directory = (f, id) => path.join(f.core, 'data/jobs/v4', id);
+test('conflicting FIFO spans owners and multiple submissions and never overlaps execution', async t => {
+    const f = fixture(t, { allowOverwrite: true }, 4, 100), other = new f.ApplicationService(f.policyFile); t.after(() => other.shutdown());
+    const { outputDir, ...base } = f.request, request = { ...base, backupDir: f.backup };
+    const first = f.service.submit(request, 'first');
+    const second = other.submit(request, 'second');
+    const third = f.service.submit(request, 'third');
     assert.equal(f.service.status(third.jobId).queuePosition, 3);
-    assert.equal(f.service.submit(f.request, 'first').jobId, first.jobId);
+    assert.equal(f.service.submit(request, 'first').jobId, first.jobId);
     for (const job of [first, second, third]) assert.equal((await f.until(job.jobId)).exitCode, 0);
     for (const [a, b] of [[first, second], [second, third]]) {
         assert.ok(fs.statSync(path.join(directory(f, a.jobId), 'exit.json')).mtimeMs <= fs.statSync(path.join(directory(f, b.jobId), 'dispatch.json')).mtimeMs);
@@ -49,7 +50,7 @@ test('dead queued owners are interrupted without replay and uncertain dispatch c
         const meta = JSON.parse(fs.readFileSync(file)); fs.writeFileSync(file, JSON.stringify({ ...meta, ownerPid: dead }));
         assert.equal(f.service.status(job.jobId).errorCode, 'INTERRUPTED');
         assert.equal(f.service.submit(f.request, 'dead').replayed, true);
-        fs.writeFileSync(path.join(dir, 'dispatch.json'), JSON.stringify({ schema: 'asset-toolbox.dispatch/1', sequence: meta.sequence, owner: meta.owner }));
+        fs.writeFileSync(path.join(dir, 'dispatch.json'), JSON.stringify({ schema: 'asset-toolbox.dispatch/2', sequence: meta.sequence, owner: meta.owner }));
         assert.equal(f.service.status(job.jobId).errorCode, 'INTERRUPTED');
         await delay(150); assert.equal(fs.existsSync(path.join(dir, 'worker.json')), false);
     } finally { release(); }
@@ -59,7 +60,7 @@ test('queue capacity is bounded before reserving an idempotency key', async t =>
     try {
         for (let i = 0; i < 100; i++) f.service.submit({ ...f.request, mode: 'preview' }, 'capacity-' + i);
         assert.throws(() => f.service.submit(f.request, 'overflow'), { code: 'BUSY' });
-        assert.equal(fs.readdirSync(path.join(f.core, 'data/jobs/v3')).length, 100);
+        assert.equal(fs.readdirSync(path.join(f.core, 'data/jobs/v4')).length, 100);
         await f.service.shutdown();
     } finally { release(); }
 });

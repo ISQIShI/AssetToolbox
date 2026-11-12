@@ -65,7 +65,7 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 .\runtime\node.exe resource-core/cli.js "D:\Assets" --pipeline pipeline.json --output "D:\Results"
 ```
 
-上述快捷命令与桌面、CLI API、MCP 和 HTTP 使用同一应用 /4 服务，返回结构化响应并创建持久 jobId；处理还生成 taskId，可续跑和恢复。API 的本机人工调用可显式使用 --local，外部 Agent 使用固定 --policy。
+上述快捷命令与桌面、CLI API、MCP 和 HTTP 使用同一应用 /5 服务，返回结构化响应并创建持久 jobId；处理还生成 taskId，可续跑和恢复。API 的本机人工调用可显式使用 --local，外部 Agent 使用固定 --policy。
 
 ```powershell
 .\runtime\node.exe resource-core/cli.js api submit --local --input request.json
@@ -75,7 +75,9 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 
 续跑 request.json 示例：`{"request":{"mode":"resume","taskId":"<任务 ID>"},"idempotencyKey":"resume-001"}`；status.json 为 `{"jobId":"<作业 ID>"}`。恢复先提交 restore-preview，再从 results 的 restore 分页选择 `{path,backupHash,targetHash}`，执行时显式传非空 selection；省略或空数组均拒绝。batch.js 仅为内部 worker，旧批处理 CLI 不再支持。退出码 0 完成、1 失败、2 取消（失败优先）。
 
-应用/响应 /4、HTTP /api/v4，旧 /api/v1、/api/v2、/api/v3 明确拒绝；持久 job 升级 /3，不读取或迁移旧 /1、/2 作业；素材任务/报告及 settings 版本不变，桌面须使用配套新 EXE 与核心。详细契约和最终架构见[统一应用接口](docs/architecture/application.md)。
+桌面和 Agent 共用[资源感知队列](docs/architecture/queue.md)：同安装最多 2 项无冲突作业并行，冲突项按登记顺序等待，最多 100 个未结束项。作业中心显示等待原因及槽位用量；登记顺位不是预计启动顺序。
+
+应用/响应 /5、HTTP /api/v5，旧 /api/v1–4 明确拒绝；持久 job 升级 /4，不读取或迁移旧 /1–3 作业；素材任务/报告及 settings 版本不变，桌面须使用配套新 EXE 与核心。详细契约和最终架构见[统一应用接口](docs/architecture/application.md)。
 
 ## 存储维护
 
@@ -85,4 +87,4 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 
 ## 统一作业中心
 
-点击活动栏“作业”（Ctrl+5）查看同一安装中桌面、CLI、MCP 与 HTTP 的作业。重启后仍可查询；列表每页 20 项，可搜索/筛选本页，查看分页结果、打开报告或跳转素材任务。选择运行中的作业后可显式取消；只查看外部作业时，关闭窗口不会取消它。当前按单安装 FIFO 串行排队，最多 100 个未结束作业；排队可取消，提交后仍须查询最终状态。方案比较见[统一作业中心与入口冲突](docs/architecture/job-center.md)。
+点击活动栏“作业”（Ctrl+5）查看同一安装中桌面、CLI、MCP 与 HTTP 的作业。重启后仍可查询；列表每页 20 项，可搜索/筛选本页，查看分页结果、打开报告或跳转素材任务。选择运行中的作业后可显式取消；只查看外部作业时，关闭窗口不会取消它。当前按单安装 资源感知排队，最多 100 个未结束作业；排队可取消，提交后仍须查询最终状态。方案比较见[统一作业中心与入口冲突](docs/architecture/job-center.md)。

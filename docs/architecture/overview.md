@@ -8,14 +8,14 @@ AssetToolbox 1.0.0 是 Windows 便携资源处理工具，使用 Vue 3/TypeScrip
 flowchart TD
     UI[Vue / WebView2] -->|Tauri invoke| Host[Rust 宿主]
     Host -->|JSON Lines| Bridge[Node 桌面会话]
-    CLI[结构化 CLI] --> Application[ApplicationService /4 唯一公共作业用例]
+    CLI[结构化 CLI] --> Application[ApplicationService /5 唯一公共作业用例]
     MCP[MCP stdio / Streamable HTTP] --> Application
     HTTP[本机 HTTP API] --> Application
     Bridge --> Application
     Application --> Storage[本地存储维护 / 预览与显式清理]
-    Application --> Queue[Queue / 提交锁内派发 FIFO 队首]
+    Application --> Queue[Queue / 提交锁内派发无冲突候选，最多 2 项]
     Queue --> Session[JobSession / 持久作业进程]
-    Session --> Worker[batch.js 工作进程 / 安装级执行锁]
+    Session --> Worker[batch.js 工作进程 / 资源占用]
     Worker --> Engine[engine.js 流水线]
     Engine --> Catalog[类型 / 操作 / 提供方]
     Engine --> Tool[编码器 / Sharp 子进程]
@@ -52,7 +52,7 @@ MCP 单独使用 SDK 2.4.0 与 Zod，不加入桌面核心依赖；按需携带 
 
 取消仅在扫描和文件边界检查；当前工具不被强杀。界面每 250ms 轮询，进程退出并释放锁后才显示最终 done。资源识别只按扩展名进入清单，再由类型/提供方验证内容；未知格式不复制。
 
-同一用户、同一核心安装的作业共用系统临时执行锁，防止 GUI、CLI、MCP/HTTP 的新任务或依赖安装互相竞争；原任务锁保留。外部 Agent 经启动目录权限检查，转换默认另存，按幂等键提交，不改桌面设置。HTTP 请求断开不取消已提交作业，服务退出才请求取消；没有远程账户和常驻队列。
+同一用户、同一核心安装的作业共用资源读写声明、持久启动预约及 worker 独立占用，无冲突作业最多并行 2 项；冲突任务和同提供方依赖更新排队，原任务锁及独占维护屏障保留。外部 Agent 经启动目录权限检查，转换默认另存，按幂等键提交，不改桌面设置。HTTP 请求断开不取消已提交作业，服务退出才请求取消；没有远程账户和常驻队列。
 
 ## 设计边界
 
@@ -60,4 +60,4 @@ MCP 单独使用 SDK 2.4.0 与 Zod，不加入桌面核心依赖；按需携带 
 
 [存储维护](storage.md)直接复用应用服务，默认保留 30 天，人工预览和选择后清理成功旧作业明细；任务、备份与幂等身份保留。当前实现同步扫描/哈希，未实现流式报告或定时清理。[测试分层](../testing.md)区分源码 CI、真实编码器、原生离线及联网安装验收。
 
-ApplicationService 现由 Queue 在提交锁内调度原持有者的 FIFO 队首，再进入 JobSession；只有确认 worker 退出才开始下一项。单安装并发度 1，无常驻后台服务。详见[持久串行队列](queue.md)。
+ApplicationService 由 Queue 在提交锁内选择原持有者的无冲突候选，再进入 JobSession；每项确认 worker 退出才释放预约。单安装最多 2 项并行，较早冲突等待项保留优先权，无常驻后台服务。详见[持久队列与有限并行](queue.md)。

@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use serde_json::{json, Value};
-use std::{io::{BufRead, BufReader, Write}, path::PathBuf, process::{Child, ChildStdin, ChildStdout, Command, Stdio}, sync::{Arc, Mutex}};
+use std::{io::{BufRead, BufReader, Write}, path::PathBuf, process::{Child, ChildStdin, ChildStdout, Command, Stdio}, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}};
 #[cfg(windows)] use std::os::windows::process::CommandExt;
 
 struct Bridge { child: Child, input: ChildStdin, output: BufReader<ChildStdout>, sequence: u64 }
@@ -38,20 +38,22 @@ impl Bridge {
         if self.output.read_line(&mut line).map_err(|e| e.to_string())? == 0 { return Err("核心通信中断，请重新打开工具。".into()); }
         let answer: Value = serde_json::from_str(&line).map_err(|e| format!("核心响应无效：{e}"))?;
         if answer["id"].as_u64() != Some(self.sequence) { return Err("核心响应序号不匹配".into()); }
-        if answer["schema"].as_str() != Some("asset-toolbox.response/4") { return Err("核心接口版本不匹配，需要应用接口 /4".into()); }
+        if answer["schema"].as_str() != Some("asset-toolbox.response/5") { return Err("核心接口版本不匹配，需要应用接口 /5".into()); }
         if answer["ok"].as_bool() != Some(true) {
             return Err(format!("{}：{}", answer["error"]["code"].as_str().unwrap_or("INVALID_REQUEST"), answer["error"]["message"].as_str().unwrap_or("核心请求失败")));
         }
         Ok(answer["result"].clone())
     }
 }
-struct Host(Arc<Mutex<Option<Bridge>>>);
+struct Host { bridge: Arc<Mutex<Option<Bridge>>>, closing: Arc<AtomicBool> }
 #[tauri::command]
 async fn core_call(host: tauri::State<'_, Host>, action: String, payload: Value) -> Result<Value, String> {
     // 同步 stdio 放到阻塞线程池，避免阻塞 WebView 和原生窗口事件。
-    let shared = host.0.clone();
+    let shared = host.bridge.clone();
+    let closing = host.closing.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let mut guard = shared.lock().map_err(|_| "核心会话锁异常")?;
+        if closing.load(Ordering::SeqCst) { return Err("应用正在退出".into()); }
         if guard.is_none() { *guard = Some(Bridge::start()?); }
         guard.as_mut().unwrap().call(&action, payload)
     }).await.map_err(|e| e.to_string())?
@@ -81,8 +83,35 @@ fn main() {
             window.visible = false;
         }
     }
+    let bridge = Arc::new(Mutex::new(None));
+    let closing = Arc::new(AtomicBool::new(false));
+    let exit_ready = Arc::new(AtomicBool::new(false));
     tauri::Builder::default().plugin(tauri_plugin_dialog::init())
-        .manage(Host(Arc::new(Mutex::new(None))))
+        .manage(Host { bridge: bridge.clone(), closing: closing.clone() })
         .invoke_handler(tauri::generate_handler![core_call, open_report, open_provider_source])
-        .run(context).expect("无法启动资源工具箱窗口");
+        .build(context).expect("无法启动资源工具箱窗口")
+        .run(move |app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                if !exit_ready.load(Ordering::SeqCst) { api.prevent_exit(); }
+                if !closing.swap(true, Ordering::SeqCst) {
+                    let shared = bridge.clone();
+                    let handle = app.clone();
+                    let ready = exit_ready.clone();
+                    tauri::async_runtime::spawn(async move {
+                        // 关闭输入触发统一上下文退出，等待全部自有作业到达文件边界。
+                        let _ = tauri::async_runtime::spawn_blocking(move || {
+                            if let Ok(mut guard) = shared.lock() {
+                                if let Some(Bridge { mut child, input, output, .. }) = guard.take() {
+                                    drop(input);
+                                    drop(output);
+                                    let _ = child.wait();
+                                }
+                            }
+                        }).await;
+                        ready.store(true, Ordering::SeqCst);
+                        handle.exit(0);
+                    });
+                }
+            }
+        });
 }

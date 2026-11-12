@@ -96,5 +96,5 @@ test('stdio also negotiates the 2026-07-28 protocol with the official v2 client'
     await f.client.close();
     const modern = await f.connect({ pin: '2026-07-28' });
     assert.equal((await modern.client.listTools()).tools.length, 10);
-    assert.equal((await modern.call('capabilities')).result.applicationApi, 'asset-toolbox.application/4');
+    assert.equal((await modern.call('capabilities')).result.applicationApi, 'asset-toolbox.application/5');
 });

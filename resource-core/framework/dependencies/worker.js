@@ -3,8 +3,8 @@ const path = require('node:path');
 const { install } = require('./install');
 async function main() {
     const filename = path.resolve(process.argv[2]), directory = path.dirname(filename);
-    const { providerId } = JSON.parse(fs.readFileSync(filename, 'utf8'));
-    const { acquire, alive } = require('../../application/lock');
+    const request = JSON.parse(fs.readFileSync(filename, 'utf8')), { providerId } = request;
+    const { alive } = require('../../application/lock');
     const parentPid = process.ppid;
     let releaseExecution;
     const controller = new AbortController(), started = Date.now();
@@ -19,7 +19,7 @@ async function main() {
         }
     };
     const checkCancellation = () => { if (fs.existsSync(path.join(directory, 'cancel')) || !alive(parentPid)) controller.abort(new Error('已取消安装')); };
-    try { releaseExecution = acquire(); await install(providerId, { signal: controller.signal, checkCancellation, publish }); }
+    try { releaseExecution = require('../../application/execution').enter(request, directory); await install(providerId, { signal: controller.signal, checkCancellation, publish }); }
     catch (error) {
         publish({ done: true, phase: 'finished', exitCode: controller.signal.aborted ? 2 : 1, cancelled: controller.signal.aborted,
             ...(controller.signal.aborted ? { message: '安装已取消，原安装保持不变。' } : { error: error.message, errorCode: error.code || 'JOB_FAILED' }) });

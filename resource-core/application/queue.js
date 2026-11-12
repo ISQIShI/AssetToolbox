@@ -1,24 +1,31 @@
-// FIFO 的序号与启动声明持久化；提交锁是调度选主边界，执行锁仍由 worker 持有。
+// 冲突 FIFO：持久预约和 worker 独立占用共同决定资源与容量，原持有者派发。
 const fs = require('node:fs');
 const path = require('node:path');
-const { acquire, alive } = require('./lock');
+const { acquire, acquireGate, readers, alive } = require('./lock');
+const { validate, schedule } = require('./resources');
 const { safe } = require('./storage');
 const { JOB } = require('./contract');
 const read = filename => { safe(filename); return JSON.parse(fs.readFileSync(filename, 'utf8')); };
-function inventory(root) {
-    if (!safe(root, true, true)) return [];
-    return fs.readdirSync(root).filter(id => /^[a-f0-9]{64}$/.test(id)).map(id => {
+function inventory(root, leases = readers(false)) {
+    if (!safe(root, true, true)) {
+        if (leases.length) throw new Error('活跃执行占用的作业目录缺失，停止调度');
+        return [];
+    }
+    const items = fs.readdirSync(root).filter(id => /^[a-f0-9]{64}$/.test(id)).map(id => {
         const directory = path.join(root, id), meta = read(path.join(directory, 'job.json'));
         if (meta.schema !== JOB || meta.id !== id || !Number.isSafeInteger(meta.sequence) || meta.sequence < 1) throw Object.assign(Error('队列作业格式不支持'), { code: 'UNSUPPORTED_VERSION' });
+        validate(meta.resources);
         const optional = name => safe(path.join(directory, name), false, true) ? read(path.join(directory, name)) : null;
         const state = optional('status.json'), worker = optional('worker.json'), exit = optional('exit.json');
         const claim = optional('dispatch.json');
-        if (claim && (claim.schema !== 'asset-toolbox.dispatch/1' || claim.sequence !== meta.sequence || claim.owner !== meta.owner)) throw Object.assign(Error('启动声明格式不支持'), { code: 'UNSUPPORTED_VERSION' });
+        if (claim && (claim.schema !== 'asset-toolbox.dispatch/2' || claim.sequence !== meta.sequence || claim.owner !== meta.owner)) throw Object.assign(Error('启动声明格式不支持'), { code: 'UNSUPPORTED_VERSION' });
         const dispatched = Boolean(claim);
-        const running = !exit && (worker ? alive(worker.pid) || alive(meta.ownerPid) : dispatched && alive(meta.ownerPid));
+        const running = leases.some(lease => lease.jobId === id) || (!exit && (worker ? alive(worker.pid) || alive(meta.ownerPid) : dispatched && alive(meta.ownerPid)));
         const pending = running || (!state?.done && !exit && !dispatched && alive(meta.ownerPid));
         return { ...meta, directory, dispatched, running, pending };
     }).sort((a, b) => a.sequence - b.sequence || a.id.localeCompare(b.id));
+    // 父进程在 spawn 后、worker.json 落盘前崩溃时仍保护已经登记的子进程占用。
+    return items.concat(leases.filter(lease => !items.some(item => item.id === lease.jobId)).map(lease => ({ id: lease.jobId, sequence: 0, resources: lease.resources, running: true, pending: true })));
 }
 class Queue {
     constructor(service) { this.service = service; this.timer = null; this.closed = false; }
@@ -29,20 +36,19 @@ class Queue {
     }
     tick() {
         if (this.closed) return;
-        let release;
+        let release, execution;
         try {
             release = acquire('submission');
-            const items = inventory(this.service.directory), pending = items.filter(item => item.pending);
+            execution = acquireGate();
+            const items = inventory(this.service.directory, readers());
             this.service.queueError = '';
             for (const item of items) if (item.owner === this.service.owner && !item.pending) this.service.owned.delete(item.id);
-            const first = pending[0];
-            if (!first || pending.some(item => item.running) || first.owner !== this.service.owner) return;
-            // 维护或崩溃前启动的工作进程仍可能占执行锁，等待而不是让新 worker 失败。
-            const execution = acquire(); execution();
-            this.service.startQueued(first);
+            for (const item of schedule(items).selected) {
+                if (item.owner === this.service.owner) this.service.startQueued(item);
+            }
         } catch (error) {
             if (error.code !== 'BUSY') this.service.queueError = error.message;
-        } finally { release?.(); if (this.service.owned.size) this.wake(); }
+        } finally { execution?.(); release?.(); if (this.service.owned.size) this.wake(); }
     }
     stop() { this.closed = true; clearTimeout(this.timer); this.timer = null; }
 }

@@ -55,7 +55,7 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
     try {
     publish({}, true);
     try {
-        releaseExecution = require('./application/lock').acquire();
+        releaseExecution = require('./application/execution').enter(request, jobDirectory);
         if (request._automationPolicy) require('./application/policy').authorize(request, request._automationPolicy);
         if (!['preview', 'process', 'resume', 'retry', 'restore', 'restore-retry', 'restore-export', 'restore-preview', 'restore-export-preview'].includes(request.mode)) throw new Error('无效任务模式');
         if (request.mode.startsWith('restore')) {

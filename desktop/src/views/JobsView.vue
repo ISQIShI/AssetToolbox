@@ -30,7 +30,7 @@ onMounted(center.start); onUnmounted(center.stop);
       <article v-if="selected" class="job-detail">
         <header class="commands"><h2>{{ jobModes[selected.mode] || selected.mode }}</h2><span>{{ jobLabel(selected.state) }}</span></header>
         <code class="selectable">{{ selected.jobId }}</code>
-        <p v-if="selected.state?.phase === 'queued'" role="status">排队位置 {{ selected.state.queuePosition }}（含执行中作业），可随时取消等待。</p>
+        <p v-if="selected.state?.phase === 'queued' && !selected.state.done" role="status">登记顺位 {{ selected.state.queuePosition }}（含执行中作业，不代表启动顺序）。{{ selected.state.message }}；执行槽位 {{ selected.state.runningCount }} / {{ selected.state.concurrencyLimit }}，可随时取消等待。</p>
         <p v-if="selected.state">进度：{{ selected.state.processed }} / {{ selected.state.total }}<span v-if="selected.state.current"> · {{ selected.state.current }}</span></p>
         <p v-if="selected.state?.error || selected.error" class="callout danger selectable">{{ selected.state?.error || selected.error }}</p>
         <p v-if="selected.state?.resultsExpired" class="callout">报告与明细已清理，作业身份与任务记录仍保留。</p>
