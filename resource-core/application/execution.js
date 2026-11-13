@@ -18,6 +18,6 @@ function enter(request, directory) {
     validate(meta.resources);
     if (!Number.isInteger(claim.slot) || claim.slot < 1 || claim.slot > require('./scheduling').MAX) fail('UNSUPPORTED_VERSION', '启动槽位声明无效');
     if (JSON.stringify(plan(request)) !== JSON.stringify(meta.resources)) fail('INVALID_REQUEST', '启动时资源范围已改变');
-    return acquireShared(meta.resources, meta.id, claim.slot);
+    return acquireShared(meta.resources, meta.id, claim.slot, true);
 }
 module.exports = { enter };

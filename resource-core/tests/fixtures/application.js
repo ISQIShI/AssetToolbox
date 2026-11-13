@@ -25,7 +25,14 @@ function fixture(t, permissions = {}, count = 4, duration = 20) {
     const call = (action, input) => respond(service, action, input);
     const until = async (id, predicate = state => state.done) => {
         const deadline = Date.now() + 30000;
-        while (Date.now() < deadline) { const state = service.status(id); if (predicate(state)) return state; await delay(25); }
+        while (Date.now() < deadline) {
+            const state = service.status(id);
+            if (predicate(state)) {
+                if (state.done && state.exitCode === 1) t.diagnostic(JSON.stringify(state));
+                return state;
+            }
+            await delay(25);
+        }
         throw new Error('作业等待超时');
     };
     t.after(async () => { await service.shutdown(); assert.equal(path.dirname(fs.realpathSync(root)), parent); assert.ok(path.basename(root).startsWith('asset-application-')); fs.rmSync(root, { recursive: true, force: true }); });

@@ -29,7 +29,15 @@ function acquireGate(name = 'execution') {
         try { write(); }
         catch (error) {
             if (error.code !== 'EEXIST') throw error;
-            const before = fs.readFileSync(filename, 'utf8'), previous = JSON.parse(before);
+            let before;
+            try { before = fs.readFileSync(filename, 'utf8'); }
+            catch (readError) {
+                // EEXIST 仅说明刚才有人持锁；持有者可以在这次读取前正常释放。
+                // 交给原有有界竞争等待，不能把尚未开始的作业判为失败或直接授予锁。
+                if (readError.code === 'ENOENT') throw busy();
+                throw readError;
+            }
+            const previous = JSON.parse(before);
             if (!Number.isSafeInteger(previous.pid) || previous.pid < 1) throw busy();
             if (alive(previous.pid) || fs.readFileSync(filename, 'utf8') !== before) throw busy();
             fs.unlinkSync(filename);
@@ -64,7 +72,7 @@ function acquire(name = 'execution') {
         return release;
     } catch (error) { release(); throw error; }
 }
-function acquireShared(resources, jobId, requestedSlot) {
+function acquireShared(resources, jobId, requestedSlot, retainUntilExit = false) {
     const { conflicts, validate } = require('./resources'); validate(resources);
     let release;
     const deadline = Date.now() + 5000;
@@ -87,7 +95,9 @@ function acquireShared(resources, jobId, requestedSlot) {
         try { fs.writeFileSync(fd, JSON.stringify({ schema: 'asset-toolbox.execution/2', pid: process.pid, token, jobId, resources, slot })); fs.fsyncSync(fd); }
         finally { fs.closeSync(fd); }
         fs.renameSync(temporary, filename);
-        return () => { if (fs.existsSync(filename) && JSON.parse(fs.readFileSync(filename, 'utf8')).token === token) fs.unlinkSync(filename); };
+        // worker 的 finally 先于进程退出；父进程崩溃且 worker.json 未发布时，
+        // 这可能是唯一的存活身份。保留到 readers() 确认 PID 已退出后再回收。
+        return () => { if (!retainUntilExit && fs.existsSync(filename) && JSON.parse(fs.readFileSync(filename, 'utf8')).token === token) fs.unlinkSync(filename); };
     } finally { release(); }
 }
 module.exports = { acquire, acquireGate, acquireShared, readers, alive };
