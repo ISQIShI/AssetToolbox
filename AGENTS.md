@@ -21,7 +21,7 @@ Windows x64 环境按 `.nvmrc`、`rust-toolchain.toml`、`.vsconfig` 配置。�
 
 核心目录：`npm run test:source` 不要求外部编码器；`npm run test:codecs` 验证真实工具；`npm test` 全量执行，缺工具明确失败。桌面目录：`npm run dev` 启动原生开发；`npm test` 跑组件测试；`npm run typecheck` 检查类型；`npm run build` 构建并校验便携依赖；`npm run test:e2e` 验证刚构建的 EXE；`npm run test:e2e:network` 单独验证真实下载安装/更新。详细前提见[开发指南](docs/development.md)。
 
-应用接口改动必读[统一应用接口](docs/architecture/application.md)、[自动化专题](docs/architecture/automation.md)、[HTTP 专题](docs/architecture/http.md)及 [ADR 0009](docs/decisions/0009-agent-interfaces.md)/[0010](docs/decisions/0010-local-http.md)/[0011](docs/decisions/0011-unified-application.md)。MCP 目录独立执行 `npm ci --ignore-scripts`、`npm test`；保持官方 SDK 锁文件。全部 CLI（含快捷命令）、桌面桥接、HTTP 和 MCP 必须复用 ApplicationService 的同一套 /6 公共作业动作；禁止桌面专用 start/poll 分支或入口直接调用 JobSession/引擎。统一 jobId/taskId、幂等提交和分页结果，权限及生命周期由启动上下文注入，MCP schema 取自 contract.js；不能通过 shell 拼接参数或各写一套处理逻辑。权限来自启动上下文，禁止工具参数扩权或通过 HTTP 暴露桌面设置。转换另存或授权备份覆盖，恢复带显式预览哈希。保留幂等键、分页和跨入口锁；stdio 断连取消，HTTP 连接断开不取消已提交作业，服务退出才请求取消自己拥有的作业。保留默认 stdio，HTTP 只能显式启动、回环监听并验证令牌/Host/Origin/正文上限；MCP 两种传输共用工具工厂，HTTP 每请求创建协议实例。不要把应用目录限制描述为 OS 沙箱。
+应用接口改动必读[统一应用接口](docs/architecture/application.md)、[自动化专题](docs/architecture/automation.md)、[HTTP 专题](docs/architecture/http.md)及 [ADR 0009](docs/decisions/0009-agent-interfaces.md)/[0010](docs/decisions/0010-local-http.md)/[0011](docs/decisions/0011-unified-application.md)。MCP 目录独立执行 `npm ci --ignore-scripts`、`npm test`；保持官方 SDK 锁文件。全部 CLI（含快捷命令）、桌面桥接、HTTP 和 MCP 必须复用 ApplicationService 的同一套 /7 公共作业动作；禁止桌面专用 start/poll 分支或入口直接调用 JobSession/引擎。统一 jobId/taskId、幂等提交和分页结果，权限及生命周期由启动上下文注入，MCP schema 取自 contract.js；不能通过 shell 拼接参数或各写一套处理逻辑。权限来自启动上下文，禁止工具参数扩权或通过 HTTP 暴露桌面设置。转换另存或授权备份覆盖，恢复带显式预览哈希。保留幂等键、分页和跨入口锁；stdio 断连取消，HTTP 连接断开不取消已提交作业，服务退出才请求取消自己拥有的作业。保留默认 stdio，HTTP 只能显式启动、回环监听并验证令牌/Host/Origin/正文上限；MCP 两种传输共用工具工厂，HTTP 每请求创建协议实例。不要把应用目录限制描述为 OS 沙箱。
 
 JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分号。组件用 PascalCase，函数及参数用 camelCase，扩展和步骤 ID 用 `[a-z][a-z0-9-]*`。TypeScript 严格模式；没有独立 lint/格式化工具。
 
@@ -34,6 +34,8 @@ JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分�
 按用户要求，本次为全新项目契约：不读写或迁移旧配置、任务及旧接口；使用新 schema 和 `data/`。不接入 Cordis。后续契约变更必须升级版本并明确拒绝策略，参见 [ADR 0003](docs/decisions/0003-processing-contract.md)。
 
 ## 测试、文档与提交
+
+新增或修改统一应用能力，必须同步桌面可操作流程、CLI 命令/帮助、MCP stdio 与 HTTP 工具、HTTP 访问入口、schema、权限及跨入口行为测试；入口只适配，不能复制业务实现。权限不足可统一明确拒绝，不能用漏入口代替权限控制；窗口、主题、文件对话框等专属功能仅放对应入口。服务相关改动必读[服务管理与入口覆盖](docs/architecture/service-management.md)及 [ADR 0016](docs/decisions/0016-service-management.md)。service-* 共用核心服务管理，stdio 由 Agent 宿主启动；服务跟随启动入口退出，不因离开页面或关闭观察窗口停止。policy/2 的 allowServiceManagement 默认 false，Agent 必须与已配置权限完全一致，不能扩权；令牌不进入响应或日志。
 
 核心用 Node 内置测试（`*.test.js`），组件用 Vitest（`*.test.ts`），原生用 Playwright（`*.spec.ts`）。无数值覆盖门槛；覆盖新增行为及文件安全边界，不删除安全断言来通过测试。仅用生成素材和隔离副本，不操作真实用户数据。
 

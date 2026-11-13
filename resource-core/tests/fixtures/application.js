@@ -18,7 +18,7 @@ function fixture(t, permissions = {}, count = 4, duration = 20) {
     fs.mkdirSync(source); fs.mkdirSync(backup);
     for (let i = 0; i < count; i++) fs.writeFileSync(path.join(source, i + '.pack'), 'PACK:' + 'test'.repeat(100));
     const policyFile = path.join(root, 'policy.json');
-    fs.writeFileSync(policyFile, JSON.stringify({ schema: 'asset-toolbox.automation-policy/1', sourceRoots: [source], outputRoots: [output], backupRoots: [backup], ...permissions }));
+    fs.writeFileSync(policyFile, JSON.stringify({ schema: 'asset-toolbox.automation-policy/2', sourceRoots: [source], outputRoots: [output], backupRoots: [backup], ...permissions }));
     const { ApplicationService, respond } = require(path.join(core, 'application/service'));
     const service = new ApplicationService(policyFile);
     const request = { mode: 'process', folder: source, outputDir: output, pipeline: [{ id: 'compress-fixture', resourceType: 'fixture', operation: 'compress', provider: 'fixture', enabled: true, parameters: {}, providerOptions: {} }] };

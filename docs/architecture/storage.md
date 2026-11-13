@@ -16,7 +16,7 @@
 
 ## 公共动作与授权
 
-应用/响应契约为 `/6`，持久 job 为 `/5`。两个动作复用同一 ApplicationService：
+应用/响应契约为 `/7`，持久 job 为 `/5`。两个动作复用同一 ApplicationService：
 
 - `storage-preview({retentionDays?:30,offset?:0,limit?:50})`：只读，返回分页 items、总数、候选数量和估计明细字节；上限 100，桌面每页取 100 项，可清理项含 fingerprint。
 - `storage-clean({retentionDays,selection:[{jobId,fingerprint}]})`：显式选择 1–100 项；返回逐项 cleaned/error、净释放字节估计和汇总。

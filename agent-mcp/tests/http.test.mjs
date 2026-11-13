@@ -18,11 +18,11 @@ const { installType } = require('../../resource-core/tests/helpers');
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function fixture(t) {
+async function fixture(t, permissions = {}) {
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'asset-mcp-http-'));
     const tool = copyTool(root), core = path.join(tool, 'resource-core'), serverRoot = path.join(tool, 'agent-mcp');
     fs.mkdirSync(serverRoot);
-    for (const file of ['server.mjs', 'tools.mjs']) fs.copyFileSync(path.join(packageRoot, file), path.join(serverRoot, file));
+    for (const file of ['server.mjs', 'tools.mjs', 'transports.mjs']) fs.copyFileSync(path.join(packageRoot, file), path.join(serverRoot, file));
     fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(serverRoot, 'node_modules'), 'junction');
     installType(tool, 'fixture');
     const provider = path.join(core, 'providers/fixture'); fs.mkdirSync(provider);
@@ -30,7 +30,7 @@ async function fixture(t) {
     const source = path.join(root, '素材'), output = path.join(root, '输出'); fs.mkdirSync(source);
     for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(source, i + '.pack'), 'PACK:' + 'data'.repeat(100));
     const policy = path.join(root, 'policy.json'), tokenFile = path.join(root, 'token.txt'), token = randomBytes(32).toString('base64url');
-    fs.writeFileSync(policy, JSON.stringify({ schema: 'asset-toolbox.automation-policy/1', sourceRoots: [source], outputRoots: [output], backupRoots: [] }));
+    fs.writeFileSync(policy, JSON.stringify({ schema: 'asset-toolbox.automation-policy/2', sourceRoots: [source], outputRoots: [output], backupRoots: [], ...permissions }));
     fs.writeFileSync(tokenFile, token);
     const child = spawn(process.execPath, [path.join(serverRoot, 'server.mjs'), '--transport', 'http', '--policy', policy, '--token-file', tokenFile, '--port', '0'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const exited = new Promise(resolve => child.once('close', resolve));
@@ -84,7 +84,7 @@ test('Streamable HTTP supports both protocol eras and concurrent clients without
     const f = await fixture(t);
     const [legacy, modern] = await Promise.all([f.connect(), f.connect({ pin: '2026-07-28' })]);
     const lists = await Promise.all([legacy.client.listTools(), modern.client.listTools()]);
-    assert.equal(lists[0].tools.length, 12);
+    assert.equal(lists[0].tools.length, 17);
     assert.deepEqual(lists[0].tools.map(tool => [tool.name, tool.inputSchema]), lists[1].tools.map(tool => [tool.name, tool.inputSchema]));
     const stream = await fetch(f.mcpUrl, { method: 'POST', headers: { Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25' }, body: JSON.stringify({ jsonrpc: '2.0', id: 42, method: 'tools/list' }) });
     assert.equal(stream.status, 200); assert.match(stream.headers.get('content-type'), /text\/event-stream/);
@@ -146,8 +146,9 @@ test('desktop, CLI, stdio MCP, HTTP and HTTP MCP share schemas, durable jobs, ca
     };
     const calls = [desktop, cli, async (action, input = {}) => (await stdio.callTool({ name: 'asset_' + action, arguments: input })).structuredContent, async (action, input) => (await f.api(action, input)).body, remote.call];
     const catalogs = await Promise.all(calls.map(call => call('capabilities')));
-    for (const response of catalogs) { assert.equal(response.schema, 'asset-toolbox.response/6'); assert.deepEqual(response.result.inputSchemas, catalogs[0].result.inputSchemas); }
+    for (const response of catalogs) { assert.equal(response.schema, 'asset-toolbox.response/7'); assert.deepEqual(response.result.inputSchemas, catalogs[0].result.inputSchemas); }
     for (const call of calls.slice(1)) {
+        assert.equal((await call('service-status')).error.code, 'PERMISSION_DENIED');
         assert.equal((await call('storage-preview')).error.code, 'PERMISSION_DENIED');
         assert.equal((await call('storage-clean', { retentionDays: 30, selection: [{ jobId: 'a'.repeat(64), fingerprint: 'b'.repeat(64) }] })).error.code, 'PERMISSION_DENIED');
     }
@@ -181,4 +182,37 @@ test('desktop, CLI, stdio MCP, HTTP and HTTP MCP share schemas, durable jobs, ca
     assert.equal(replay.result.replayed, true); assert.equal(replay.result.jobId, preview.result.jobId);
     assert.equal(fs.readFileSync(path.join(f.source, '0.pack'), 'utf8'), 'PACK:' + 'data'.repeat(100));
     assert.equal(fs.existsSync(path.join(f.core, 'data/settings.json')), false);
+});
+
+test('authorized MCP and HTTP clients manage one listener using shared service actions and cannot expand policy', async t => {
+    const f = await fixture(t, { allowServiceManagement: true });
+    const { ApplicationService } = require(path.join(f.core, 'application/service'));
+    const local = ApplicationService.forDesktop(), policy = require(path.join(f.core, 'application/policy')).loadPolicy(f.policy);
+    f.cleanups.push(() => local.shutdown());
+    local.dispatch('service-configure', { port: 0, mcp: true, policy });
+    const remote = await f.connect();
+    const stdio = new Client({ name: 'services-stdio', version: '1.0.0' });
+    f.cleanups.push(() => stdio.close());
+    const exported = (await remote.call('service-client-config', { transport: 'stdio' })).result.mcpServers['asset-toolbox'];
+    await stdio.connect(new StdioClientTransport({ ...exported, stderr: 'pipe' }));
+    const call = async (action, args = {}) => (await stdio.callTool({ name: 'asset_' + action, arguments: args })).structuredContent;
+    assert.equal((await call('service-configure', { port: 0, mcp: true, policy })).ok, true);
+    const started = await call('service-start'); assert.equal(started.ok, true, JSON.stringify(started));
+    assert.equal((await remote.call('service-start')).result.reused, true);
+    assert.equal((await f.api('service-status')).body.result.state, 'running');
+    const secret = fs.readFileSync(started.result.tokenFile, 'utf8').trim();
+    assert.equal(JSON.stringify(started).includes(secret), false);
+    const managed = new Client({ name: 'managed-http', version: '1.0.0' });
+    f.cleanups.push(() => managed.close());
+    await managed.connect(new StreamableHTTPClientTransport(new URL(started.result.endpoints.mcpUrl), { requestInit: { headers: { Authorization: 'Bearer ' + secret } } }));
+    const tools = await managed.listTools();
+    assert.deepEqual(tools.tools.map(tool => tool.name).sort(), Object.keys(require(path.join(f.core, 'application/contract')).inputSchemas).map(action => 'asset_' + action).sort());
+    const stopped = await managed.callTool({ name: 'asset_service-stop', arguments: {} }); assert.equal(stopped.structuredContent.ok, true);
+    for (let i = 0; i < 100 && local.dispatch('service-status').state !== 'stopped'; i++) await delay(30);
+    assert.equal(local.dispatch('service-status').state, 'stopped');
+    assert.equal((await remote.call('service-configure', { port: 0, mcp: true, policy: { ...policy, sourceRoots: [f.root] } })).error.code, 'PERMISSION_DENIED');
+    const next = await call('service-start'); assert.equal(next.ok, true);
+    await stdio.close();
+    for (let i = 0; i < 100; i++) { try { await fetch(next.result.endpoints.healthUrl); await delay(30); } catch { break; } }
+    await assert.rejects(fetch(next.result.endpoints.healthUrl));
 });

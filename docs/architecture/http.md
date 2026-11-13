@@ -1,12 +1,14 @@
 # 本机 HTTP API 与 MCP Streamable HTTP
 
-状态：已实现。仅支持本机 Agent；stdio MCP 保留且仍为默认启动模式。源码为 `resource-core/application/http.js`、`http-server.js`、`server-options.js`、`agent-mcp/server.mjs`、`tools.mjs`；决策见 [ADR 0010](../decisions/0010-local-http.md)。业务动作、目录 policy、幂等键和报告分页使用 /6 [自动化契约](automation.md)。
+状态：已实现。仅支持本机 Agent；stdio MCP 保留且仍为默认启动模式。源码为 `resource-core/application/http.js`、`http-server.js`、`server-options.js`、`agent-mcp/server.mjs`、`tools.mjs`；决策见 [ADR 0010](../decisions/0010-local-http.md)。业务动作、目录 policy、幂等键和报告分页使用 /7 [自动化契约](automation.md)。
 
 ## 统一应用服务边界
 
-桌面、CLI（含快捷命令）、MCP 和 HTTP 直接复用应用 /6 的公共作业契约与唯一实现。权限和 connection/server 生命周期来自启动上下文；没有桌面专用作业分支，详见[统一应用接口](application.md)。桌面设置保持独立，网络不公开 save、bootstrap 或内部执行方法。HTTP 服务只接受 policy 权限及 server 生命周期上下文。
+桌面、CLI（含快捷命令）、MCP 和 HTTP 直接复用应用 /7 的公共作业契约与唯一实现。权限和 connection/server 生命周期来自启动上下文；没有桌面专用作业分支，详见[统一应用接口](application.md)。桌面设置保持独立，网络不公开 save、bootstrap 或内部执行方法。HTTP 服务只接受 policy 权限及 server 生命周期上下文。
 
 ## 启动
+
+日常推荐通过桌面“工具 → Agent 接入与服务管理”或 `cli.js service` 使用统一服务接口配置和启动；详见[服务管理](service-management.md)。下面保留指定外部 policy/token 文件的独立前台传输入口，它们不登记为受管理监听器。
 
 先准备 `resource-core/data/automation-policy.json`，参照[权限示例](../../examples/automation-policy.example.json)填写素材、输出和备份目录。以下命令从仓库根执行。若 data 不存在，先创建；不要覆盖已有 policy。
 
@@ -34,25 +36,25 @@ stdio 由宿主按会话启动；HTTP 由使用者单独启动并保持运行。
 
 ## HTTP API
 
-所有请求都带 `Authorization: Bearer <令牌>`。API 是动作式 JSON 接口，路径为 `POST /api/v6/<action>`，正文与 CLI/MCP 对应动作的输入一致，响应沿用 `asset-toolbox.response/6`。
+所有请求都带 `Authorization: Bearer <令牌>`。API 是动作式 JSON 接口，路径为 `POST /api/v7/<action>`，正文与 CLI/MCP 对应动作的输入一致，响应沿用 `asset-toolbox.response/7`。
 
 | 路径 | JSON 输入 | 成功响应 |
 | --- | --- | --- |
-| `/api/v6/capabilities` | `{}` | 200，目录、schema、提供方获取信息及当前 policy |
-| `/api/v6/validate` | `{request}` | 200，规范化请求 |
-| `/api/v6/submit` | `{request,idempotencyKey}` | 202，立即返回 jobId；需继续查询状态 |
-| `/api/v6/status` | `{jobId}` | 200，进度、done、exitCode、taskId |
-| `/api/v6/cancel` | `{jobId}` | 200，取消请求回执 |
-| `/api/v6/jobs`、`/api/v6/tasks` | `{offset?,limit?}` | 200，分页摘要 |
-| `/api/v6/results` | `{jobId,kind?,offset?,limit?}` | 200，分页文件、音频或恢复结果 |
+| `/api/v7/capabilities` | `{}` | 200，目录、schema、提供方获取信息及当前 policy |
+| `/api/v7/validate` | `{request}` | 200，规范化请求 |
+| `/api/v7/submit` | `{request,idempotencyKey}` | 202，立即返回 jobId；需继续查询状态 |
+| `/api/v7/status` | `{jobId}` | 200，进度、done、exitCode、taskId |
+| `/api/v7/cancel` | `{jobId}` | 200，取消请求回执 |
+| `/api/v7/jobs`、`/api/v7/tasks` | `{offset?,limit?}` | 200，分页摘要 |
+| `/api/v7/results` | `{jobId,kind?,offset?,limit?}` | 200，分页文件、音频或恢复结果 |
 | `GET /health` | 无正文 | 200，应用接口版本及是否挂载 MCP；仍需认证 |
 
 示例：
 
 ```powershell
 $assetHeaders = @{ Authorization = 'Bearer ' + (Get-Content -Raw resource-core/data/http-token.txt).Trim() }
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v6/capabilities -Headers $assetHeaders -ContentType 'application/json' -Body '{}'
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v6/submit -Headers $assetHeaders -ContentType 'application/json' -InFile examples/agent-resize.example.json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v7/capabilities -Headers $assetHeaders -ContentType 'application/json' -Body '{}'
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v7/submit -Headers $assetHeaders -ContentType 'application/json' -InFile examples/agent-resize.example.json
 ```
 
 先复制修改请求示例中的路径和幂等键。相同 policy 的 CLI、stdio、HTTP API 与 HTTP MCP 共用幂等记录；同一 HTTP 服务中的 API 和 MCP 使用同一个应用实例。桌面/本地 CLI 作业也可按 jobId 访问，但必须通过当前 policy 对原请求的授权检查。响应丢失时使用同键重试，不以新键盲目重做。
@@ -82,7 +84,7 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v6/submit -Headers
 
 HTTP 请求结束、客户端关闭或临时网络中断都不取消已提交作业；作业由服务进程持有。需要取消时调用 cancel。Ctrl+C/正常服务退出停止接收新请求、请求文件边界取消、等待工作进程结束后关闭连接。Windows 强杀整个进程树仍按既有 INTERRUPTED 与任务日志恢复，不承诺自动回滚。
 
-stdio 会话结束仍请求安全取消，与 HTTP 语义区分。HTTP 服务持有一个活动作业，支持多个客户端查询；它不是并行队列。所有持有同一令牌的客户端是同一授权主体，可查询/取消该 policy 范围内的作业（包括桌面和其他入口提交的作业），不提供多用户隔离。
+stdio 会话结束仍请求安全取消，与 HTTP 语义区分。HTTP 服务可持有多个排队/运行作业，复用[资源感知有限并行](queue.md)。所有持有同一令牌的客户端是同一授权主体，可查询/取消该 policy 范围内的作业（包括桌面和其他入口提交的作业），不提供多用户隔离。
 
 Host 必须是当前端口的 127.0.0.1 或 localhost，不采信代理转发头。任何 Origin 均拒绝，不启用浏览器 CORS；无 Origin 的本机客户端仍须认证。拒绝重复安全头、URL 查询携带令牌及非 JSON/压缩请求；JSON 正文最多 1 MiB（含 chunked），头部最多 16 KiB，并限制请求超时和连接数。提前拒绝的连接关闭，防止未读正文被误作下次请求。令牌在启动时读取，轮换需停止服务、更换文件后重启；Windows 文件权限由所在目录 ACL 决定。
 
@@ -92,8 +94,8 @@ Host 必须是当前端口的 127.0.0.1 或 localhost，不采信代理转发头
 
 ## 存储维护与版本
 
-当前 HTTP 为 /api/v6；旧 /api/v1、/api/v2、/api/v3、/api/v4、/api/v5 返回 410/UNSUPPORTED_VERSION。应用和响应为 /6，持久 job 为 /5。`storage-preview/storage-clean` 虽在公共契约中声明，但 HTTP 与 MCP HTTP 均为 policy 上下文，调用返回 403/PERMISSION_DENIED；不能通过网络授权全局清理。已清理的作业仍可 status 查询，results 返回 410/RESULTS_EXPIRED。默认 stdio 及两种传输的工具工厂保持不变。
+当前 HTTP 为 /api/v7；旧 /api/v1–6 返回 410/UNSUPPORTED_VERSION。应用和响应为 /7，持久 job 为 /5，policy 为 /2。`storage-preview/storage-clean` 与 scheduling-set 仍不授权 policy；服务管理则由 policy/2 的 allowServiceManagement 显式授权并核对与服务配置等权，禁止输入扩权。已清理作业的 results 返回 410/RESULTS_EXPIRED。默认 stdio 及两种传输的工具工厂保持不变。
 
 POST submit 返回 202 后，作业可能排队；status 的 queued/queuePosition 表示等待，仍需轮询至 done。服务退出取消自己全部等待及运行项，单次请求断开不取消。见[队列](queue.md)。
 
-新增 queue 与 scheduling-set 同样通过 /api/v6 暴露：前者按当前 policy 过滤作业并匿名显示其他占用；后者固定返回 403/PERMISSION_DENIED，HTTP/MCP 不能修改全局预算或通过参数扩权。
+新增 queue 与 scheduling-set 同样通过 /api/v7 暴露：前者按当前 policy 过滤作业并匿名显示其他占用；后者固定返回 403/PERMISSION_DENIED，HTTP/MCP 不能修改全局预算或通过参数扩权。

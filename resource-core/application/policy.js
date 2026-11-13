@@ -26,14 +26,17 @@ function canonical(value) {
 }
 function loadPolicy(filename) {
     const input = JSON.parse(fs.readFileSync(filename, 'utf8').replace(/^\uFEFF/, ''));
-    record(input, ['schema', 'sourceRoots', 'outputRoots', 'backupRoots', 'allowOverwrite', 'allowRestore', 'allowDependencyInstall']);
-    if (input.schema !== 'asset-toolbox.automation-policy/1') fail('UNSUPPORTED_VERSION', '自动化权限配置版本不支持');
+    return normalizePolicy(input);
+}
+function normalizePolicy(input) {
+    record(input, ['schema', 'sourceRoots', 'outputRoots', 'backupRoots', 'allowOverwrite', 'allowRestore', 'allowDependencyInstall', 'allowServiceManagement']);
+    if (input.schema !== 'asset-toolbox.automation-policy/2') fail('UNSUPPORTED_VERSION', '自动化权限配置版本不支持');
     const policy = { schema: input.schema };
     for (const key of ['sourceRoots', 'outputRoots', 'backupRoots']) {
         if (!Array.isArray(input[key]) || input[key].length > 32) fail('INVALID_REQUEST', key + ' 必须为最多 32 项的数组');
         policy[key] = input[key].map(canonical).sort();
     }
-    for (const key of ['allowOverwrite', 'allowRestore', 'allowDependencyInstall']) {
+    for (const key of ['allowOverwrite', 'allowRestore', 'allowDependencyInstall', 'allowServiceManagement']) {
         if (input[key] !== undefined && typeof input[key] !== 'boolean') fail('INVALID_REQUEST', key + ' 必须为布尔值');
         policy[key] = input[key] === true;
     }
@@ -77,4 +80,4 @@ function authorize(request, policy) {
     }
     return request;
 }
-module.exports = { fail, record, within, canonical, loadPolicy, checkPath, authorize };
+module.exports = { fail, record, within, canonical, loadPolicy, normalizePolicy, checkPath, authorize };

@@ -25,6 +25,8 @@ async function runCommand(context, action, input) {
         }
         if (!response.ok) process.exitCode = 1;
         process.stdout.write(JSON.stringify(response).replace(/[\u007f-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')) + '\n');
+        // 启动命令持有服务；其他 CLI 可以查询/停止，Ctrl+C 安全退出。
+        if (action === 'service-start' && response.ok) while (service.services?.server) await new Promise(resolve => setTimeout(resolve, 100));
         return response;
     } finally {
         await service.disconnect();

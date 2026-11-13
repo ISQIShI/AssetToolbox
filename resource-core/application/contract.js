@@ -1,5 +1,5 @@
-const API = 'asset-toolbox.application/6';
-const RESPONSE = 'asset-toolbox.response/6';
+const API = 'asset-toolbox.application/7';
+const RESPONSE = 'asset-toolbox.response/7';
 const JOB = 'asset-toolbox.job/5';
 const object = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 const string = { type: 'string' };
@@ -18,7 +18,14 @@ const request = { oneOf: [
 const jobId = { type: 'string', pattern: '^[a-f0-9]{64}$' };
 const pagination = { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 100 } };
 const retentionDays = { type: 'integer', minimum: 1, maximum: 3650, default: 30 };
+const roots = { type: 'array', maxItems: 32, items: string };
+const policy = object({ schema: { const: 'asset-toolbox.automation-policy/2' }, sourceRoots: roots, outputRoots: roots, backupRoots: roots,
+    allowOverwrite: { type: 'boolean' }, allowRestore: { type: 'boolean' }, allowDependencyInstall: { type: 'boolean' }, allowServiceManagement: { type: 'boolean' } }, ['schema', 'sourceRoots', 'outputRoots', 'backupRoots']);
 const inputSchemas = {
+    'service-status': object({}),
+    'service-configure': object({ port: { type: 'integer', minimum: 0, maximum: 65535 }, mcp: { type: 'boolean' }, policy }),
+    'service-start': object({}), 'service-stop': object({}),
+    'service-client-config': object({ transport: { enum: ['stdio', 'http'] } }),
     queue: object({}),
     'scheduling-set': object({ maxConcurrent: { type: 'integer', minimum: 1, maximum: 8 } }),
     capabilities: object({}), validate: object({ request }),

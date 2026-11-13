@@ -1,6 +1,6 @@
 # 持久队列与有限并行
 
-状态：已实现单安装的资源感知队列，并行数量 **1–8，默认 2**，最多保留 **100** 个未结束作业。应用/响应 /6、HTTP /api/v6、job/5、dispatch/3、execution/2、resources/1。决策见 [ADR 0014](../decisions/0014-resource-aware-concurrency.md) 和 [0015](../decisions/0015-configurable-concurrency.md)；入口与生命周期见[统一应用接口](application.md)。
+状态：已实现单安装的资源感知队列，并行数量 **1–8，默认 2**，最多保留 **100** 个未结束作业。应用/响应 /7、HTTP /api/v7、job/5、dispatch/3、execution/2、resources/1。决策见 [ADR 0014](../decisions/0014-resource-aware-concurrency.md) 和 [0015](../decisions/0015-configurable-concurrency.md)；入口与生命周期见[统一应用接口](application.md)。
 
 ## 配置、CPU 建议与稳定槽位
 
@@ -60,7 +60,7 @@ queued 状态包含 sequence、queuePosition、waitReason、runningCount、concu
 
 持有者死亡的等待项中断，不自动接管权限或重放。dispatch 落盘后永不再次启动同 ID。活 worker 继续占用，父进程死亡后按文件边界取消；确认 PID 已死的临时执行占用才回收。PID 重用、坏记录和丢失退出确认保守阻塞，不超时强抢、不强杀编码器。素材任务通过显式 resume/retry 恢复。
 
-旧 HTTP 1–5 返回 410，旧 job/1–4 不读取或迁移；新目录内旧 schema、未知 dispatch/resources/执行占用格式拒绝。task/report/settings 和提供方契约不变。升级必须关闭旧入口并配套更新 EXE、核心与 MCP；不支持同一安装同时运行旧执行锁实现。
+旧 HTTP 1–6 返回 410，旧 job/1–4 不读取或迁移；新目录内旧 schema、未知 dispatch/resources/执行占用格式拒绝。task/report/settings 和提供方契约不变。升级必须关闭旧入口并配套更新 EXE、核心与 MCP；不支持同一安装同时运行旧执行锁实现。
 
 锁只协调同一安装，不是跨安装或 OS 沙箱；外部编辑器、同权限篡改和不同安装访问相同素材仍需操作者协调。没有后台接管、自动恢复、分布式调度、目录索引或自动清理。同步扫描历史记录仍是性能边界。
 

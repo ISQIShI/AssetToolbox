@@ -217,6 +217,11 @@ class ApplicationService {
         record(input, ACTION_FIELDS[action]);
         if (inputSchemas[action].required.some(key => !Object.hasOwn(input, key))) fail('INVALID_REQUEST', '请求缺少必需字段');
         switch (action) {
+            case 'service-status': case 'service-configure': case 'service-start': case 'service-stop': case 'service-client-config': {
+                this.services ||= new (require('./services').ServiceHost)(this);
+                const method = { 'service-status': 'status', 'service-configure': 'configure', 'service-start': 'start', 'service-stop': 'stop', 'service-client-config': 'clientConfig' }[action];
+                return this.services[method](input);
+            }
             case 'queue': return require('./scheduling').snapshot(this);
             case 'scheduling-set': return require('./scheduling').configure(this, input);
             case 'storage-preview': return require('./storage').preview(this, input);
@@ -259,6 +264,7 @@ class ApplicationService {
     }
     async shutdown() {
         this.queue.stop(); this.session.closing = true;
+        await this.services?.close();
         for (const id of this.owned) {
             // 与调度争用同一锁，退出期间不会将等待项升级为运行项。
             for (;;) {
@@ -276,7 +282,7 @@ async function respond(service, action, input) {
         for (;;) {
             try { return { schema: RESPONSE, ok: true, result: await service.dispatch(action, input) }; }
             catch (error) {
-                if (!['submit', 'cancel', 'queue', 'scheduling-set'].includes(action) || error.lockName !== 'submission' || Date.now() >= deadline) throw error;
+                if ((!['submit', 'cancel', 'queue', 'scheduling-set'].includes(action) || error.lockName !== 'submission') && (!action?.startsWith('service-') || error.lockName !== 'services') || Date.now() >= deadline) throw error;
                 // 短暂登记/派发竞争在公共入口内等待；队列满、关闭及执行锁拒绝不自动重试。
                 await new Promise(resolve => setTimeout(resolve, 15 + Math.floor(Math.random() * 20)));
             }

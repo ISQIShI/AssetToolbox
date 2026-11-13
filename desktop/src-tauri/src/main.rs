@@ -38,7 +38,7 @@ impl Bridge {
         if self.output.read_line(&mut line).map_err(|e| e.to_string())? == 0 { return Err("核心通信中断，请重新打开工具。".into()); }
         let answer: Value = serde_json::from_str(&line).map_err(|e| format!("核心响应无效：{e}"))?;
         if answer["id"].as_u64() != Some(self.sequence) { return Err("核心响应序号不匹配".into()); }
-        if answer["schema"].as_str() != Some("asset-toolbox.response/6") { return Err("核心接口版本不匹配，需要应用接口 /6".into()); }
+        if answer["schema"].as_str() != Some("asset-toolbox.response/7") { return Err("核心接口版本不匹配，需要应用接口 /7".into()); }
         if answer["ok"].as_bool() != Some(true) {
             return Err(format!("{}：{}", answer["error"]["code"].as_str().unwrap_or("INVALID_REQUEST"), answer["error"]["message"].as_str().unwrap_or("核心请求失败")));
         }

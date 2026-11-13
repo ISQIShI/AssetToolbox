@@ -5,6 +5,11 @@ const { respond } = application;
 import contract from '../resource-core/application/contract.js';
 
 const definitions = {
+    'service-status': { description: '查询受管理的本机 HTTP/MCP HTTP 服务配置和状态。需要启动时明确授予服务管理权限且与配置权限一致；不返回令牌。', readOnly: true },
+    'service-configure': { description: '停止状态下配置本机服务端口、是否启用 MCP HTTP 及 policy。Agent 不能改变启动权限范围；受信任本地操作者可授予权限。', readOnly: false },
+    'service-start': { description: '显式启动已配置的回环 HTTP/MCP HTTP 服务。重复启动返回已有服务；服务跟随原启动入口退出，调用者不会接管已有服务。', readOnly: false },
+    'service-stop': { description: '请求安全停止受管理服务及其自己的作业；继续查询 service-status 至 stopped。其他入口作业不受影响。', readOnly: false },
+    'service-client-config': { description: '生成 stdio MCP 启动配置或 HTTP 连接端点与令牌文件位置，不返回令牌正文。stdio 仍由 Agent 宿主启动。', readOnly: true },
     queue: { description: '查询当前并行预算、真实执行槽位及等待队列。只返回当前权限范围内的作业信息，其他占用以匿名忙碌槽位表示。', readOnly: true },
     'scheduling-set': { description: '仅受信任本地上下文可以在队列空闲时设置 1–8 的并行预算；Agent policy 不授予此权限。', readOnly: false },
     'storage-preview': { description: '预览旧作业明细的清理范围，默认保留 30 天。仅受信任本地上下文可用，现有 Agent policy 不授予存储维护权限。', readOnly: true },
@@ -20,7 +25,9 @@ const definitions = {
 };
 export function createServer(service, transport = 'stdio') {
     const server = new McpServer({ name: 'asset-toolbox', version: '1.0.0' });
-    for (const [action, definition] of Object.entries(definitions)) {
+    for (const action of Object.keys(contract.inputSchemas)) {
+        const definition = definitions[action];
+        if (!definition) throw Error('公共动作缺少 MCP 入口定义：' + action);
         server.registerTool('asset_' + action, {
             description: definition.description + (action === 'submit' ? (transport === 'stdio' ? ' stdio 结束会请求安全取消。' : ' HTTP 连接断开不会取消已提交作业；使用 asset_cancel 或停止服务。') : ''), inputSchema: z.fromJSONSchema(contract.inputSchemas[action]),
             annotations: { readOnlyHint: definition.readOnly, destructiveHint: !definition.readOnly, idempotentHint: true, openWorldHint: action === 'submit' },

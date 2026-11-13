@@ -65,7 +65,7 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 .\runtime\node.exe resource-core/cli.js "D:\Assets" --pipeline pipeline.json --output "D:\Results"
 ```
 
-上述快捷命令与桌面、CLI API、MCP 和 HTTP 使用同一应用 /6 服务，返回结构化响应并创建持久 jobId；处理还生成 taskId，可续跑和恢复。API 的本机人工调用可显式使用 --local，外部 Agent 使用固定 --policy。
+上述快捷命令与桌面、CLI API、MCP 和 HTTP 使用同一应用 /7 服务，返回结构化响应并创建持久 jobId；处理还生成 taskId，可续跑和恢复。API 的本机人工调用可显式使用 --local，外部 Agent 使用固定 --policy。
 
 ```powershell
 .\runtime\node.exe resource-core/cli.js api submit --local --input request.json
@@ -77,7 +77,7 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 
 桌面和 Agent 共用[资源感知队列](docs/architecture/queue.md)：同安装按配置的 1–8 个槽位并行（默认 2），冲突项按登记顺序等待，最多 100 个未结束项。作业中心显示等待原因及槽位用量；登记顺位不是预计启动顺序。
 
-应用/响应 /6、HTTP /api/v6，旧 /api/v1–5 明确拒绝；持久 job 升级 /5，不读取或迁移旧 /1–4 作业；素材任务/报告及 settings 版本不变，桌面须使用配套新 EXE 与核心。详细契约和最终架构见[统一应用接口](docs/architecture/application.md)。
+应用/响应 /7、HTTP /api/v7，旧 /api/v1–6 明确拒绝；持久 job 升级 /5，不读取或迁移旧 /1–4 作业；素材任务/报告及 settings 版本不变，桌面须使用配套新 EXE 与核心。详细契约和最终架构见[统一应用接口](docs/architecture/application.md)。
 
 ## 存储维护
 
@@ -90,3 +90,5 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 点击活动栏“作业”（Ctrl+5）查看同一安装中桌面、CLI、MCP 与 HTTP 的作业。重启后仍可查询；列表每页 20 项，可搜索/筛选本页，查看分页结果、打开报告或跳转素材任务。选择运行中的作业后可显式取消；只查看外部作业时，关闭窗口不会取消它。当前按单安装 资源感知排队，最多 100 个未结束作业；排队可取消，提交后仍须查询最终状态。方案比较见[统一作业中心与入口冲突](docs/architecture/job-center.md)。
 
 作业中心按实际槽位纵向排列任务卡片，等待项与历史分开。并行数量可在队列空闲时设为 1–8，默认 2；支持采用基于可用逻辑处理器的保守建议。编码器也会使用多线程，建议值不等于 CPU 核心数或性能保证。设置重启保留，HTTP/MCP 只能查询。
+
+桌面“工具 → Agent 接入与服务管理”可配置素材/输出/备份目录权限、端口及 MCP HTTP，启动/安全停止服务并生成 stdio 或 HTTP 连接配置。CLI 使用 `service configure/start/status/stop/client-config`；相同五个动作也通过 MCP 工具与 HTTP API 访问。policy/2 的服务管理授权默认关闭，Agent 不能扩大启动权限。服务跟随原启动入口退出，离开工具页不停止；详细命令与边界见[服务管理](docs/architecture/service-management.md)。

@@ -15,7 +15,7 @@ function fixture(t) {
     fs.writeFileSync(path.join(provider, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:2,version:'1.0.0',displayName:'统一契约测试',adapters:{compress:{version:'1.0.0',resourceTypes:['fixture'],execute({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,120);fs.writeFileSync(output,fs.readFileSync(input).subarray(0,8));return{output};}}}};`);
     const source = path.join(root, '素材'), output = path.join(root, '结果'); fs.mkdirSync(source);
     for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(source, i + '.pack'), 'PACK:' + 'test'.repeat(100));
-    const policy = path.join(root, 'policy.json'); fs.writeFileSync(policy, JSON.stringify({ schema: 'asset-toolbox.automation-policy/1', sourceRoots: [source], outputRoots: [output], backupRoots: [] }));
+    const policy = path.join(root, 'policy.json'); fs.writeFileSync(policy, JSON.stringify({ schema: 'asset-toolbox.automation-policy/2', sourceRoots: [source], outputRoots: [output], backupRoots: [] }));
     const { ApplicationService, respond } = require(path.join(core, 'application/service'));
     const { policyContext, localContext } = require(path.join(core, 'application/context'));
     const local = new ApplicationService(localContext()), server = new ApplicationService(policyContext(policy, 'server'));
@@ -82,7 +82,7 @@ test('shortcut CLI adapts into durable jobs and keeps provider loading logs out 
     const pipeline = path.join(f.root, 'pipeline.json'); fs.writeFileSync(pipeline, JSON.stringify(f.request.pipeline));
     const result = spawnSync(process.execPath, [path.join(f.core, 'cli.js'), f.source, '--pipeline', pipeline, '--output', f.output], { encoding: 'utf8', windowsHide: true, timeout: 15000 });
     assert.equal(result.status, 0, result.stderr); assert.match(result.stderr, /提供方加载诊断/);
-    const response = JSON.parse(result.stdout); assert.equal(response.schema, 'asset-toolbox.response/6');
+    const response = JSON.parse(result.stdout); assert.equal(response.schema, 'asset-toolbox.response/7');
     assert.equal(response.result.state.task.completed, 8);
     assert.equal(f.server.dispatch('status', { jobId: response.result.jobId }).taskId, response.result.state.taskId);
     assert.equal(fs.readFileSync(path.join(f.source, '0.pack'), 'utf8'), 'PACK:' + 'test'.repeat(100));

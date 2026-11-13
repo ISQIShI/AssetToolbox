@@ -21,12 +21,12 @@ async function fixture(t) {
     const provider = path.join(core, 'providers/fixture'); fs.mkdirSync(provider);
     fs.writeFileSync(path.join(provider, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:2,version:'1.0.0',displayName:'MCP 测试',adapters:{compress:{version:'1.0.0',resourceTypes:['fixture'],execute({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,150);fs.writeFileSync(output,fs.readFileSync(input).subarray(0,8));return {output};}}}};`);
     const serverRoot = path.join(tool, 'agent-mcp'); fs.mkdirSync(serverRoot);
-    for (const file of ['server.mjs', 'tools.mjs']) fs.copyFileSync(path.join(packageRoot, file), path.join(serverRoot, file));
+    for (const file of ['server.mjs', 'tools.mjs', 'transports.mjs']) fs.copyFileSync(path.join(packageRoot, file), path.join(serverRoot, file));
     fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(serverRoot, 'node_modules'), 'junction');
     const source = path.join(root, '素材'), output = path.join(root, '输出'); fs.mkdirSync(source);
     for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(source, i + '.pack'), 'PACK:' + 'test'.repeat(100));
     const policy = path.join(root, 'policy.json');
-    fs.writeFileSync(policy, JSON.stringify({ schema: 'asset-toolbox.automation-policy/1', sourceRoots: [source], outputRoots: [output], backupRoots: [] }));
+    fs.writeFileSync(policy, JSON.stringify({ schema: 'asset-toolbox.automation-policy/2', sourceRoots: [source], outputRoots: [output], backupRoots: [] }));
     const clients = [];
     async function connect(mode = 'legacy') {
         const client = new Client({ name: 'asset-toolbox-integration', version: '1.0.0' }, { versionNegotiation: { mode } });
@@ -62,7 +62,7 @@ async function until(call, jobId, predicate = state => state.done) {
 
 test('official SDK discovers tools, validates input and runs idempotent jobs with structured paginated results', async t => {
     const f = await fixture(t);
-    const { tools } = await f.client.listTools(); assert.equal(tools.length, 12);
+    const { tools } = await f.client.listTools(); assert.equal(tools.length, 17);
     assert.ok(tools.find(tool => tool.name === 'asset_submit').inputSchema.properties.request);
     const catalog = await f.call('capabilities'); assert.equal(catalog.result.apiVersion, 3);
     const invalid = await f.client.callTool({ name: 'asset_submit', arguments: { request: f.request } }); assert.equal(invalid.isError, true);
@@ -95,6 +95,6 @@ test('stdio also negotiates the 2026-07-28 protocol with the official v2 client'
     const f = await fixture(t);
     await f.client.close();
     const modern = await f.connect({ pin: '2026-07-28' });
-    assert.equal((await modern.client.listTools()).tools.length, 12);
-    assert.equal((await modern.call('capabilities')).result.applicationApi, 'asset-toolbox.application/6');
+    assert.equal((await modern.client.listTools()).tools.length, 17);
+    assert.equal((await modern.call('capabilities')).result.applicationApi, 'asset-toolbox.application/7');
 });

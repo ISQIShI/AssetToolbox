@@ -6,6 +6,7 @@ import { isMissing } from '../core/model';
 import type { Provider } from '../core/types';
 import Icon from '../components/Icon.vue';
 import StorageMaintenance from '../components/StorageMaintenance.vue';
+import ServicePanel from '../components/ServicePanel.vue';
 
 const bench = useWorkbench();
 const { definition, boot, busy } = bench;
@@ -36,6 +37,7 @@ function supports(provider: Provider) {
 
     <div class="scroll">
       <div class="sheet">
+        <ServicePanel />
         <StorageMaintenance />
         <section class="block">
           <header class="block-head">

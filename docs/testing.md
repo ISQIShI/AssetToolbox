@@ -29,3 +29,5 @@ GitHub Actions 在 push、pull_request 和手动触发时使用 Windows runner�
 队列测试位于 resource-core/tests/queue.test.js，属于 source 层。覆盖冲突 FIFO、多个持有者、等待取消/退出、死队首、启动不确定、适配器变化和容量。parallel.test.js 同属 source 层，覆盖真实并行/容量、目录别名、任务/备份/提供方资源、防饥饿、维护屏障、崩溃占用与启动失败。原生 E2E 另覆盖桌面与 CLI 同时处理、取消隔离、冲突排队原因、登记顺位及宿主等待桥接退出。
 
 scheduling.test.js 属于 source 层：覆盖配置范围/持久化/权限、三槽位实跑与溢出排队、匿名占用、忙碌拒绝、降额后历史、重复/越界槽位及坏配置安全。组件验证建议值与服务拒绝；原生验证 3/8 槽位、重启配置、忙碌禁用和两种尺寸主题。
+
+services.test.js 属于 source 层：覆盖公共服务五动作、令牌轮换、授权等权、旧 policy 拒绝、CLI 前台持有/跨进程停止、启动竞争与退出清理。MCP HTTP 用例通过真实 stdio/HTTP 客户端启动和停止受管理监听器；原生工具页面验证配置、实际 HTTP/MCP 请求、生成连接说明及窗口退出释放端口。原生综合用例需要本地 agent-mcp 依赖，测试仅在隔离副本链接该依赖。

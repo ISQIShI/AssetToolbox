@@ -129,14 +129,18 @@ stateDiagram-v2
 
 JobDock 中 AudioResults 展示前 100 条步骤测量、请求/实际增益、是否达标和峰值警告，null 明确显示不可测，失败文件标注未提交。完整结果从报告打开；作业栏限制高度并允许内部滚动。原生测试见 audio.spec.ts。
 
-公共调用使用应用 /6；上表 submit 的输入还必填 idempotencyKey，由前端为每次明确提交生成 UUID。所有任务选中值和续跑/恢复参数使用 taskId，任务列表与恢复 results 取完分页；音频完成后从 results 获取前 100 条。状态用 hasReport，原生打开报告按 jobId 由应用服务核验。旧 start/poll 与 taskFile 不再发送，见[统一应用接口](application.md)。
+公共调用使用应用 /7；上表 submit 的输入还必填 idempotencyKey，由前端为每次明确提交生成 UUID。所有任务选中值和续跑/恢复参数使用 taskId，任务列表与恢复 results 取完分页；音频完成后从 results 获取前 100 条。状态用 hasReport，原生打开报告按 jobId 由应用服务核验。旧 start/poll 与 taskFile 不再发送，见[统一应用接口](application.md)。
 
 ## 存储维护面板
 
 工具页的 `StorageMaintenance.vue` 负责天数、分页和显式选择；默认 30 天、折叠、不勾选。`workbench.ts` 调用公共 storage-preview/storage-clean，维护独立 maintenanceBusy 并纳入 busy；期间禁止其他操作，关闭窗口等待维护结束。修改天数使预览失效，翻页清空选择；STALE_PREVIEW 清除旧预览且不自动重试。清理后刷新状态，JobDock 对 resultsExpired 显示明细已清理。浏览器预览仅展示空清单，不模拟删除。参见[存储维护](storage.md)。
 
+## Agent 接入与服务管理
+
+工具页的 `ServicePanel.vue` 调用公共五个 service-* 动作，表单按服务状态禁用，打开面板时读取配置，每 2 秒刷新状态；卸载只取消观察定时器。连接 JSON 可复制，令牌正文不显示。浏览器预览仅模拟状态；生命周期、管理授权及 stdio 宿主启动规则见[服务管理](service-management.md)。
+
 ## 统一作业中心
 
 `JobsView.vue` / `core/job-center.ts` 调用公共 jobs/status/results/cancel。观察状态独立于 workbench 的 ActiveJob；不提交、不接管作业，页面卸载只停止刷新。Ctrl+5 打开作业工作区，原 Ctrl+1–4 不变。每页 20 个作业、50 条文件结果，2 秒刷新，本页搜索/状态筛选；已清理结果有独立提示。报告按 ID 打开，关联任务进入原任务页。详见[作业中心及冲突设计](job-center.md)。
 
-公共 queue 提供独立于历史分页的活动快照，JobCard 展示固定编号槽位、等待项及历史项；同 ID 不重复出现在历史卡片中。scheduling-set 在空闲时设置 1–8 项并行，并支持一键采用 CPU 建议。后台公共接口 /6，桌面仍一次配置一个本会话作业，可与其他入口无冲突作业并行，资源冲突或槽位满时排队。配置错误不推测新预算，查询失败清除旧配置入口；布局和交互见[设计规范](../design/frontend-design.md#作业工作区)。
+公共 queue 提供独立于历史分页的活动快照，JobCard 展示固定编号槽位、等待项及历史项；同 ID 不重复出现在历史卡片中。scheduling-set 在空闲时设置 1–8 项并行，并支持一键采用 CPU 建议。后台公共接口 /7，桌面仍一次配置一个本会话作业，可与其他入口无冲突作业并行，资源冲突或槽位满时排队。配置错误不推测新预算，查询失败清除旧配置入口；布局和交互见[设计规范](../design/frontend-design.md#作业工作区)。

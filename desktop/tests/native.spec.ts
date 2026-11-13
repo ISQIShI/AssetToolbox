@@ -18,6 +18,9 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     fs.mkdirSync(path.join(tool, 'runtime')); fs.copyFileSync(path.join(project, 'runtime/node.exe'), path.join(tool, 'runtime/node.exe'));
     fs.copyFileSync(path.join(project, 'AssetToolbox.exe'), path.join(tool, 'AssetToolbox.exe'));
     fs.copyFileSync(path.join(project, 'resource-core/desktop-bridge.js'), path.join(tool, 'resource-core/desktop-bridge.js'));
+    const mcpRoot = path.join(tool, 'agent-mcp'); fs.mkdirSync(mcpRoot);
+    for (const file of ['server.mjs', 'tools.mjs', 'transports.mjs']) fs.copyFileSync(path.join(project, 'agent-mcp', file), path.join(mcpRoot, file));
+    fs.symlinkSync(path.join(project, 'agent-mcp/node_modules'), path.join(mcpRoot, 'node_modules'), 'junction');
     const module = path.join(tool, 'resource-core/providers/extra'); fs.mkdirSync(module); require(path.join(project, 'resource-core/tests/helpers.js')).installType(tool, 'extra');
     fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '扩展测试模块', order: 5, extensions: ['.pack'], enabledKey: 'extraEnabled', defaults: { extraLevel: 3, extraMode: 'fast', extraText: '原参数' }, limits: { extraLevel: { label: '测试级别', min: 1, max: 9 } }, parameters: { extraMode: { label: '测试模式', type: 'enum', choices: ['fast', 'best'] }, extraText: { label: '测试文字', type: 'text', maxLength: 32767 } } }));
     fs.writeFileSync(path.join(module, 'index.js'), `const fs=require('node:fs'),path=require('node:path');module.exports={apiVersion:2,version:'1.0.0',displayName:'测试提供方',adapters:{'compress':{version:'1.0.0',resourceTypes:['extra'],schema:require('./config'),execute({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,500);const bytes=fs.readFileSync(input);fs.appendFileSync(path.join(__dirname,'calls.txt'),bytes.subarray(0,6)+'\\n');if(bytes.toString().startsWith('PACK:b')&&!fs.existsSync(path.join(__dirname,'repaired')))throw Error('模拟编码失败');fs.writeFileSync(output,bytes.subarray(0,10));return{output};}}}}`);
@@ -235,7 +238,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         const nativeStatus = await page.evaluate(jobId => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'status', payload: { jobId } }), completedJobId);
         const cliStatus = spawnSync(path.join(tool, 'runtime/node.exe'), [path.join(tool, 'resource-core/cli.js'), 'api', 'status', '--local', '--input', '-'], { input: JSON.stringify({ jobId: completedJobId }), encoding: 'utf8', windowsHide: true, timeout: 15000 });
         expect(cliStatus.status, cliStatus.stderr).toBe(0);
-        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/6');
+        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/7');
         expect(JSON.parse(cliStatus.stdout).result).toEqual(nativeStatus);
         expect(nativeStatus.taskId).toBe(adapterTask.id); expect(nativeStatus.task).not.toHaveProperty('taskFile');
         expect(nativeStatus.hasReport).toBe(true); expect(nativeStatus).not.toHaveProperty('reportDirectory');
@@ -253,6 +256,39 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect(page.getByLabel('替换前备份原文件', { exact: false })).toBeChecked();
         expect(fs.readFileSync(settingsPath, 'utf8')).toContain('中文 配置');
         expect(errors).toEqual([]);
+        // CLI 创建作业，桌面通过公共列表观察，不产生新的提交。
+        await tab('工具').click(); await page.locator('.services summary').click();
+        await page.getByLabel('服务端口', { exact: true }).fill('0');
+        await page.getByLabel('服务素材目录', { exact: true }).fill(source);
+        await page.getByLabel('服务输出目录', { exact: true }).fill(output);
+        await page.getByLabel('服务备份目录', { exact: true }).fill(backup);
+        await page.getByLabel('允许 Agent 管理同权限服务', { exact: true }).check();
+        await button('保存服务配置').click(); await expect(button('启动服务')).toBeEnabled();
+        await button('启动服务').click(); await expect(page.locator('.services')).toContainText('运行中');
+        await expect(page.getByLabel('服务端口', { exact: true })).toBeDisabled();
+        const serviceInfo = await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'service-status', payload: {} }));
+        const secret = fs.readFileSync(serviceInfo.tokenFile, 'utf8').trim();
+        const serviceHeaders = { Authorization: 'Bearer ' + secret, 'Content-Type': 'application/json' };
+        const serviceResponse = await fetch(serviceInfo.endpoints.apiUrl + 'service-status', { method: 'POST', headers: serviceHeaders, body: '{}' });
+        expect((await serviceResponse.json()).result.state).toBe('running');
+        const mcpResponse = await fetch(serviceInfo.endpoints.mcpUrl, { method: 'POST', headers: { ...serviceHeaders, Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
+        expect(mcpResponse.status).toBe(200); expect(await mcpResponse.text()).toContain('asset_service-start');
+        await button('生成 stdio 配置').click(); await expect(page.getByLabel('Agent 连接配置')).toHaveValue(/mcpServers/);
+        await button('生成 HTTP 连接配置').click(); await expect(page.getByLabel('Agent 连接配置')).toHaveValue(/tokenFile/);
+        expect(await page.locator('.services').innerText()).not.toContain(secret);
+        await page.screenshot({ path: info.outputPath('services-1220-light.png') });
+        await page.setViewportSize({ width: 840, height: 620 }); await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: info.outputPath('services-840-dark.png') });
+        await button('安全停止服务').click(); await expect(page.locator('.services summary')).toContainText('已停止');
+        await button('启动服务').click(); await expect(page.locator('.services summary')).toContainText('运行中');
+        const closingService = await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'service-status', payload: {} }));
+        await tab('处理').click(); await close(); await expect.poll(async () => { try { await fetch(closingService.endpoints.healthUrl); return false; } catch { return true; } }).toBe(true);
+        await launch(); await tab('工具').click(); await page.locator('.services summary').click();
+        await expect(page.locator('.services summary')).toContainText('已停止');
+        await expect(page.getByLabel('服务素材目录', { exact: true })).toHaveValue(source);
+        await page.setViewportSize({ width: 1220, height: 850 }); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+        await tab('处理').click();
         // CLI 创建作业，桌面通过公共列表观察，不产生新的提交。
         const cliPreview = spawnSync(path.join(tool, 'runtime/node.exe'), [path.join(tool, 'resource-core/cli.js'), 'api', 'submit', '--local', '--input', '-'], { input: JSON.stringify({ request: { mode: 'preview', folder: source, pipeline: config.pipeline }, idempotencyKey: 'job-center-native' }), encoding: 'utf8', windowsHide: true, timeout: 15000 });
         expect(cliPreview.status, cliPreview.stderr).toBe(0);
@@ -373,6 +409,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         if (browser) await browser.close().catch(() => {});
         if (child && child.exitCode === null) { const exited = new Promise<void>(resolve => child!.once('exit', () => resolve())); child.kill(); await exited; }
         await sleep(1800);
+        fs.unlinkSync(path.join(mcpRoot, 'node_modules'));
         expect(path.dirname(fs.realpathSync(root))).toBe(parent); expect(path.basename(root).startsWith('asset-native-test-')).toBe(true);
         await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }).catch(cause => console.error('Temporary cleanup failed:', root, cause));
     }

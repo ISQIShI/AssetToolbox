@@ -54,7 +54,7 @@ test('real asynchronous jobs cancel, resume without repeats, retry failures and 
     assert.equal(stopped.cancelled, true); assert.ok(stopped.task.completed > 0 && stopped.task.completed < 6);
     const state = await f.run({ mode: 'resume', taskId: stopped.taskId }); assert.equal(state.task.completed, 6);
     const calls = fs.readFileSync(path.join(f.module, 'calls.txt'), 'utf8').trim().split('\n'); assert.equal(calls.length, 6);
-    const retried = await f.run({ mode: 'retry', taskId: state.taskId }); assert.equal(retried.summary.total, 0);
+    const retried = await f.run({ mode: 'retry', taskId: state.taskId }); assert.equal(retried.exitCode, 0, JSON.stringify(retried)); assert.equal(retried.summary.total, 0);
     const preview = await f.run({ mode: 'restore-preview', taskId: state.taskId }); assert.equal(preview.preview.recoverable, 6);
     const selected = preview.preview.files.slice(0, 2).map(({ path, backupHash, targetHash }) => ({ path, backupHash, targetHash }));
     const restored = await f.run({ mode: 'restore', taskId: state.taskId, selection: selected }); assert.equal(restored.summary.restored, 2);

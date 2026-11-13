@@ -3,7 +3,7 @@ const { timingSafeEqual } = require('node:crypto');
 const { ACTION_FIELDS, respond } = require('./service');
 
 const MAX_BODY_BYTES = 1024 * 1024;
-const errorResponse = (code, message) => ({ schema: 'asset-toolbox.response/6', ok: false, error: { code, message } });
+const errorResponse = (code, message) => ({ schema: 'asset-toolbox.response/7', ok: false, error: { code, message } });
 const statusCodes = { INVALID_REQUEST: 400, UNSUPPORTED_VERSION: 400, PATH_FORBIDDEN: 403, PERMISSION_DENIED: 403, NOT_FOUND: 404, BUSY: 409, IDEMPOTENCY_CONFLICT: 409, NOT_READY: 409, STALE_PREVIEW: 409, RESULTS_EXPIRED: 410, DEPENDENCY_MISSING: 422, MANUAL_INSTALL_REQUIRED: 422 };
 function validToken(token) { return typeof token === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(token); }
 function send(res, status, body) {
@@ -71,10 +71,10 @@ function createHttpServer({ service, token, port = 8787, mcpHandler, closeMcp = 
             return reject(401, 'UNAUTHORIZED', '需要有效的本地 Bearer 令牌');
         }
         if (closing) return reject(503, 'SHUTTING_DOWN', '服务正在安全退出');
-        if (req.url === '/health' && req.method === 'GET') return send(res, 200, { schema: 'asset-toolbox.response/6', ok: true, result: { applicationApi: 'asset-toolbox.application/6', mcp: Boolean(mcpHandler) } });
-        if (/^\/api\/v[12345]\//.test(req.url || '')) return reject(410, 'UNSUPPORTED_VERSION', '请使用 /api/v6/；旧应用接口已停用');
+        if (req.url === '/health' && req.method === 'GET') return send(res, 200, { schema: 'asset-toolbox.response/7', ok: true, result: { applicationApi: 'asset-toolbox.application/7', mcp: Boolean(mcpHandler) } });
+        if (/^\/api\/v[123456]\//.test(req.url || '')) return reject(410, 'UNSUPPORTED_VERSION', '请使用 /api/v7/；旧应用接口已停用');
         const mcp = req.url === '/mcp' && mcpHandler;
-        const action = /^\/api\/v6\/([a-z-]+)$/.exec(req.url || '')?.[1];
+        const action = /^\/api\/v7\/([a-z-]+)$/.exec(req.url || '')?.[1];
         if (!mcp && (!action || !Object.hasOwn(ACTION_FIELDS, action))) return reject(404, 'NOT_FOUND', '接口不存在');
         if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return reject(405, 'METHOD_NOT_ALLOWED', '此接口只接受 POST'); }
         if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(req.headers['content-type'] || '')) return reject(415, 'UNSUPPORTED_MEDIA_TYPE', '需要 application/json（UTF-8）');

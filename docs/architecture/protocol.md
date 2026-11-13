@@ -1,12 +1,12 @@
 # 通信协议
 
-桌面、CLI、MCP（stdio/Streamable HTTP）及 HTTP 使用同一[应用 /6 契约](application.md)。本页补充桌面传输与原生能力；公共动作、请求和错误码见[自动化接口](automation.md)，HTTP 认证与路径见 [HTTP 专题](http.md)。
+桌面、CLI、MCP（stdio/Streamable HTTP）及 HTTP 使用同一[应用 /7 契约](application.md)。本页补充桌面传输与原生能力；公共动作、请求和错误码见[自动化接口](automation.md)，HTTP 认证与路径见 [HTTP 专题](http.md)。
 
 源码：`desktop/src/core/{api,types,workbench}.ts`、`desktop/src-tauri/src/main.rs`、`resource-core/desktop-bridge.js`、`application/{contract,service,desktop-actions}.js`。
 
 ## 原生和 JSON Lines
 
-前端 `invoke('core_call', {action,payload})` 经 Rust 转为一行 `{id,action,payload}`。Node 调用公共 respond，返回 `{id,schema:"asset-toolbox.response/6",ok:true,result}` 或 `{id,schema,ok:false,error:{code,message}}`。Rust 核对关联 id 和响应版本后解包；失败向前端返回带错误码的消息。stdout 只能写协议。
+前端 `invoke('core_call', {action,payload})` 经 Rust 转为一行 `{id,action,payload}`。Node 调用公共 respond，返回 `{id,schema:"asset-toolbox.response/7",ok:true,result}` 或 `{id,schema,ok:false,error:{code,message}}`。Rust 核对关联 id 和响应版本后解包；失败向前端返回带错误码的消息。stdout 只能写协议。
 
 | 公共 action | payload | 返回 |
 | --- | --- | --- |
@@ -62,6 +62,6 @@ exitCode 为 0 完成、1 失败、2 取消（失败优先）；CLI 也将预览
 
 ## 排队状态
 
-应用及响应 /6、job/5。status 新增 phase=queued、sequence、queuePosition（登记顺位，从 1 起且含执行中，不代表启动顺序）、waitReason、runningCount、concurrencyLimit；done 仍由退出确认决定。队列满返回 BUSY，等待项取消直接结束且不创建 worker。旧 response/1–5 需更新配套 EXE，旧 HTTP 1–5 返回 410。见[队列](queue.md)。
+应用及响应 /7、job/5。status 包含 phase=queued、sequence、queuePosition（登记顺位，从 1 起且含执行中，不代表启动顺序）、waitReason、runningCount、concurrencyLimit；done 仍由退出确认决定。队列满返回 BUSY，等待项取消直接结束且不创建 worker。旧 response/1–6 需更新配套 EXE，旧 HTTP 1–6 返回 410。service-* 五个动作同样经公共协议转发，字段及管理权限见[服务管理](service-management.md)。
 
 queue 返回 `{maxConcurrent,minConcurrent,maxAllowedConcurrent,maxPending,availableProcessors,recommendedConcurrent,canConfigure,runningCount,waitingCount,slots,waiting}`；slots 为 `{slot,occupied,job}`，job 是带公共 state 的作业行或 null。scheduling-set 输入 `{maxConcurrent}`、成功返回 scheduling/1 配置。范围、授权、空闲条件和稳定编号由公共服务核验，详见[队列](queue.md)。

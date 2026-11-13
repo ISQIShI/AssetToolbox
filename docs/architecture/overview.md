@@ -8,11 +8,13 @@ AssetToolbox 1.0.0 是 Windows 便携资源处理工具，使用 Vue 3/TypeScrip
 flowchart TD
     UI[Vue / WebView2] -->|Tauri invoke| Host[Rust 宿主]
     Host -->|JSON Lines| Bridge[Node 桌面会话]
-    CLI[结构化 CLI] --> Application[ApplicationService /6 唯一公共作业用例]
+    CLI[结构化 CLI] --> Application[ApplicationService /7 唯一公共用例]
     MCP[MCP stdio / Streamable HTTP] --> Application
     HTTP[本机 HTTP API] --> Application
     Bridge --> Application
     Application --> Storage[本地存储维护 / 预览与显式清理]
+    Application --> Services[服务配置 / 状态 / 启停 / 连接配置]
+    Services --> Transport[回环 HTTP / 可选 MCP HTTP 监听器]
     Application --> Queue[Queue / 提交锁内派发无冲突候选，默认 2 项、可配置 1–8 项]
     Queue --> Session[JobSession / 持久作业进程]
     Session --> Worker[batch.js 工作进程 / 资源占用]
@@ -43,6 +45,8 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 表中核心入口位于 `resource-core/`。Sharp 为核心唯一直接 npm 依赖；核心、桌面 npm 和 Rust 依赖各有锁文件。完整便携部署包含核心 node_modules，构建脚本通过便携 Node 验证 Sharp 可加载。
 
 MCP 单独使用 SDK 2.4.0 与 Zod，不加入桌面核心依赖；按需携带 `agent-mcp/` 及其 node_modules。GUI 与 Agent 素材任务共用历史，桌面作业中心可观察所有授权可见的持久作业；底部作业栏仍属于本会话。原生桥接 JSON Lines 与 MCP 是两个不同协议，不能互换连接。
+
+公共 service-* 支持从桌面、CLI、MCP 或 HTTP 管理一个安装级监听器，使用核心传输启动器和独立 policy/server 上下文；拥有入口退出时关闭，观察者不接管。stdio 连接配置由公共接口生成，进程仍由 Agent 宿主创建。授权与完整入口矩阵见[服务管理](service-management.md)。
 
 ## 数据流与安全
 

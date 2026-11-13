@@ -1,12 +1,12 @@
 # 外部 Agent、CLI 与 MCP
 
-状态：已实现统一应用 API /6、结构化 CLI、桌面公共作业接口、stdio MCP，以及按需启动的本机 HTTP API / MCP Streamable HTTP。源码为 `resource-core/application/`、`resource-core/cli.js`、`agent-mcp/server.mjs`；决策见 [ADR 0009](../decisions/0009-agent-interfaces.md)、[0010](../decisions/0010-local-http.md) 和 [0011](../decisions/0011-unified-application.md)。不需要模型密钥；stdio 保持默认，HTTP 启动与认证见[专门指南](http.md)。
+状态：已实现统一应用 API /7、结构化 CLI、桌面公共作业接口、stdio MCP，以及按需启动的本机 HTTP API / MCP Streamable HTTP。源码为 `resource-core/application/`、`resource-core/cli.js`、`agent-mcp/server.mjs`；决策见 [ADR 0009](../decisions/0009-agent-interfaces.md)、[0010](../decisions/0010-local-http.md) 和 [0011](../decisions/0011-unified-application.md)。不需要模型密钥；stdio 保持默认，HTTP 启动与认证见[专门指南](http.md)。
 
 ## 接入与目录授权
 
 先按[开发指南](../development.md)安装核心依赖。CLI 只依赖现有核心；MCP 另在 `agent-mcp/` 执行 `npm ci --ignore-scripts`。开发使用锁定 Node，便携 Node 24.19.0 也已验证。MCP 包不会加入桌面核心的 npm 依赖。
 
-将[权限示例](../../examples/automation-policy.example.json)复制到忽略目录，如 `resource-core/data/automation-policy.json`，由使用者修改绝对目录。三个根数组分别限定素材读取、结果写入和备份写入；覆盖、恢复/导出、自动安装三个开关默认关闭。转换要求 `outputDir`，除非明确允许覆盖且指定 `backupDir`；纯音频分析可不传保存目录。缺失目录不自动创建，只有实际处理按需创建目标。
+将[权限示例](../../examples/automation-policy.example.json)复制到忽略目录，如 `resource-core/data/automation-policy.json`，由使用者修改绝对目录。policy/2 的三个根数组限定素材、输出和备份范围；覆盖、恢复/导出、自动安装及服务管理四个开关默认关闭。旧 policy/1 明确拒绝，不迁移。转换要求 `outputDir`，除非明确允许覆盖且指定 `backupDir`；纯音频分析可不传保存目录。缺失目录不自动创建，只有实际处理按需创建目标。
 
 权限文件只在 CLI/MCP 启动时读取，工具参数不能扩权。真实路径校验阻止通过目录联接越界，作业执行及查询重新核对；素材范围不能包含核心代码或 `data/`。这是应用边界校验，不是 OS 沙箱；持有本机 shell 或代码写权限的 Agent 仍应由宿主控制。根配置改变后旧作业不再属于新范围，可用原配置查询；当前仍获授权的任务可按 taskId 续跑。
 
@@ -30,10 +30,13 @@
 
 ## 统一动作
 
-CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST /api/v6/<action>`。三者直接调用同一应用服务，MCP 不执行 shell 或解析 CLI 文本。桌面直接使用相同公共动作和作业 DTO，通过启动上下文区分权限和生命周期；专属设置独立，见[统一应用接口](application.md)。
+CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST /api/v7/<action>`。三者直接调用同一应用服务，MCP 不执行 shell 或解析 CLI 文本。桌面直接使用相同公共动作和作业 DTO，通过启动上下文区分权限和生命周期；专属设置独立，见[统一应用接口](application.md)。
 
 | action | 输入 | 返回及用途 |
 | --- | --- | --- |
+| service-status / service-start / service-stop | `{}` | 受管理服务状态 / 启动 / 安全停止请求，见[服务管理](service-management.md) |
+| service-configure | `{port,mcp,policy}` | 停止时配置，Agent 必须获独立管理授权且不能扩大 policy |
+| service-client-config | `{transport}` | stdio 或 http 连接配置；不返回令牌正文 |
 | capabilities | `{}` | 目录 API 3、每操作/适配器 JSON Schema、版本、依赖获取说明，以及当前 policy |
 | validate | `{request}` | 规范化步骤与版本、校验路径权限；不扫描、不编码 |
 | submit | `{request, idempotencyKey}` | 创建作业；MCP 立即返回 jobId，CLI 等待最终状态 |
@@ -69,7 +72,7 @@ CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST
 '{"maxConcurrent":3}' | .\runtime\node.exe resource-core/cli.js api scheduling-set --local --input -
 ```
 
-`--input -` 读取 UTF-8 stdin JSON；省略 input 等价于 `{}`。stdout 只有一个 `asset-toolbox.response/6` JSON，启动回执与日志写 stderr。成功响应 `{schema,ok:true,result}`；拒绝响应 `{schema,ok:false,error:{code,message}}`。CLI submit 始终等待，便于脚本可靠取得退出码；另一个 CLI 进程可通过相同 policy 的 jobs/status/cancel 查询和取消。
+`--input -` 读取 UTF-8 stdin JSON；省略 input 等价于 `{}`。stdout 只有一个 `asset-toolbox.response/7` JSON，启动回执与日志写 stderr。成功响应 `{schema,ok:true,result}`；拒绝响应 `{schema,ok:false,error:{code,message}}`。CLI submit 始终等待，便于脚本可靠取得退出码；另一个 CLI 进程可通过相同 policy 的 jobs/status/cancel 查询和取消。
 
 位置参数 CLI 是公共 submit 的本地适配，自动生成幂等键并等待；`api` 子命令也可显式使用 `--local` 代替 `--policy`。二者同样记录持久作业和任务。Agent 建议使用固定 policy；本地上下文和任意 shell 权限不受 Agent 目录限制。batch.js 仅为内部工作进程，不再提供用户 CLI。
 
@@ -89,10 +92,10 @@ HTTP 的单次请求或连接结束不触发作业取消，作业由服务进程
 
 验证：核心 `application.test.js` 覆盖权限、联接、幂等、分页、恢复/导出和跨入口锁，`codecs.test.js` 另验真实 Sharp/FFmpeg；MCP `server.test.mjs` 验证 stdio，HTTP 见两套 `http` 测试。远程授权、OS 常驻服务、流式报告和自动清理仍未实现；资源感知有限并行已实现。
 
-应用及响应现为 /6，作业升级为 job/5；HTTP /api/v1–5 返回 410，旧 automation 作业不读取、不迁移；公共输入不再接受桌面 taskFile/start/poll。素材任务和报告版本不变。详见[版本拒绝](application.md#版本与验证)。
+应用及响应现为 /7，作业升级为 job/5；HTTP /api/v1–6 返回 410，旧 automation 作业不读取、不迁移；公共输入不再接受桌面 taskFile/start/poll。素材任务和报告版本不变。详见[版本拒绝](application.md#版本与验证)。
 
 手动存储维护仅允许桌面或 `--local` CLI；两种 MCP、HTTP、带 policy 的 CLI 均返回 PERMISSION_DENIED。作业被清理后返回 resultsExpired，原幂等键仍有效；不能把 RESULTS_EXPIRED 当作可以自动重新提交的理由。详见[存储维护](storage.md)。
 
-## 排队、有限并行与 /6
+## 排队、有限并行与 /7
 
-所有入口统一资源感知调度，按配置的 1–8 个槽位并行（默认 2），冲突项保持 FIFO，submit 成功表示已登记；status.phase=queued 时返回 queuePosition（含执行中的登记顺位，不代表启动顺序）、sequence、waitReason、runningCount 与 concurrencyLimit。CLI 仍等待至 done，无默认等待超时，Ctrl+C 请求取消；HTTP 请求断开仍继续。最多 100 个未结束作业，超限 BUSY 且不占幂等键。持有会话退出取消其全部等待项，运行项在文件边界退出；不自动接管崩溃会话。旧 HTTP 1–5 与旧 job 格式拒绝，不迁移。详见[队列](queue.md)。
+所有入口统一资源感知调度，按配置的 1–8 个槽位并行（默认 2），冲突项保持 FIFO，submit 成功表示已登记；status.phase=queued 时返回 queuePosition（含执行中的登记顺位，不代表启动顺序）、sequence、waitReason、runningCount 与 concurrencyLimit。CLI 仍等待至 done，无默认等待超时，Ctrl+C 请求取消；HTTP 请求断开仍继续。最多 100 个未结束作业，超限 BUSY 且不占幂等键。持有会话退出取消其全部等待项，运行项在文件边界退出；不自动接管崩溃会话。旧 HTTP 1–6 与旧 job 格式拒绝，不迁移。详见[队列](queue.md)。

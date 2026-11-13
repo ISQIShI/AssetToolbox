@@ -85,6 +85,8 @@ const restore: RestorePreview = { source: 'D:\\Projects\\StarHarbor\\Backups\\20
 const jobs = new Map<string, { request: JobRequest; started: number; cancelled: boolean }>();
 const DURATION = Number(params.get('duration') || 4000);
 let maxConcurrent = 2;
+let serviceConfig: any = null, serviceRunning = false;
+function serviceSnapshot() { return { configured: !!serviceConfig, config: serviceConfig, state: serviceRunning ? 'running' : 'stopped', owned: serviceRunning, tokenFile: serviceConfig ? '浏览器预览：未生成令牌' : null, endpoints: serviceRunning ? { apiUrl: 'http://127.0.0.1:8787/api/v7/', mcpUrl: serviceConfig.mcp ? 'http://127.0.0.1:8787/mcp' : null } : null }; }
 
 function poll(id: string): JobState {
     const job = jobs.get(id);
@@ -116,6 +118,11 @@ function poll(id: string): JobState {
 export async function call(action: string, payload: any): Promise<unknown> {
     await new Promise(resolve => setTimeout(resolve, 60));
     switch (action) {
+        case 'service-status': return serviceSnapshot();
+        case 'service-configure': if (serviceRunning) throw Error('先停止服务'); serviceConfig = structuredClone(payload); return serviceSnapshot();
+        case 'service-start': if (!serviceConfig) throw Error('请先配置服务'); serviceRunning = true; return serviceSnapshot();
+        case 'service-stop': serviceRunning = false; return { requested: true };
+        case 'service-client-config': return { transport: payload.transport, note: '浏览器预览仅模拟界面，不监听端口或生成真实配置。' };
         case 'storage-preview': return { items: [], total: 0, nextOffset: null, retentionDays: payload.retentionDays ?? 30, scannedAt: new Date().toISOString(), eligibleCount: 0, eligibleBytes: 0, protectedCount: 0 };
         case 'storage-clean': throw new Error('浏览器预览不清理真实数据。');
         case 'bootstrap': return { config: structuredClone(config), definition: structuredClone(definition), warnings: [], root: 'D:\\Tools\\AssetToolbox\\resource-core', nodeVersion: '24.19.0' } satisfies Bootstrap;

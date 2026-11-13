@@ -70,13 +70,15 @@ claim 登记后排他取得 PID/token 锁；只在确认进程退出且锁未变
 
 步骤 `metadata.audio` 保存 before/after 测量、增益、峰值限制及警告；失败步骤也可记录已测数据。report.json 的 audioResults 为本次处理的完整音频结果，额外生成 UTF-8 audio.csv；界面状态仅带前 100 条。失败文件所有音频步骤标记 fileStatus:failed，不表示已提交。CSV 沿用公式注入防护，报告写入失败不抹掉处理结果。
 
-应用 /6 不读取或迁移旧 data/automation 作业；新存储中的 job/1–4 明确拒绝。预览也保留作业记录，但不创建素材任务或报告。当前没有自动清理作业记录；已完成作业可跨入口和重启查询，权限每次重新核验。
+应用 /7 不读取或迁移旧 data/automation 作业；新存储中的 job/1–4 明确拒绝。预览也保留作业记录，但不创建素材任务或报告。当前没有自动清理作业记录；已完成作业可跨入口和重启查询，权限每次重新核验。
 
 ## 作业清理记录
 
-当前应用/响应 /6 将清理记录写入 `data/jobs/v5/<jobId>/retention.json`，schema 仍为 asset-toolbox.retention/1；不改变 job/5、素材 task/report 和 settings 格式。清理前先写持久状态摘要和批准的文件清单；清理后保留作业身份、幂等键、进程退出记录及全部任务/备份，明细查询明确过期。未知 retention 版本拒绝读取，不迁移；部分清理失败只能继续处理清单中内容未变的文件。当前支持手动预览/选择，仍无自动清理和流式报告读取，详见[存储维护](storage.md)。
+当前应用/响应 /7 将清理记录写入 `data/jobs/v5/<jobId>/retention.json`，schema 仍为 asset-toolbox.retention/1；不改变 job/5、素材 task/report 和 settings 格式。清理前先写持久状态摘要和批准的文件清单；清理后保留作业身份、幂等键、进程退出记录及全部任务/备份，明细查询明确过期。未知 retention 版本拒绝读取，不迁移；部分清理失败只能继续处理清单中内容未变的文件。当前支持手动预览/选择，仍无自动清理和流式报告读取，详见[存储维护](storage.md)。
 
 ## FIFO 持久记录
+
+服务配置独立使用 `data/services/` 下的 services/1、service-runtime/1、派生 policy/2 和令牌文件；均不属于明细清理范围。公共应用/响应 /7 不改变 job/5，详见[服务持久化与生命周期](service-management.md)。
 
 job/5 位于 data/jobs/v5，保存 sequence、owner、publicRequest 及核心推导的 resources/1 读写集合；启动前写 dispatch/3 的 dispatch.json，并 fsync。旧 job/1–4 不读写/迁移。序号、身份及 dispatch 始终保留，不属于存储清理明细。未知启动声明版本拒绝。出队、取消、崩溃和退出语义见[队列](queue.md)。
 

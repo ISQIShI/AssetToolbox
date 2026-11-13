@@ -1,0 +1,14 @@
+{
+    "port": 8787,
+    "mcp": true,
+    "policy": {
+        "schema": "asset-toolbox.automation-policy/2",
+        "sourceRoots": ["D:\\Assets\\Source"],
+        "outputRoots": ["D:\\Assets\\Output"],
+        "backupRoots": ["D:\\Assets\\Backup"],
+        "allowOverwrite": false,
+        "allowRestore": false,
+        "allowDependencyInstall": false,
+        "allowServiceManagement": false
+    }
+}
