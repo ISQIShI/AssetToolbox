@@ -1,12 +1,12 @@
 # 通信协议
 
-桌面、CLI、MCP（stdio/Streamable HTTP）及 HTTP 使用同一[应用 /5 契约](application.md)。本页补充桌面传输与原生能力；公共动作、请求和错误码见[自动化接口](automation.md)，HTTP 认证与路径见 [HTTP 专题](http.md)。
+桌面、CLI、MCP（stdio/Streamable HTTP）及 HTTP 使用同一[应用 /6 契约](application.md)。本页补充桌面传输与原生能力；公共动作、请求和错误码见[自动化接口](automation.md)，HTTP 认证与路径见 [HTTP 专题](http.md)。
 
 源码：`desktop/src/core/{api,types,workbench}.ts`、`desktop/src-tauri/src/main.rs`、`resource-core/desktop-bridge.js`、`application/{contract,service,desktop-actions}.js`。
 
 ## 原生和 JSON Lines
 
-前端 `invoke('core_call', {action,payload})` 经 Rust 转为一行 `{id,action,payload}`。Node 调用公共 respond，返回 `{id,schema:"asset-toolbox.response/5",ok:true,result}` 或 `{id,schema,ok:false,error:{code,message}}`。Rust 核对关联 id 和响应版本后解包；失败向前端返回带错误码的消息。stdout 只能写协议。
+前端 `invoke('core_call', {action,payload})` 经 Rust 转为一行 `{id,action,payload}`。Node 调用公共 respond，返回 `{id,schema:"asset-toolbox.response/6",ok:true,result}` 或 `{id,schema,ok:false,error:{code,message}}`。Rust 核对关联 id 和响应版本后解包；失败向前端返回带错误码的消息。stdout 只能写协议。
 
 | 公共 action | payload | 返回 |
 | --- | --- | --- |
@@ -58,8 +58,10 @@ exitCode 为 0 完成、1 失败、2 取消（失败优先）；CLI 也将预览
 
 验证：核心 application/unified/desktop/http，MCP 官方客户端五入口联合测试，前端组件测试，以及真实 EXE 与 CLI 状态一致、重启查询、安装/音频/恢复等原生 E2E。实际结果见[项目状态](../project-status.md)。
 
-清理后的状态包含 resultsExpired/cleanedAt，hasReport 为 false；results/report 返回 RESULTS_EXPIRED，过期清理预览返回 STALE_PREVIEW。新 retention/1 侧文件不改变 job/4；详细权限和原子记录语义见[存储维护](storage.md)。
+清理后的状态包含 resultsExpired/cleanedAt，hasReport 为 false；results/report 返回 RESULTS_EXPIRED，过期清理预览返回 STALE_PREVIEW。新 retention/1 侧文件不改变 job/5；详细权限和原子记录语义见[存储维护](storage.md)。
 
 ## 排队状态
 
-应用及响应 /5、job/4。status 新增 phase=queued、sequence、queuePosition（登记顺位，从 1 起且含执行中，不代表启动顺序）、waitReason、runningCount、concurrencyLimit；done 仍由退出确认决定。队列满返回 BUSY，等待项取消直接结束且不创建 worker。旧 response/4 需更新配套 EXE，旧 HTTP 1–4 返回 410。见[队列](queue.md)。
+应用及响应 /6、job/5。status 新增 phase=queued、sequence、queuePosition（登记顺位，从 1 起且含执行中，不代表启动顺序）、waitReason、runningCount、concurrencyLimit；done 仍由退出确认决定。队列满返回 BUSY，等待项取消直接结束且不创建 worker。旧 response/1–5 需更新配套 EXE，旧 HTTP 1–5 返回 410。见[队列](queue.md)。
+
+queue 返回 `{maxConcurrent,minConcurrent,maxAllowedConcurrent,maxPending,availableProcessors,recommendedConcurrent,canConfigure,runningCount,waitingCount,slots,waiting}`；slots 为 `{slot,occupied,job}`，job 是带公共 state 的作业行或 null。scheduling-set 输入 `{maxConcurrent}`、成功返回 scheduling/1 配置。范围、授权、空闲条件和稳定编号由公共服务核验，详见[队列](queue.md)。

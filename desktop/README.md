@@ -2,7 +2,7 @@
 
 阅读 [AGENTS.md](../AGENTS.md)、[开发指南](../docs/development.md)、[前端架构](../docs/architecture/frontend.md)及[通信协议](../docs/architecture/protocol.md)。
 
-桌面使用与 CLI/MCP/HTTP 相同的[公共作业接口 /5](../docs/architecture/application.md)，需配套新 EXE 与核心。旧 start/poll 与临时作业 ID 不再支持；所有入口的 jobId 可在授权范围内跨入口及重启查询。
+桌面使用与 CLI/MCP/HTTP 相同的[公共作业接口 /6](../docs/architecture/application.md)，需配套新 EXE 与核心。旧 start/poll 与临时作业 ID 不再支持；所有入口的 jobId 可在授权范围内跨入口及重启查询。
 
 ## 源码发布范围
 
@@ -44,4 +44,4 @@ E2E 还会移走隔离副本的 LAME/Sharp，从前端真实下载并安装，�
 
 普通 `npm run test:e2e` 运行 native/audio 项目，禁止下载安装；`npm run test:e2e:network` 独立验证真实 LAME/Sharp 获取、更新和处理，需要网络。核心可用 `npm run test:source` 验证无第三方 EXE 的源码层，完整矩阵见[测试分层](../docs/testing.md)。工具页新增默认保留 30 天的手动存储预览/勾选清理，规则见[存储维护](../docs/architecture/storage.md)。
 
-当前应用接口 /5，旧接口 EXE 必须配套更新；同安装最多 2 项无冲突作业并行，作业中心显示登记顺位、等待原因及槽位。正常关闭窗口等待本会话等待项及运行项取消收尾，不取消其他入口。见[队列](../docs/architecture/queue.md)。
+当前应用接口 /6，旧接口 EXE 必须配套更新；同安装按配置的 1–8 个槽位并行（默认 2），作业中心显示登记顺位、等待原因及槽位。正常关闭窗口等待本会话等待项及运行项取消收尾，不取消其他入口。见[队列](../docs/architecture/queue.md)。

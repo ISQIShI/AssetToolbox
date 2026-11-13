@@ -10,7 +10,7 @@ async function main(args) {
     const server = createHttpServer({ ...options, service });
     const stop = () => void server.close().catch(error => { console.error(error.message); process.exitCode = 1; });
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
-    try { const { url } = await server.listen(); console.log(JSON.stringify({ transport: 'http', apiUrl: url + '/api/v5/', healthUrl: url + '/health' })); }
+    try { const { url } = await server.listen(); console.log(JSON.stringify({ transport: 'http', apiUrl: url + '/api/v6/', healthUrl: url + '/health' })); }
     catch (error) { await server.close(); throw error; }
 }
 if (require.main === module) main(process.argv.slice(2)).catch(error => { console.error(error.message); process.exitCode = 1; });

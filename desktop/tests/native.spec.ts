@@ -235,7 +235,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         const nativeStatus = await page.evaluate(jobId => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'status', payload: { jobId } }), completedJobId);
         const cliStatus = spawnSync(path.join(tool, 'runtime/node.exe'), [path.join(tool, 'resource-core/cli.js'), 'api', 'status', '--local', '--input', '-'], { input: JSON.stringify({ jobId: completedJobId }), encoding: 'utf8', windowsHide: true, timeout: 15000 });
         expect(cliStatus.status, cliStatus.stderr).toBe(0);
-        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/5');
+        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/6');
         expect(JSON.parse(cliStatus.stdout).result).toEqual(nativeStatus);
         expect(nativeStatus.taskId).toBe(adapterTask.id); expect(nativeStatus.task).not.toHaveProperty('taskFile');
         expect(nativeStatus.hasReport).toBe(true); expect(nativeStatus).not.toHaveProperty('reportDirectory');
@@ -258,6 +258,19 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         expect(cliPreview.status, cliPreview.stderr).toBe(0);
         const externalJobId = JSON.parse(cliPreview.stdout).result.jobId;
         await tab('作业').click();
+        await expect(page.locator('.slot')).toHaveCount(2);
+        await page.getByLabel('并行数量', { exact: true }).fill('3'); await button('应用').click();
+        await expect(page.locator('.slot')).toHaveCount(3);
+        await page.getByLabel('并行数量', { exact: true }).fill('8'); await button('应用').click();
+        await expect(page.locator('.slot')).toHaveCount(8);
+        await page.locator('[data-slot="8"]').scrollIntoViewIfNeeded();
+        await expect(button('刷新作业')).toBeVisible();
+        await page.screenshot({ path: info.outputPath('jobs-eight-slots.png') });
+        await page.getByLabel('并行数量', { exact: true }).fill('3'); await button('应用').click();
+        await expect(page.locator('.slot')).toHaveCount(3);
+        await close(); await launch(); await tab('作业').click();
+        await expect(page.locator('.slot')).toHaveCount(3);
+        await expect(page.getByLabel('并行数量', { exact: true })).toHaveValue('3');
         await page.locator('.job-row').filter({ hasText: externalJobId }).click();
         await expect(page.locator('.job-detail')).toContainText('已完成');
         await page.locator('.job-row').filter({ hasText: completedJobId }).click();
@@ -266,9 +279,13 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await page.setViewportSize({ width: 840, height: 620 });
         await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await expect(page.locator('.job-detail')).toBeInViewport();
+        await expect(button('刷新作业')).toBeInViewport();
         await page.screenshot({ path: info.outputPath('jobs-840-dark.png') });
         await page.setViewportSize({ width: 1220, height: 850 });
         await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+        await page.getByLabel('并行数量', { exact: true }).fill('2'); await button('应用').click();
+        await expect(page.locator('.slot')).toHaveCount(2);
         // 观察运行中的 CLI：关闭观察窗口不取消，重启桌面后可以显式取消。
         const externalSource = path.join(root, '外部作业素材'); fs.mkdirSync(externalSource);
         for (let i = 0; i < 40; i++) fs.writeFileSync(path.join(externalSource, i + '.pack'), 'PACK:x' + 'test'.repeat(100));
@@ -279,6 +296,8 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect.poll(() => receipt.includes('jobId')).toBe(true);
         const runningId = JSON.parse(receipt.trim().split('\n').find(line => line.includes('jobId'))!).jobId;
         await button('刷新作业').click(); await page.locator('.job-row').filter({ hasText: runningId }).click();
+        await expect(page.locator('.slot[data-occupied="true"] .job-row')).toHaveCount(1);
+        await expect(page.getByLabel('并行数量', { exact: true })).toBeDisabled();
         await expect(page.locator('.job-detail')).toContainText('运行中');
         // 不相交写入由桌面与 CLI 同时执行；取消桌面作业不能影响 CLI。
         const parallelSource = path.join(root, '桌面并行素材'); fs.mkdirSync(parallelSource);
@@ -287,8 +306,8 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         const parallelJob = await page.evaluate(request => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'submit', payload: { request, idempotencyKey: 'native-parallel' } }), parallelRequest);
         await button('刷新作业').click(); await page.locator('.job-row').filter({ hasText: parallelJob.jobId }).click();
         await expect(page.locator('.job-detail')).toContainText('运行中');
-        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v4', parallelJob.jobId, 'worker.json'))).toBe(true);
-        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v4', runningId, 'exit.json'))).toBe(false);
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v5', parallelJob.jobId, 'worker.json'))).toBe(true);
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v5', runningId, 'exit.json'))).toBe(false);
         await page.screenshot({ path: info.outputPath('parallel-running.png') });
         await button('取消此作业').click(); await expect(page.locator('.job-detail')).toContainText('已取消');
         expect(external.exitCode).toBeNull();
@@ -299,11 +318,11 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect(page.locator('.job-detail')).toContainText('等待冲突资源释放');
         await page.screenshot({ path: info.outputPath('queue-waiting.png') });
         await button('取消此作业').click(); await expect(page.locator('.job-detail')).toContainText('已取消');
-        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v4', queued.jobId, 'worker.json'))).toBe(false);
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v5', queued.jobId, 'worker.json'))).toBe(false);
         const closingQueued = await page.evaluate(request => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'submit', payload: { request, idempotencyKey: 'native-closing-queued' } }), queueRequest);
         await close(); expect(external.exitCode).toBeNull();
-        expect(JSON.parse(fs.readFileSync(path.join(tool, 'resource-core/data/jobs/v4', closingQueued.jobId, 'status.json'), 'utf8')).cancelled).toBe(true);
-        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v4', runningId, 'cancel'))).toBe(false);
+        expect(JSON.parse(fs.readFileSync(path.join(tool, 'resource-core/data/jobs/v5', closingQueued.jobId, 'status.json'), 'utf8')).cancelled).toBe(true);
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v5', runningId, 'cancel'))).toBe(false);
         await launch(); await tab('作业').click();
         await page.locator('.job-row').filter({ hasText: runningId }).click();
         await button('取消此作业').click();
@@ -311,7 +330,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect.poll(() => external!.exitCode).not.toBeNull();
         expect(JSON.parse(externalOutput).result.state.cancelled).toBe(true);
         // 只给隔离副本中的已完成作业模拟 45 天前时间；真实配置与素材不参与清理验收。
-        const oldJob = path.join(tool, 'resource-core/data/jobs/v4', completedJobId);
+        const oldJob = path.join(tool, 'resource-core/data/jobs/v5', completedJobId);
         const jobFile = path.join(oldJob, 'job.json'), oldMeta = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
         const oldReport = JSON.parse(fs.readFileSync(path.join(oldJob, 'status.json'), 'utf8')).reportDirectory;
         const oldTime = new Date(Date.now() - 45 * 86400000);

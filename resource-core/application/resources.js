@@ -1,7 +1,6 @@
 const path = require('node:path');
 const { canonical, within, fail } = require('./policy');
 const SCHEMA = 'asset-toolbox.resources/1';
-const LIMIT = 2;
 const keyPath = value => { const resolved = canonical(value); return process.platform === 'win32' ? resolved.toLowerCase() : resolved; };
 
 // 目录占用包含后代及任务目录；提供方使用精确标识。整个集合一次授予，不逐个等待锁。
@@ -62,16 +61,19 @@ function conflicts(left, right) {
         (a.kind === 'path' ? within(a.key, b.key) || within(b.key, a.key) : a.key === b.key)));
 }
 // 按序选取；较早的等待项也保留冲突优先权，不允许连续读者饿死写者。
-function schedule(items) {
+function schedule(items, limit = require('./scheduling').read().maxConcurrent) {
     const active = items.filter(item => item.running), waiting = items.filter(item => item.pending && !item.running);
+    const occupied = new Set(active.map(item => item.slot));
+    if (occupied.size !== active.length || active.some(item => !Number.isInteger(item.slot) || item.slot < 1 || item.slot > limit)) fail('UNSUPPORTED_VERSION', '执行槽位声明无效');
+    const free = Array.from({ length: limit }, (_, index) => index + 1).filter(slot => !occupied.has(slot));
     const selected = [], reasons = new Map();
     for (let i = 0; i < waiting.length; i++) {
         const item = waiting[i];
         if (active.some(other => conflicts(item.resources, other.resources))) reasons.set(item.id, 'resource-conflict');
         else if (waiting.slice(0, i).some(other => conflicts(item.resources, other.resources))) reasons.set(item.id, 'earlier-conflict');
-        else if (active.length + selected.length >= LIMIT) reasons.set(item.id, 'capacity');
-        else { selected.push(item); reasons.set(item.id, 'owner-dispatch'); }
+        else if (!free.length) reasons.set(item.id, 'capacity');
+        else { selected.push({ ...item, slot: free.shift() }); reasons.set(item.id, 'owner-dispatch'); }
     }
     return { selected, reasons, runningCount: active.length };
 }
-module.exports = { plan, validate, conflicts, schedule, LIMIT };
+module.exports = { plan, validate, conflicts, schedule };

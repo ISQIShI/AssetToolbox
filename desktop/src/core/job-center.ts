@@ -3,23 +3,29 @@ import { ref } from 'vue';
 import { call } from './api';
 import type { JobState, ResultPage } from './types';
 export interface JobRow { jobId: string; mode: string; createdAt: string; state?: JobState; error?: string }
+export interface QueueSnapshot { maxConcurrent: number; maxPending: number; minConcurrent: number; maxAllowedConcurrent: number; availableProcessors: number; recommendedConcurrent: number; canConfigure: boolean; runningCount: number; waitingCount: number; slots: { slot: number; occupied: boolean; job: JobRow | null }[]; waiting: JobRow[] }
 export const jobModes: Record<string, string> = { process: '处理资源', preview: '扫描预览', resume: '续跑', retry: '重试', restore: '恢复', 'restore-preview': '检查备份', 'restore-retry': '重试恢复', 'restore-export': '导出备份', 'restore-export-preview': '检查独立备份', 'dependency-install': '安装依赖' };
 export function jobLabel(state?: JobState) { return !state ? '无法读取' : !state.done ? (state.phase === 'queued' ? '排队中' : '运行中') : state.cancelled ? '已取消' : state.exitCode || state.error ? '失败 / 中断' : state.resultsExpired ? '明细已清理' : '已完成'; }
 export function createJobCenter() {
     const rows = ref<JobRow[]>([]), offset = ref(0), total = ref(0), next = ref<number | null>(null);
     const selected = ref<JobRow>(), results = ref<ResultPage<Record<string, unknown>>>(), resultOffset = ref(0);
     const error = ref(''), loading = ref(false), cancelling = ref(false), cancelRequested = ref('');
+    const queue = ref<QueueSnapshot>(), saving = ref(false);
     let revision = 0, selection = 0, timer: ReturnType<typeof setTimeout> | undefined, active = false;
     async function refresh() {
         if (loading.value) return;
         const version = revision; loading.value = true; error.value = '';
         try {
-            const list = await call<ResultPage<JobRow>>('jobs', { offset: offset.value, limit: 20 });
+            const [list, snapshot] = await Promise.all([
+                call<ResultPage<JobRow>>('jobs', { offset: offset.value, limit: 20 }),
+                call<QueueSnapshot>('queue').catch(cause => { if (version === revision) { queue.value = undefined; error.value = String(cause); } return undefined; }),
+            ]);
             const items = await Promise.all(list.items.map(async row => {
                 try { return { ...row, state: await call<JobState>('status', { jobId: row.jobId }) }; }
                 catch (cause) { return { ...row, error: String(cause) }; }
             }));
             if (version !== revision) return;
+            queue.value = snapshot;
             rows.value = items; total.value = list.total; next.value = list.nextOffset;
             if (selected.value) {
                 const current = selected.value;
@@ -37,7 +43,7 @@ export function createJobCenter() {
                 if (state.resultsExpired) { selection++; results.value = undefined; }
                 else if (state.done && !current.state?.done) await loadResults(0);
             }
-        } catch (cause) { if (version === revision) error.value = String(cause); }
+        } catch (cause) { if (version === revision) { queue.value = undefined; error.value = String(cause); } }
         finally { loading.value = false; }
     }
     async function loadResults(start = 0) {
@@ -61,7 +67,14 @@ export function createJobCenter() {
         finally { cancelling.value = false; }
     }
     async function tick() { await refresh(); if (active) timer = setTimeout(() => void tick(), 2000); }
+    async function configure(maxConcurrent: number) {
+        if (!queue.value?.canConfigure || saving.value) return;
+        saving.value = true; error.value = '';
+        try { await call('scheduling-set', { maxConcurrent }); await refresh(); }
+        catch (cause) { error.value = String(cause); }
+        finally { saving.value = false; }
+    }
     function start() { if (active) return; active = true; void tick(); }
     function stop() { active = false; revision++; selection++; clearTimeout(timer); }
-    return { rows, offset, total, next, selected, results, resultOffset, error, loading, cancelling, cancelRequested, refresh, select, changePage, loadResults, cancel, start, stop };
+    return { rows, offset, total, next, selected, results, resultOffset, error, loading, cancelling, cancelRequested, queue, saving, configure, refresh, select, changePage, loadResults, cancel, start, stop };
 }

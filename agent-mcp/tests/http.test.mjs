@@ -84,13 +84,17 @@ test('Streamable HTTP supports both protocol eras and concurrent clients without
     const f = await fixture(t);
     const [legacy, modern] = await Promise.all([f.connect(), f.connect({ pin: '2026-07-28' })]);
     const lists = await Promise.all([legacy.client.listTools(), modern.client.listTools()]);
-    assert.equal(lists[0].tools.length, 10);
+    assert.equal(lists[0].tools.length, 12);
     assert.deepEqual(lists[0].tools.map(tool => [tool.name, tool.inputSchema]), lists[1].tools.map(tool => [tool.name, tool.inputSchema]));
     const stream = await fetch(f.mcpUrl, { method: 'POST', headers: { Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25' }, body: JSON.stringify({ jsonrpc: '2.0', id: 42, method: 'tools/list' }) });
     assert.equal(stream.status, 200); assert.match(stream.headers.get('content-type'), /text\/event-stream/);
     assert.match(await stream.text(), /"id":42/);
     const [capabilities, jobs] = await Promise.all([legacy.call('capabilities'), modern.call('jobs')]);
     assert.equal(capabilities.result.apiVersion, 3); assert.equal(jobs.result.total, 0);
+    const snapshot = await modern.call('queue');
+    assert.deepEqual(snapshot.result, (await f.api('queue', {})).body.result);
+    assert.equal(snapshot.result.canConfigure, false);
+    assert.equal((await modern.call('scheduling-set', { maxConcurrent: 3 })).error.code, 'PERMISSION_DENIED');
     const submitted = await modern.call('submit', { request: f.request, idempotencyKey: 'shared-http' }); const { jobId } = submitted.result;
     assert.equal((await f.api('submit', { request: f.request, idempotencyKey: 'shared-http' })).body.result.replayed, true);
     assert.equal((await legacy.call('submit', { request: f.request, idempotencyKey: 'shared-http' })).result.jobId, jobId);
@@ -142,7 +146,7 @@ test('desktop, CLI, stdio MCP, HTTP and HTTP MCP share schemas, durable jobs, ca
     };
     const calls = [desktop, cli, async (action, input = {}) => (await stdio.callTool({ name: 'asset_' + action, arguments: input })).structuredContent, async (action, input) => (await f.api(action, input)).body, remote.call];
     const catalogs = await Promise.all(calls.map(call => call('capabilities')));
-    for (const response of catalogs) { assert.equal(response.schema, 'asset-toolbox.response/5'); assert.deepEqual(response.result.inputSchemas, catalogs[0].result.inputSchemas); }
+    for (const response of catalogs) { assert.equal(response.schema, 'asset-toolbox.response/6'); assert.deepEqual(response.result.inputSchemas, catalogs[0].result.inputSchemas); }
     for (const call of calls.slice(1)) {
         assert.equal((await call('storage-preview')).error.code, 'PERMISSION_DENIED');
         assert.equal((await call('storage-clean', { retentionDays: 30, selection: [{ jobId: 'a'.repeat(64), fingerprint: 'b'.repeat(64) }] })).error.code, 'PERMISSION_DENIED');

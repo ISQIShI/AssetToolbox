@@ -62,7 +62,7 @@ async function until(call, jobId, predicate = state => state.done) {
 
 test('official SDK discovers tools, validates input and runs idempotent jobs with structured paginated results', async t => {
     const f = await fixture(t);
-    const { tools } = await f.client.listTools(); assert.equal(tools.length, 10);
+    const { tools } = await f.client.listTools(); assert.equal(tools.length, 12);
     assert.ok(tools.find(tool => tool.name === 'asset_submit').inputSchema.properties.request);
     const catalog = await f.call('capabilities'); assert.equal(catalog.result.apiVersion, 3);
     const invalid = await f.client.callTool({ name: 'asset_submit', arguments: { request: f.request } }); assert.equal(invalid.isError, true);
@@ -95,6 +95,6 @@ test('stdio also negotiates the 2026-07-28 protocol with the official v2 client'
     const f = await fixture(t);
     await f.client.close();
     const modern = await f.connect({ pin: '2026-07-28' });
-    assert.equal((await modern.client.listTools()).tools.length, 10);
-    assert.equal((await modern.call('capabilities')).result.applicationApi, 'asset-toolbox.application/5');
+    assert.equal((await modern.client.listTools()).tools.length, 12);
+    assert.equal((await modern.call('capabilities')).result.applicationApi, 'asset-toolbox.application/6');
 });

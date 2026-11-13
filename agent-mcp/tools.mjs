@@ -5,6 +5,8 @@ const { respond } = application;
 import contract from '../resource-core/application/contract.js';
 
 const definitions = {
+    queue: { description: '查询当前并行预算、真实执行槽位及等待队列。只返回当前权限范围内的作业信息，其他占用以匿名忙碌槽位表示。', readOnly: true },
+    'scheduling-set': { description: '仅受信任本地上下文可以在队列空闲时设置 1–8 的并行预算；Agent policy 不授予此权限。', readOnly: false },
     'storage-preview': { description: '预览旧作业明细的清理范围，默认保留 30 天。仅受信任本地上下文可用，现有 Agent policy 不授予存储维护权限。', readOnly: true },
     'storage-clean': { description: '按预览 fingerprint 显式清理所选旧报告和明细；保留任务、备份与幂等记录。仅受信任本地上下文可用。', readOnly: false },
     capabilities: { description: '发现资源类型、操作、提供方、公共/专属参数 schema、依赖可用性及获取渠道。先调用此工具再构造 pipeline。', readOnly: true },

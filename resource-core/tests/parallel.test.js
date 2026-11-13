@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { fixture } = require('./fixtures/application');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const jobDir = (f, id) => path.join(f.core, 'data/jobs/v4', id);
+const jobDir = (f, id) => path.join(f.core, 'data/jobs/v5', id);
 function local(t, f) {
     const service = f.ApplicationService.forDesktop(); t.after(() => service.shutdown()); return service;
 }
@@ -58,7 +58,7 @@ test('resource plans cover aliases, parent directories, outputs, backups, provid
 
 test('conflicting waiters keep FIFO priority while unrelated resources fill idle slots', () => {
     const { schedule } = require('../application/resources');
-    const item = (id, key, access, running = false) => ({ id, running, pending: true, resources: { schema: 'asset-toolbox.resources/1', entries: [{ kind: 'provider', key, access }] } });
+    const item = (id, key, access, running = false) => ({ id, slot: running ? 1 : undefined, running, pending: true, resources: { schema: 'asset-toolbox.resources/1', entries: [{ kind: 'provider', key, access }] } });
     const result = schedule([item('reader', 'x', 'read', true), item('writer', 'x', 'write'), item('late-reader', 'x', 'read'), item('independent', 'y', 'write')]);
     assert.deepEqual(result.selected.map(item => item.id), ['independent']);
     assert.equal(result.reasons.get('writer'), 'resource-conflict');
@@ -93,7 +93,7 @@ test('spawn failure after dispatch releases the reservation without replay or qu
 
 test('automatic provider updates wait for live provider readers and can cancel without downloading', async t => {
     const f = fixture(t, { allowDependencyInstall: true });
-    fs.mkdirSync(path.join(f.core, 'data/jobs/v4'), { recursive: true });
+    fs.mkdirSync(path.join(f.core, 'data/jobs/v5'), { recursive: true });
     const lock = require(path.join(f.core, 'application/lock'));
     const release = lock.acquireShared({ schema: 'asset-toolbox.resources/1', entries: [{ kind: 'provider', key: 'sharp', access: 'read' }] }, 'f'.repeat(64));
     try {

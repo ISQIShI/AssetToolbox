@@ -50,8 +50,9 @@ function readers(cleanup = true) {
         let item;
         try { item = JSON.parse(fs.readFileSync(filename, 'utf8')); }
         catch (error) { if (error.code === 'ENOENT') return []; throw error; }
-        if (item.schema !== 'asset-toolbox.execution/1' || !Number.isSafeInteger(item.pid) || item.pid < 1 || name !== item.token + '.json' || !/^[a-f0-9]{64}$/.test(item.jobId)) throw new Error('执行占用记录损坏，停止调度');
+        if (item.schema !== 'asset-toolbox.execution/2' || !Number.isSafeInteger(item.pid) || item.pid < 1 || name !== item.token + '.json' || !/^[a-f0-9]{64}$/.test(item.jobId)) throw new Error('执行占用记录损坏，停止调度');
         require('./resources').validate(item.resources);
+        if (!Number.isInteger(item.slot) || item.slot < 1 || item.slot > require('./scheduling').MAX) throw new Error('执行槽位记录无效');
         if (!alive(item.pid)) { if (cleanup) fs.unlinkSync(filename); return []; }
         return [item];
     });
@@ -63,8 +64,8 @@ function acquire(name = 'execution') {
         return release;
     } catch (error) { release(); throw error; }
 }
-function acquireShared(resources, jobId) {
-    const { conflicts, LIMIT, validate } = require('./resources'); validate(resources);
+function acquireShared(resources, jobId, requestedSlot) {
+    const { conflicts, validate } = require('./resources'); validate(resources);
     let release;
     const deadline = Date.now() + 5000;
     for (;;) {
@@ -76,12 +77,14 @@ function acquireShared(resources, jobId) {
     }
     try {
         const active = readers();
-        if (active.length >= LIMIT || active.some(item => conflicts(resources, item.resources))) throw Object.assign(Error('执行资源仍被占用'), { code: 'BUSY' });
+        const limit = require('./scheduling').read().maxConcurrent;
+        const slot = requestedSlot ?? Array.from({ length: limit }, (_, index) => index + 1).find(value => !active.some(item => item.slot === value));
+        if (!Number.isInteger(slot) || slot < 1 || slot > limit || active.some(item => item.slot === slot) || active.length >= limit || active.some(item => conflicts(resources, item.resources))) throw Object.assign(Error('执行资源或槽位仍被占用'), { code: 'BUSY' });
         const directory = path.join(lockRoot(), 'readers'); fs.mkdirSync(directory, { recursive: true });
         const token = randomUUID(), filename = path.join(directory, token + '.json');
         const temporary = path.join(directory, token + '.next');
         const fd = fs.openSync(temporary, 'wx');
-        try { fs.writeFileSync(fd, JSON.stringify({ schema: 'asset-toolbox.execution/1', pid: process.pid, token, jobId, resources })); fs.fsyncSync(fd); }
+        try { fs.writeFileSync(fd, JSON.stringify({ schema: 'asset-toolbox.execution/2', pid: process.pid, token, jobId, resources, slot })); fs.fsyncSync(fd); }
         finally { fs.closeSync(fd); }
         fs.renameSync(temporary, filename);
         return () => { if (fs.existsSync(filename) && JSON.parse(fs.readFileSync(filename, 'utf8')).token === token) fs.unlinkSync(filename); };

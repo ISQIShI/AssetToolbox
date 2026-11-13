@@ -1,6 +1,6 @@
-const API = 'asset-toolbox.application/5';
-const RESPONSE = 'asset-toolbox.response/5';
-const JOB = 'asset-toolbox.job/4';
+const API = 'asset-toolbox.application/6';
+const RESPONSE = 'asset-toolbox.response/6';
+const JOB = 'asset-toolbox.job/5';
 const object = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 const string = { type: 'string' };
 const parameters = { type: 'object', additionalProperties: { anyOf: [string, { type: 'number' }, { type: 'boolean' }] } };
@@ -19,6 +19,8 @@ const jobId = { type: 'string', pattern: '^[a-f0-9]{64}$' };
 const pagination = { offset: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 100 } };
 const retentionDays = { type: 'integer', minimum: 1, maximum: 3650, default: 30 };
 const inputSchemas = {
+    queue: object({}),
+    'scheduling-set': object({ maxConcurrent: { type: 'integer', minimum: 1, maximum: 8 } }),
     capabilities: object({}), validate: object({ request }),
     submit: object({ request, idempotencyKey: { type: 'string', pattern: '^[a-zA-Z0-9._:-]{1,128}$' } }),
     status: object({ jobId }), cancel: object({ jobId }),

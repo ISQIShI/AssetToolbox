@@ -6,7 +6,7 @@ const { acquire, alive } = require('./lock');
 const { fail, record, canonical, within } = require('./policy');
 const { localContext, policyContext, assertContext } = require('./context');
 const { API, RESPONSE, JOB, ACTION_FIELDS, inputSchemas } = require('./contract');
-const ROOT = path.join(__dirname, '..', 'data', 'jobs', 'v4');
+const ROOT = path.join(__dirname, '..', 'data', 'jobs', 'v5');
 const fingerprint = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const read = filename => JSON.parse(fs.readFileSync(filename, 'utf8'));
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
@@ -32,7 +32,7 @@ function capabilities() {
     const catalog = require('../framework/registry').describe();
     for (const operation of catalog.operations) operation.parametersSchema = fieldsSchema(operation.fields);
     for (const provider of catalog.providers) for (const adapter of provider.adapters) adapter.providerOptionsSchema = fieldsSchema(adapter.fields);
-    return { ...catalog, applicationApi: API, inputSchemas, scheduling: { maxConcurrent: require('./resources').LIMIT, maxPending: 100, ordering: 'conflict-fifo' }, notes: '字段 schema 供发现使用；公共参数、跨字段约束和版本由 validate 再次核验。预览仅扫描，不测量或编码。' };
+    return { ...catalog, applicationApi: API, inputSchemas, scheduling: { maxConcurrent: require('./scheduling').read().maxConcurrent, minConcurrent: 1, maxAllowedConcurrent: 8, maxPending: 100, ordering: 'conflict-fifo' }, notes: '字段 schema 供发现使用；公共参数、跨字段约束和版本由 validate 再次核验。预览仅扫描，不测量或编码。' };
 }
 
 class ApplicationService {
@@ -93,7 +93,7 @@ class ApplicationService {
     metadata(id) {
         if (typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id)) fail('INVALID_REQUEST', '无效作业 ID');
         const directory = path.join(this.directory, id);
-        if (!fs.existsSync(directory)) fail('NOT_FOUND', '没有该 /4 作业；不读取或迁移旧作业');
+        if (!fs.existsSync(directory)) fail('NOT_FOUND', '没有该 /5 作业；不读取或迁移旧作业');
         if (fs.realpathSync(directory) !== directory) fail('PATH_FORBIDDEN', '作业目录不能是链接');
         const meta = read(path.join(directory, 'job.json'));
         if (meta.schema !== JOB || meta.id !== id || !Number.isSafeInteger(meta.sequence) || meta.sequence < 1 || typeof meta.owner !== 'string' || !meta.publicRequest) fail('UNSUPPORTED_VERSION', '作业格式不支持');
@@ -101,7 +101,8 @@ class ApplicationService {
         const dispatchFile = path.join(directory, 'dispatch.json');
         if (fs.existsSync(dispatchFile)) {
             const claim = read(dispatchFile);
-            if (claim.schema !== 'asset-toolbox.dispatch/2' || claim.sequence !== meta.sequence || claim.owner !== meta.owner) fail('UNSUPPORTED_VERSION', '启动声明格式不支持');
+            if (claim.schema !== 'asset-toolbox.dispatch/3' || claim.sequence !== meta.sequence || claim.owner !== meta.owner) fail('UNSUPPORTED_VERSION', '启动声明格式不支持');
+            if (!Number.isInteger(claim.slot) || claim.slot < 1 || claim.slot > require('./scheduling').MAX) fail('UNSUPPORTED_VERSION', '启动槽位声明无效');
         }
         // 重新授权，防止重启后目录链接发生变化。
         this.context.authorize(meta.request);
@@ -139,7 +140,7 @@ class ApplicationService {
             const request = this.normalize(meta.publicRequest);
             if (JSON.stringify(stable(request)) !== JSON.stringify(stable(meta.request))) fail('INVALID_REQUEST', '排队期间请求或适配器版本发生变化');
             if (JSON.stringify(require('./resources').plan(request)) !== JSON.stringify(meta.resources)) fail('INVALID_REQUEST', '排队期间资源范围发生变化');
-            writeExclusive(path.join(meta.directory, 'dispatch.json'), { schema: 'asset-toolbox.dispatch/2', sequence: meta.sequence, owner: this.owner, at: new Date().toISOString() });
+            writeExclusive(path.join(meta.directory, 'dispatch.json'), { schema: 'asset-toolbox.dispatch/3', sequence: meta.sequence, owner: this.owner, slot: meta.slot, at: new Date().toISOString() });
             this.session.start(request.mode === 'dependency-install' || !this.policy ? request : { ...request, _automationPolicy: this.policy }, { directory: meta.directory, id: meta.id });
         } catch (error) {
             if (this.session.jobs.has(meta.id)) {
@@ -151,7 +152,7 @@ class ApplicationService {
             this.owned.delete(meta.id);
         }
     }
-    rawStatus(id) {
+    rawStatus(id, inventory) {
         const meta = this.metadata(id);
         const expired = require('./storage').expiredState(meta.directory);
         if (expired) return expired;
@@ -163,11 +164,11 @@ class ApplicationService {
         }
         let state = { phase: fs.existsSync(path.join(meta.directory, 'dispatch.json')) ? 'starting' : 'queued', done: false, sequence: meta.sequence };
         if (!fs.existsSync(path.join(meta.directory, 'dispatch.json')) && alive(meta.ownerPid) && !fs.existsSync(path.join(meta.directory, 'status.json'))) {
-            const pending = require('./queue').inventory(this.directory).filter(item => item.pending);
-            const { schedule, LIMIT } = require('./resources'), decision = schedule(pending);
+            const pending = (inventory || require('./queue').inventory(this.directory)).filter(item => item.pending);
+            const { schedule } = require('./resources'), limit = require('./scheduling').read().maxConcurrent, decision = schedule(pending, limit);
             const waitReason = decision.reasons.get(id) || 'owner-dispatch';
             const messages = { 'resource-conflict': '等待冲突资源释放', 'earlier-conflict': '等待较早的冲突作业', capacity: '等待空闲执行槽位', 'owner-dispatch': '等待持有会话派发' };
-            return { ...state, queuePosition: pending.findIndex(item => item.id === id) + 1, waitReason, concurrencyLimit: LIMIT, runningCount: decision.runningCount, message: this.queueError || messages[waitReason] };
+            return { ...state, queuePosition: pending.findIndex(item => item.id === id) + 1, waitReason, concurrencyLimit: limit, runningCount: decision.runningCount, message: this.queueError || messages[waitReason] };
         }
         try { state = read(path.join(meta.directory, 'status.json')); }
         catch (error) { if (!['ENOENT', 'EBUSY', 'EACCES', 'EPERM'].includes(error.code)) throw error; }
@@ -184,8 +185,8 @@ class ApplicationService {
         }
         return { ...state, done: true, phase: 'finished', exitCode: 1, errorCode: 'INTERRUPTED', error: '作业进程已退出；请从 taskId 续跑，不要重复提交新转换' };
     }
-    status(id) {
-        const state = this.rawStatus(id);
+    status(id, inventory) {
+        const state = this.rawStatus(id, inventory);
         const { reportDirectory, preview, task, ...summary } = state;
         if (task) { const { taskFile, ...info } = task; summary.task = info; summary.taskId = info.id; }
         if (preview) { const { files, ...info } = preview; summary.preview = info; }
@@ -216,6 +217,8 @@ class ApplicationService {
         record(input, ACTION_FIELDS[action]);
         if (inputSchemas[action].required.some(key => !Object.hasOwn(input, key))) fail('INVALID_REQUEST', '请求缺少必需字段');
         switch (action) {
+            case 'queue': return require('./scheduling').snapshot(this);
+            case 'scheduling-set': return require('./scheduling').configure(this, input);
             case 'storage-preview': return require('./storage').preview(this, input);
             case 'storage-clean': return require('./storage').clean(this, input);
             case 'capabilities': return { ...capabilities(), policy: this.policy };
@@ -273,7 +276,7 @@ async function respond(service, action, input) {
         for (;;) {
             try { return { schema: RESPONSE, ok: true, result: await service.dispatch(action, input) }; }
             catch (error) {
-                if (!['submit', 'cancel'].includes(action) || error.lockName !== 'submission' || Date.now() >= deadline) throw error;
+                if (!['submit', 'cancel', 'queue', 'scheduling-set'].includes(action) || error.lockName !== 'submission' || Date.now() >= deadline) throw error;
                 // 短暂登记/派发竞争在公共入口内等待；队列满、关闭及执行锁拒绝不自动重试。
                 await new Promise(resolve => setTimeout(resolve, 15 + Math.floor(Math.random() * 20)));
             }

@@ -28,7 +28,7 @@ if (options.transport === 'stdio') {
     closeTransport = () => server.close();
     try {
         const { url } = await server.listen();
-        console.error(JSON.stringify({ transport: 'http', apiUrl: url + '/api/v5/', mcpUrl: url + '/mcp' }));
+        console.error(JSON.stringify({ transport: 'http', apiUrl: url + '/api/v6/', mcpUrl: url + '/mcp' }));
     } catch (error) { await server.close(); throw error; }
 }
 let stopping;

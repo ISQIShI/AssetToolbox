@@ -11,7 +11,7 @@
 | [文档管理规范](documentation.md) | 分类、维护责任、更新时机、决策与归档规则 |
 | [总体架构](architecture/overview.md) | 系统边界、进程关系、完整处理流程、设计取舍 |
 | [前端设计规范](design/frontend-design.md) | 桌面软件的设计主张、浅色/深色令牌、窗口骨架、两级步骤选择器、组件、交互约定、状态语义与浏览器调试；任何界面改动必读 |
-| [持久队列与有限并行](architecture/queue.md) | 资源读写冲突、双槽位预算、冲突 FIFO、公平性、维护与崩溃保护、API /5 与 job/4 |
+| [持久队列与有限并行](architecture/queue.md) | 资源读写冲突、可配置并行预算与稳定槽位、冲突 FIFO、公平性、维护与崩溃保护、API /6 与 job/5 |
 | [统一作业中心与入口冲突](architecture/job-center.md) | 跨入口作业观察、取消、生命周期和串行/队列/并行方案比较 |
 | [前端架构](architecture/frontend.md) | 源码结构、工作台状态、作业生命周期、请求映射、步骤编辑与恢复勾选 |
 | [后端与框架设计](architecture/backend.md) | Rust 宿主、Node 调度、处理流水线、提供方扩展、安全恢复 |
@@ -19,7 +19,7 @@
 | [音频处理](architecture/audio.md) | 分析、固定增益、响度归一化、峰值策略、质量边界和报告 |
 | [提供方依赖管理](architecture/dependencies.md) | 固定核验清单、HTTPS/摘要校验、自动安装更新、取消与不可变目录 |
 | [通信协议](architecture/protocol.md) | Tauri 命令、JSON Lines、操作与作业模式、错误语义 |
-| [统一应用接口](architecture/application.md) | 应用/响应 /5、持久作业 /4、唯一实现、启动上下文与跨入口访问 |
+| [统一应用接口](architecture/application.md) | 应用/响应 /6、持久作业 /5、唯一实现、启动上下文与跨入口访问 |
 | [外部 Agent 接入](architecture/automation.md) | 共享应用 API、结构化 CLI、本地 MCP、启动权限、幂等与分页查询 |
 | [本机 HTTP 与 MCP HTTP](architecture/http.md) | 统一应用上下文、独立/联合启动、令牌、Streamable HTTP、生命周期与边界 |
 | [持久化与版本契约](architecture/persistence.md) | 新 schema、步骤快照、锁、崩溃恢复、报告格式 |
@@ -29,6 +29,7 @@
 | [分发核对](distribution.md) | MIT 源码发布范围、历史清理、提供方许可与二进制放行条件 |
 | [第三方声明](../THIRD_PARTY_NOTICES.md) | 来源、版本、许可证及当前分发结论 |
 | [项目状态](project-status.md) | 接手基线、实际验证结果、已知限制和后续事项 |
+| [验证记录索引](verification/README.md) | 每轮命令、环境、原生产物及验证边界；历史不混入当前状态 |
 | [职责扩展与 Cordis 评估](plans/resource-processing-and-cordis.md) | 多操作扩展瓶颈、官方论文依据、框架收益和阶段性建议；历史评估；当前契约已实现，Cordis 未接入 |
 | [架构决策记录](decisions/README.md) | 重要设计变更的背景、方案、代价及替代关系 |
 

@@ -84,6 +84,7 @@ const restore: RestorePreview = { source: 'D:\\Projects\\StarHarbor\\Backups\\20
 
 const jobs = new Map<string, { request: JobRequest; started: number; cancelled: boolean }>();
 const DURATION = Number(params.get('duration') || 4000);
+let maxConcurrent = 2;
 
 function poll(id: string): JobState {
     const job = jobs.get(id);
@@ -121,6 +122,16 @@ export async function call(action: string, payload: any): Promise<unknown> {
         case 'providers': return structuredClone(providers);
         case 'tasks': return page(tasks, payload);
         case 'jobs': return page([...jobs].map(([jobId, job]) => ({ jobId, mode: job.request.mode, createdAt: new Date(job.started).toISOString() })).reverse(), payload);
+        case 'queue': {
+            const running = [...jobs].filter(([id]) => !poll(id).done).map(([jobId, job]) => ({ jobId, mode: job.request.mode, createdAt: new Date(job.started).toISOString(), state: poll(jobId) }));
+            return { maxConcurrent, maxPending: 100, minConcurrent: 1, maxAllowedConcurrent: 8, availableProcessors: 8, recommendedConcurrent: 2, canConfigure: !running.length, runningCount: running.length, waitingCount: 0,
+                slots: Array.from({ length: maxConcurrent }, (_, index) => ({ slot: index + 1, occupied: !!running[index], job: running[index] || null })), waiting: [] };
+        }
+        case 'scheduling-set': {
+            if ([...jobs.keys()].some(id => !poll(id).done)) throw new Error('队列空闲后才能修改并行数量');
+            if (!Number.isInteger(payload.maxConcurrent) || payload.maxConcurrent < 1 || payload.maxConcurrent > 8) throw new Error('并行数量必须为 1–8 的整数');
+            maxConcurrent = payload.maxConcurrent; return { schema: 'asset-toolbox.scheduling/1', maxConcurrent };
+        }
         case 'normalize': return JSON.parse(JSON.stringify(payload));
         case 'save': config = JSON.parse(JSON.stringify(payload)); return structuredClone(config);
         case 'submit': { const jobId = crypto.randomUUID(); jobs.set(jobId, { request: payload.request, started: Date.now(), cancelled: false }); return { jobId, replayed: false }; }

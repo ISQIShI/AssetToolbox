@@ -18,14 +18,17 @@ function inventory(root, leases = readers(false)) {
         const optional = name => safe(path.join(directory, name), false, true) ? read(path.join(directory, name)) : null;
         const state = optional('status.json'), worker = optional('worker.json'), exit = optional('exit.json');
         const claim = optional('dispatch.json');
-        if (claim && (claim.schema !== 'asset-toolbox.dispatch/2' || claim.sequence !== meta.sequence || claim.owner !== meta.owner)) throw Object.assign(Error('启动声明格式不支持'), { code: 'UNSUPPORTED_VERSION' });
+        if (claim && (claim.schema !== 'asset-toolbox.dispatch/3' || claim.sequence !== meta.sequence || claim.owner !== meta.owner)) throw Object.assign(Error('启动声明格式不支持'), { code: 'UNSUPPORTED_VERSION' });
         const dispatched = Boolean(claim);
+        if (claim && (!Number.isInteger(claim.slot) || claim.slot < 1 || claim.slot > require('./scheduling').MAX)) throw new Error('启动槽位声明无效');
+        const lease = leases.find(item => item.jobId === id);
+        if (lease && claim?.slot !== lease.slot) throw new Error('启动预约与执行占用槽位不一致');
         const running = leases.some(lease => lease.jobId === id) || (!exit && (worker ? alive(worker.pid) || alive(meta.ownerPid) : dispatched && alive(meta.ownerPid)));
         const pending = running || (!state?.done && !exit && !dispatched && alive(meta.ownerPid));
-        return { ...meta, directory, dispatched, running, pending };
+        return { ...meta, slot: claim?.slot, directory, dispatched, running, pending };
     }).sort((a, b) => a.sequence - b.sequence || a.id.localeCompare(b.id));
     // 父进程在 spawn 后、worker.json 落盘前崩溃时仍保护已经登记的子进程占用。
-    return items.concat(leases.filter(lease => !items.some(item => item.id === lease.jobId)).map(lease => ({ id: lease.jobId, sequence: 0, resources: lease.resources, running: true, pending: true })));
+    return items.concat(leases.filter(lease => !items.some(item => item.id === lease.jobId)).map(lease => ({ id: lease.jobId, sequence: 0, slot: lease.slot, resources: lease.resources, running: true, pending: true })));
 }
 class Queue {
     constructor(service) { this.service = service; this.timer = null; this.closed = false; }
