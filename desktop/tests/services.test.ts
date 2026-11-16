@@ -44,5 +44,8 @@ it('shows startup failure without claiming the listener is running, and preserve
     expect(wrapper.find('[role="alert"]').text()).toContain('DEPENDENCY_MISSING');
     expect(button('安全停止服务').attributes('disabled')).toBeDefined();
     expect(wrapper.find('[aria-label="服务端口"]').element).toHaveProperty('value', '1234');
+    await wrapper.find('[aria-label="服务端口"]').setValue(4321);
+    await button('刷新服务状态').trigger('click'); await flushPromises();
+    expect(wrapper.find('[aria-label="服务端口"]').element).toHaveProperty('value', '4321');
     wrapper.unmount();
 });

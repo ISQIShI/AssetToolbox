@@ -189,7 +189,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await addStep.click();
         await page.getByLabel('搜索操作或格式').fill('缩放');
         await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
-        await page.getByLabel('搜索资源类型').fill('.png');
+        await page.getByLabel('搜索资源格式').fill('.png');
         await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
         await expect(picker).toHaveCount(0);
         await expect(page.locator('.editor h2')).toHaveText('PNG 图片缩放');
@@ -257,7 +257,15 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         expect(fs.readFileSync(settingsPath, 'utf8')).toContain('中文 配置');
         expect(errors).toEqual([]);
         // CLI 创建作业，桌面通过公共列表观察，不产生新的提交。
-        await tab('工具').click(); await page.locator('.services summary').click();
+        await tab('工具').click();
+        for (const [width, height, theme] of [[1220, 850, 'light'], [840, 620, 'dark']] as const) {
+            await page.setViewportSize({ width, height }); await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+            await page.locator('.tools-page .scroll').evaluate(element => { element.scrollTop = 0; });
+            await page.screenshot({ path: info.outputPath(`tools-panels-${width}-${theme}.png`) });
+            const headings = await page.locator('.tool-panel-heading').evaluateAll(elements => elements.map(element => ({ x: element.getBoundingClientRect().x, height: element.getBoundingClientRect().height })));
+            expect(headings).toHaveLength(2); expect(headings[0]).toEqual(headings[1]);
+        }
+        await page.locator('.services summary').click();
         await page.getByLabel('服务端口', { exact: true }).fill('0');
         await page.getByLabel('服务素材目录', { exact: true }).fill(source);
         await page.getByLabel('服务输出目录', { exact: true }).fill(output);
@@ -276,10 +284,17 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await button('生成 stdio 配置').click(); await expect(page.getByLabel('Agent 连接配置')).toHaveValue(/mcpServers/);
         await button('生成 HTTP 连接配置').click(); await expect(page.getByLabel('Agent 连接配置')).toHaveValue(/tokenFile/);
         expect(await page.locator('.services').innerText()).not.toContain(secret);
+        await page.setViewportSize({ width: 1220, height: 850 }); await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+        await page.locator('.tools-page .scroll').evaluate(element => { element.scrollTop = 0; });
         await page.screenshot({ path: info.outputPath('services-1220-light.png') });
         await page.setViewportSize({ width: 840, height: 620 }); await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         await page.screenshot({ path: info.outputPath('services-840-dark.png') });
+        await page.locator('.tools-page tbody[aria-label="图片"]').scrollIntoViewIfNeeded();
+        await expect(page.locator('.tools-page tbody[aria-label="图片"]')).toContainText('JPEG');
+        await expect(page.locator('.tools-page tbody[aria-label="图片"]')).toContainText('PNG');
+        await expect(page.locator('.tools-page tbody[aria-label="音频"]')).toContainText('MP3');
+        await page.screenshot({ path: info.outputPath('resource-groups-840-dark.png') });
         await button('安全停止服务').click(); await expect(page.locator('.services summary')).toContainText('已停止');
         await button('启动服务').click(); await expect(page.locator('.services summary')).toContainText('运行中');
         const closingService = await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'service-status', payload: {} }));

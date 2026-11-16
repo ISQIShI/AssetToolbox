@@ -6,12 +6,14 @@ import { isMissing, resetStep, retargetStep, stepTitle } from '../core/model';
 import ParameterFields from './ParameterFields.vue';
 import Icon from './Icon.vue';
 import FilterEditor from './FilterEditor.vue';
+import { resourceGroups } from '../core/resource-groups';
 
 const props = defineProps<{ definition: Definition; modelValue: Step; index: number; count: number; disabled?: boolean }>();
 const emit = defineEmits<{ 'update:modelValue': [value: Step]; remove: []; move: [offset: number]; 'show-tools': [] }>();
 const id = useId();
 
 const step = computed(() => props.modelValue);
+const categories = computed(() => resourceGroups(props.definition.resourceTypes));
 const operation = computed(() => props.definition.operations.find(item => item.id === step.value.operation));
 const provider = computed(() => props.definition.providers.find(item => item.id === step.value.provider));
 const adapter = computed(() => provider.value?.adapters.find(item => item.operation === step.value.operation));
@@ -57,9 +59,9 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
 
     <section class="group combo" aria-label="步骤组合">
       <div class="field">
-        <label class="label" :for="`${id}-type`">资源类型</label>
+        <label class="label" :for="`${id}-type`">资源格式</label>
         <select :id="`${id}-type`" class="select" :value="step.resourceType" :disabled="disabled" @change="retarget(($event.target as HTMLSelectElement).value)">
-          <option v-for="type in definition.resourceTypes" :key="type.id" :value="type.id">{{ type.displayName }}</option>
+          <optgroup v-for="group in categories" :key="group.id" :label="group.label"><option v-for="type in group.items" :key="type.id" :value="type.id">{{ type.displayName }}</option></optgroup>
         </select>
       </div>
       <div class="field">
@@ -77,7 +79,7 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
       </div>
     </section>
 
-    <FilterEditor :properties="definition.properties" :resource-type="step.resourceType" :model-value="step.filter" :disabled="locked" title="步骤过滤" hint="只对满足条件的当前输入执行此步骤；前一步改变尺寸后按新尺寸判断。未匹配仅跳过本步骤。" @update:model-value="patch({ filter: $event })" />
+    <FilterEditor :properties="definition.properties" :resource-types="definition.resourceTypes" :resource-type="step.resourceType" :model-value="step.filter" :disabled="locked" title="步骤过滤" hint="只对满足条件的当前输入执行此步骤；前一步改变尺寸后按新尺寸判断。未匹配仅跳过本步骤。" @update:model-value="patch({ filter: $event })" />
     <section v-if="operation?.fields.length" class="group">
       <h3>{{ operation.displayName }}参数</h3>
       <ParameterFields :id-prefix="`${id}-op`" :fields="operation.fields" :model-value="step.parameters" :disabled="locked" @update:model-value="patch({ parameters: $event })" />

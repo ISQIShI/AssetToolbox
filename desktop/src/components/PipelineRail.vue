@@ -4,6 +4,7 @@ import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue';
 import { useWorkbench } from '../core/workbench';
 import { folderName, isMissing, providerOf, stepGroups, stepTitle } from '../core/model';
 import type { ResourceType } from '../core/types';
+import { resourceGroups, resourceKindLabel } from '../core/resource-groups';
 import Icon from './Icon.vue';
 
 const bench = useWorkbench();
@@ -21,9 +22,10 @@ const groups = computed(() => definition.value ? stepGroups(definition.value) : 
 const selectedGroup = computed(() => groups.value.find(group => group.operation.id === operationId.value));
 const term = computed(() => query.value.trim().toLocaleLowerCase());
 const matches = (value: string) => value.toLocaleLowerCase().includes(term.value);
-const matchesType = (type: ResourceType) => matches([type.displayName, type.id, ...type.extensions].join(' '));
+const matchesType = (type: ResourceType) => matches([resourceKindLabel(type.kind), type.kind, type.displayName, type.id, ...type.extensions].join(' '));
 const filteredGroups = computed(() => groups.value.filter(group => matches(`${group.operation.displayName} ${group.operation.id}`) || group.resourceTypes.some(matchesType)));
 const filteredTypes = computed(() => selectedGroup.value?.resourceTypes.filter(matchesType) || []);
+const typeGroups = computed(() => resourceGroups(filteredTypes.value));
 const full = computed(() => (config.value?.pipeline.length || 0) >= 64);
 const steps = computed(() => config.value && definition.value ? config.value.pipeline.map((step, index) => {
     const provider = providerOf(definition.value!, step);
@@ -126,26 +128,29 @@ onUnmounted(() => close(false));
           <div class="picker-heading">
             <button v-if="selectedGroup" type="button" class="button quiet small icon-only" aria-label="返回操作列表" title="返回操作列表" @click="selectOperation('')"><Icon class="back" name="chevron" /></button>
             <strong>{{ selectedGroup ? selectedGroup.operation.displayName : '选择操作' }}</strong>
-            <span>{{ selectedGroup ? '选择资源类型' : '再选资源类型' }}</span>
+            <span>{{ selectedGroup ? '选择资源格式' : '再选资源格式' }}</span>
           </div>
           <div class="picker-search">
-            <input ref="search" v-model="query" class="input" type="search" :aria-label="selectedGroup ? '搜索资源类型' : '搜索操作或格式'" :placeholder="selectedGroup ? '搜索资源类型…' : '搜索操作或格式…'" />
+            <input ref="search" v-model="query" class="input" type="search" :aria-label="selectedGroup ? '搜索资源格式' : '搜索操作或格式'" :placeholder="selectedGroup ? '搜索类别或格式…' : '搜索操作、类别或格式…'" />
           </div>
-          <ul class="choices" :aria-label="selectedGroup ? '资源类型' : '处理操作'">
+          <ul class="choices" :aria-label="selectedGroup ? '资源格式' : '处理操作'">
             <template v-if="!selectedGroup">
               <li v-for="group in filteredGroups" :key="group.operation.id">
                 <button type="button" class="choice" :aria-label="group.operation.displayName" :title="group.operation.description" @click="selectOperation(group.operation.id)">
-                  <span class="choice-text"><span>{{ group.operation.displayName }}</span><small>{{ group.resourceTypes.map(type => type.displayName).join('、') }}</small></span>
+                  <span class="choice-text"><span>{{ group.operation.displayName }}</span><small>{{ resourceGroups(group.resourceTypes).map(category => `${category.label} · ${category.items.map(type => type.displayName).join('、')}`).join(' / ') }}</small></span>
                   <Icon name="chevron" :size="12" />
                 </button>
               </li>
             </template>
             <template v-else>
-              <li v-for="type in filteredTypes" :key="type.id">
-                <button type="button" class="choice" :aria-label="type.displayName" @click="choose(type.id, selectedGroup!.operation.id)">
+              <li v-for="group in typeGroups" :key="group.id" class="format-group">
+                <p class="category-title">{{ group.label }}<span>{{ group.items.length }} 种格式</span></p>
+                <ul :aria-label="group.label">
+                <li v-for="type in group.items" :key="type.id"><button type="button" class="choice" :aria-label="type.displayName" @click="choose(type.id, selectedGroup!.operation.id)">
                   <span class="choice-text"><span>{{ type.displayName }}</span><small class="extensions">{{ type.extensions.join('、') }}</small></span>
                   <Icon name="plus" :size="12" />
-                </button>
+                </button></li>
+                </ul>
               </li>
             </template>
           </ul>
@@ -261,6 +266,9 @@ onUnmounted(() => close(false));
 .picker-search { flex-shrink: 0; padding: var(--s-1) var(--s-2) var(--s-2); }
 .picker-search input { width: 100%; }
 .choices { list-style: none; min-height: 0; margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; }
+.format-group > ul { list-style: none; margin: 0; padding: 0; }
+.category-title { display: flex; justify-content: space-between; gap: var(--s-2); padding: var(--s-1) var(--s-2); background: var(--pane); color: var(--text-2); font-size: var(--t-small); }
+.category-title > span { font-weight: 400; }
 .choice { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); width: 100%; min-height: 44px; padding: var(--s-1) var(--s-2); border: 0; border-radius: var(--r-control); background: none; text-align: left; }
 .choice-text { display: grid; min-width: 0; }
 .choice-text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

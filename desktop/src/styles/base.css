@@ -214,6 +214,15 @@ input[type='checkbox'].toggle:checked::after { left: 16px; background: var(--on-
 .facts dd { margin: 0; }
 
 /* 数据表格 */
+.tool-panel-heading { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3); min-height: 44px; list-style: none; border-radius: var(--r-panel); }
+.tool-panel-heading::-webkit-details-marker { display: none; }
+.tool-panel-heading:hover { background: var(--hover); }
+.tool-panel-heading:focus-visible { outline-offset: -2px; }
+.tool-panel-heading > .icon { flex: none; color: var(--text-2); }
+.tool-panel-heading .panel-description { margin-left: auto; color: var(--text-2); font-size: var(--t-small); }
+details[open] > .tool-panel-heading > .icon { transform: rotate(90deg); }
+.table .resource-group th { position: static; color: var(--text); font-weight: 600; height: 30px; }
+.resource-group small { margin-left: var(--s-2); font-weight: 400; color: var(--text-2); }
 .table { width: 100%; border-collapse: collapse; }
 .table th { position: sticky; top: 0; z-index: 1; height: 28px; padding: 0 var(--s-3); background: var(--pane); color: var(--text-2); font-size: var(--t-small); font-weight: 400; text-align: left; box-shadow: inset 0 -1px 0 var(--border-soft); white-space: nowrap; }
 .table td { padding: 5px var(--s-3); border-bottom: 1px solid var(--border-soft); vertical-align: middle; }

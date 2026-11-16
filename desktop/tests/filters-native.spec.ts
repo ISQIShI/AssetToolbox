@@ -33,7 +33,7 @@ test('native source and step filters use real image properties and preserve excl
         const sourceEditor = page.getByRole('region', { name: '来源过滤', exact: true });
         await sourceEditor.getByRole('button', { name: '添加过滤条件', exact: true }).click();
         await sourceEditor.getByLabel('属性 1-1', { exact: true }).selectOption('resource-type');
-        await sourceEditor.getByLabel('值 1-1', { exact: true }).fill('jpg');
+        await sourceEditor.getByLabel('值 1-1', { exact: true }).selectOption('jpg');
         await sourceEditor.getByRole('button', { name: '且：添加条件', exact: true }).click();
         await sourceEditor.getByLabel('属性 1-2', { exact: true }).selectOption('image-width');
         await sourceEditor.getByLabel('比较 1-2', { exact: true }).selectOption('gt');

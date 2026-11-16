@@ -13,7 +13,7 @@
 | [前端设计规范](design/frontend-design.md) | 桌面软件的设计主张、浅色/深色令牌、窗口骨架、两级步骤选择器、组件、交互约定、状态语义与浏览器调试；任何界面改动必读 |
 | [持久队列与有限并行](architecture/queue.md) | 资源读写冲突、可配置并行预算与稳定槽位、冲突 FIFO、公平性、维护与崩溃保护、API /8 与 job/6 |
 | [统一作业中心与入口冲突](architecture/job-center.md) | 跨入口作业观察、取消、生命周期和串行/队列/并行方案比较 |
-| [前端架构](architecture/frontend.md) | 源码结构、工作台状态、作业生命周期、请求映射、步骤编辑与恢复勾选 |
+| [前端架构](architecture/frontend.md) | 源码结构、工作台状态、作业生命周期、资源类别分组、步骤编辑与恢复勾选 |
 | [后端与框架设计](architecture/backend.md) | Rust 宿主、Node 调度、处理流水线、提供方扩展、安全恢复 |
 | [扩展契约](architecture/extensions.md) | 类型/操作/提供方、按操作适配器、公共与专属参数、版本及新增实现示例 |
 | [资源属性与过滤器](architecture/properties-and-filters.md) | 通用/专属代码属性、有界 AND/OR、来源排除、步骤条件、中间产物、续跑及恢复边界 |

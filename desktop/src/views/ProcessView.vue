@@ -8,6 +8,7 @@ import PathField from '../components/PathField.vue';
 import ScanSummary from '../components/ScanSummary.vue';
 import Icon from '../components/Icon.vue';
 import FilterEditor from '../components/FilterEditor.vue';
+import { groupByResourceKind } from '../core/resource-groups';
 
 const bench = useWorkbench();
 const { config, definition, boot, station, scan, scanStale, busy, blockedSteps } = bench;
@@ -21,9 +22,9 @@ const current = computed(() => {
 const enabledCount = computed(() => config.value?.pipeline.filter(step => step.enabled).length || 0);
 const observationOnly = computed(() => enabledCount.value > 0 && config.value!.pipeline.filter(step => step.enabled)
     .every(step => definition.value?.operations.find(op => op.id === step.operation)?.resultPolicy === 'observe'));
-const coverage = computed(() => definition.value?.resourceTypes.map(type => ({
+const coverage = computed(() => groupByResourceKind(definition.value?.resourceTypes.map(type => ({
     type, steps: config.value?.pipeline.filter(step => step.enabled && step.resourceType === type.id).length || 0,
-})) || []);
+})) || [], row => row.type.kind));
 // 切换站点时编辑区回到顶部，避免新站点沿用上一个站点的滚动位置。
 const detail = ref<HTMLElement>();
 watch(station, () => { if (detail.value) detail.value.scrollTop = 0; });
@@ -101,21 +102,22 @@ const canStart = computed(() => !busy.value && !blockedSteps.value.length && Boo
           </section>
         </article>
 
-        <ScanSummary v-else-if="station === 'scan' && scan" :scan="scan" :stale="scanStale" :disabled="busy" @rescan="bench.runPipeline('preview')" />
+        <ScanSummary v-else-if="station === 'scan' && scan" :scan="scan" :resource-types="definition.resourceTypes" :stale="scanStale" :disabled="busy" @rescan="bench.runPipeline('preview')" />
 
         <article v-else class="panel">
           <header class="panel-head"><h2>来源</h2><p class="muted">处理这个文件夹及其所有子文件夹中的资源，目录结构保持不变。</p></header>
           <section class="group">
             <PathField v-model="config.sourceDir" label="来源文件夹" dialog-title="选择来源文件夹" :disabled="busy" />
           </section>
-          <FilterEditor v-model="config.sourceFilter" :properties="definition.properties" :disabled="busy" title="来源过滤" hint="仅匹配的文件进入任务。排除的文件不复制、不处理、不备份；续跑使用已经固定的清单。分辨率可分别设置宽度、高度或总像素数。" />
+          <FilterEditor v-model="config.sourceFilter" :properties="definition.properties" :resource-types="definition.resourceTypes" :disabled="busy" title="来源过滤" hint="仅匹配的文件进入任务。排除的文件不复制、不处理、不备份；续跑使用已经固定的清单。分辨率可分别设置宽度、高度或总像素数。" />
           <section class="coverage">
             <h3>会识别的资源</h3>
             <div class="grid-frame">
               <table class="table">
-                <thead><tr><th>资源类型</th><th>扩展名</th><th class="number">启用的步骤</th></tr></thead>
-                <tbody>
-                  <tr v-for="row in coverage" :key="row.type.id">
+                <thead><tr><th>资源格式</th><th>扩展名</th><th class="number">启用的步骤</th></tr></thead>
+                <tbody v-for="group in coverage" :key="group.id" :aria-label="group.label">
+                  <tr class="resource-group"><th colspan="3" scope="rowgroup">{{ group.label }}<small>{{ group.items.length }} 种格式</small></th></tr>
+                  <tr v-for="row in group.items" :key="row.type.id">
                     <td>{{ row.type.displayName }}</td>
                     <td class="path">{{ row.type.extensions.join(' ') }}</td>
                     <td class="number" :class="{ muted: !row.steps }">{{ row.steps || '无' }}</td>

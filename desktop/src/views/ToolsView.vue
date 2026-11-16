@@ -3,6 +3,7 @@
 import { computed } from 'vue';
 import { useWorkbench } from '../core/workbench';
 import { isMissing } from '../core/model';
+import { resourceGroups } from '../core/resource-groups';
 import type { Provider } from '../core/types';
 import Icon from '../components/Icon.vue';
 import StorageMaintenance from '../components/StorageMaintenance.vue';
@@ -13,6 +14,7 @@ const { definition, boot, busy } = bench;
 const list = computed(() => definition.value?.providers || []);
 const ordered = computed(() => [...list.value].sort((a, b) => Number(isMissing(b)) - Number(isMissing(a))));
 const missingCount = computed(() => list.value.filter(isMissing).length);
+const resourceCategories = computed(() => resourceGroups(definition.value?.resourceTypes || []));
 const installLabel = (provider: Provider) => ({ install: '获取并安装', update: '更新到核验版本', repair: '修复安装', reinstall: '重新安装' }[provider.dependency?.action || 'install']);
 const dependencyStatus = (provider: Provider) => ({ missing: '尚未安装', unmanaged: '手动安装，未纳入校验', current: '已安装核验版本', update: '有新的核验版本', damaged: '安装文件需要修复' }[provider.dependency?.state || 'missing']);
 
@@ -94,9 +96,10 @@ function supports(provider: Provider) {
           <header class="block-head"><h2>识别的资源类型</h2></header>
           <div class="grid-frame">
             <table class="table">
-              <thead><tr><th>资源类型</th><th>扩展名</th><th>可用操作</th></tr></thead>
-              <tbody>
-                <tr v-for="type in definition.resourceTypes" :key="type.id">
+              <thead><tr><th>资源格式</th><th>扩展名</th><th>可用操作</th></tr></thead>
+              <tbody v-for="group in resourceCategories" :key="group.id" :aria-label="group.label">
+                <tr class="resource-group"><th colspan="3" scope="rowgroup">{{ group.label }}<small>{{ group.items.length }} 种格式</small></th></tr>
+                <tr v-for="type in group.items" :key="type.id">
                   <td>{{ type.displayName }}</td>
                   <td class="path">{{ type.extensions.join(' ') }}</td>
                   <td>{{ definition.operations.filter(o => definition!.providers.some(p => p.supports.some(s => s.resourceType === type.id && s.operation === o.id))).map(o => o.displayName).join('、') || '无' }}</td>

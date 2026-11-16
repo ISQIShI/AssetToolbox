@@ -141,6 +141,8 @@ JobDock 中 AudioResults 展示前 100 条步骤测量、请求/实际增益、�
 
 ## 属性过滤编辑
 
+分类由 `core/resource-groups.ts` 根据核心 `resourceTypes[].kind` 生成，统一用于工具、来源、扫描和步骤选择。图片/音频排序固定，格式保留目录顺序，未知 kind 保留可见；扫描的未知格式放“其他”组。类别只负责界面组织，一个步骤仍对应一个明确格式，未增加跨格式步骤或改变任务/适配器契约。过滤器的类别和格式选项显示中文，值仍发送 image/audio/jpg/png 等核心 ID。
+
 来源页与 StepEditor 共用 `FilterEditor.vue`：目录提供属性类型、适用资源、单位及运算符，界面只构造 sourceFilter/step.filter。支持组内“且”、组间“或”、删除和清除，运行期间禁用。同类型切换工具保留规则，切换资源类型清空，重置操作参数不清空条件。扫描显示发现/来源排除数量，启用步骤仅表示配置范围；实际逐步 filtered 状态保存在公共 results/报告。完整语义见[属性与过滤器](properties-and-filters.md)。
 
 ## 统一作业中心

@@ -66,4 +66,6 @@ module.exports = {
 
 桌面在来源与每个步骤显示同一过滤编辑器，支持 AND/OR、清除及忙碌禁用；同类型切换工具保留条件，改变类型清空条件，恢复参数不清空过滤。CLI 快捷命令增加 `--source-filter examples/source-filter.example.json`（仓库根执行）；通用 CLI API、MCP stdio/HTTP 和 HTTP 的 validate/submit 直接接受 sourceFilter 与 step.filter。示例见[根 README](../../README.md)。恢复请求不接受过滤字段。
 
+界面将 resource-kind 显示为“资源类别”，resource-type 显示为“资源格式”；eq/ne 提供图片/音频及分组格式选项，仍保存原始 kind/格式 ID，不改变 filter/1。contains 等操作保持文本输入，已保存的目录外值保留显示。类别筛选 image 可涵盖 JPEG 与 PNG，步骤仍分别指定一个格式。
+
 测试：核心 `filters.test.js`、真实图片 `resize.test.js`、组件 `filters.test.ts`、MCP `http.test.mjs` 五入口行为对照、原生 `filters-native.spec.ts`。覆盖来源排除与不备份、固定清单续跑、版本拒绝、中间产物、失效元数据、插件不可用时恢复，以及真实 JPG 的界面配置与原文件保护。

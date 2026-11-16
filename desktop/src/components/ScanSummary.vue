@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import type { ScanPreview } from '../core/types';
+import { computed } from 'vue';
+import type { ResourceType, ScanPreview } from '../core/types';
 import { bytes } from '../core/model';
+import { groupByResourceKind } from '../core/resource-groups';
 import Icon from './Icon.vue';
-defineProps<{ scan: ScanPreview; stale?: boolean; disabled?: boolean }>();
+const props = defineProps<{ scan: ScanPreview; resourceTypes?: ResourceType[]; stale?: boolean; disabled?: boolean }>();
+const groups = computed(() => groupByResourceKind(props.scan.resources, resource => props.resourceTypes?.find(type => type.id === resource.id)?.kind || 'other'));
 const emit = defineEmits<{ rescan: [] }>();
 </script>
 
@@ -25,9 +28,10 @@ const emit = defineEmits<{ rescan: [] }>();
 
     <div v-if="scan.resources.length" class="grid-frame">
       <table class="table">
-        <thead><tr><th>资源类型</th><th class="number">文件数</th><th class="number">体积</th><th>处理方式</th></tr></thead>
-        <tbody>
-          <tr v-for="resource in scan.resources" :key="resource.id">
+        <thead><tr><th>资源格式</th><th class="number">文件数</th><th class="number">体积</th><th>处理方式</th></tr></thead>
+        <tbody v-for="group in groups" :key="group.id" :aria-label="group.label">
+          <tr class="resource-group"><th scope="rowgroup">{{ group.label }}</th><th class="number">{{ group.items.reduce((sum, item) => sum + item.count, 0) }}</th><th class="number">{{ bytes(group.items.reduce((sum, item) => sum + item.bytes, 0)) }}</th><th><span class="muted small">{{ group.items.length }} 种格式</span></th></tr>
+          <tr v-for="resource in group.items" :key="resource.id">
             <td>{{ resource.name }}</td>
             <td class="number">{{ resource.count }}</td>
             <td class="number">{{ bytes(resource.bytes) }}</td>

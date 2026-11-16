@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue';
-import type { FilterRule, ResourceFilter, ResourceProperty } from '../core/types';
-const props = defineProps<{ modelValue?: ResourceFilter; properties: ResourceProperty[]; resourceType?: string; disabled?: boolean; title: string; hint: string }>();
+import type { FilterRule, ResourceFilter, ResourceProperty, ResourceType } from '../core/types';
+import { resourceGroups } from '../core/resource-groups';
+const props = defineProps<{ modelValue?: ResourceFilter; properties: ResourceProperty[]; resourceTypes?: ResourceType[]; resourceType?: string; disabled?: boolean; title: string; hint: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: ResourceFilter] }>();
 const id = useId();
 const filter = computed<ResourceFilter>(() => props.modelValue || { schema: 'asset-toolbox.filter/1', any: [] });
@@ -9,6 +10,10 @@ const fields = computed(() => props.properties.filter(field => !props.resourceTy
 const count = computed(() => filter.value.any.reduce((sum, group) => sum + group.all.length, 0));
 const labels: Record<string, string> = { eq: '等于', ne: '不等于', gt: '大于', gte: '大于或等于', lt: '小于', lte: '小于或等于', contains: '包含', 'starts-with': '开头是', 'ends-with': '结尾是' };
 const fieldOf = (rule: FilterRule) => fields.value.find(field => field.id === rule.property);
+const categories = computed(() => resourceGroups(props.resourceTypes || []));
+const catalogValue = (rule: FilterRule) => categories.value.length && ['eq', 'ne'].includes(rule.operator) && ['resource-kind', 'resource-type'].includes(rule.property);
+const knownValue = (rule: FilterRule) => rule.property === 'resource-kind' ? categories.value.some(group => group.id === rule.value) : props.resourceTypes?.some(type => type.id === rule.value);
+const fieldLabel = (field: ResourceProperty) => field.id === 'resource-kind' ? '资源类别' : field.id === 'resource-type' ? '资源格式' : field.label;
 function update(change: (next: ResourceFilter) => void) {
     const next = structuredClone(JSON.parse(JSON.stringify(filter.value))) as ResourceFilter;
     change(next); emit('update:modelValue', next);
@@ -35,14 +40,19 @@ function remove(group: number, index: number) {
       <div v-for="(rule, ri) in group.all" :key="ri" class="filter-rule">
         <label class="visually-hidden" :for="`${id}-${gi}-${ri}-property`">属性 {{ gi + 1 }}-{{ ri + 1 }}</label>
         <select :id="`${id}-${gi}-${ri}-property`" class="select property" :value="rule.property" @change="update(next => { next.any[gi]!.all[ri] = newRule(($event.target as HTMLSelectElement).value); })">
-          <option v-for="field in fields" :key="field.id" :value="field.id">{{ field.label }}{{ field.unit ? ` (${field.unit})` : '' }}</option>
+          <option v-for="field in fields" :key="field.id" :value="field.id">{{ fieldLabel(field) }}{{ field.unit ? ` (${field.unit})` : '' }}</option>
         </select>
         <label class="visually-hidden" :for="`${id}-${gi}-${ri}-operator`">比较 {{ gi + 1 }}-{{ ri + 1 }}</label>
         <select :id="`${id}-${gi}-${ri}-operator`" class="select" :value="rule.operator" @change="patch(gi, ri, { operator: ($event.target as HTMLSelectElement).value })">
           <option v-for="op in fieldOf(rule)?.operators || []" :key="op" :value="op">{{ labels[op] || op }}</option>
         </select>
         <label class="visually-hidden" :for="`${id}-${gi}-${ri}-value`">值 {{ gi + 1 }}-{{ ri + 1 }}</label>
-        <select v-if="fieldOf(rule)?.type === 'boolean'" :id="`${id}-${gi}-${ri}-value`" class="select" :value="String(rule.value)" @change="patch(gi, ri, { value: ($event.target as HTMLSelectElement).value === 'true' })"><option value="true">是</option><option value="false">否</option></select>
+        <select v-if="catalogValue(rule)" :id="`${id}-${gi}-${ri}-value`" class="select" :value="rule.value" @change="patch(gi, ri, { value: ($event.target as HTMLSelectElement).value })">
+          <option v-if="!knownValue(rule)" :value="rule.value">{{ rule.value === '' ? '请选择…' : `${rule.value}（目录外的值）` }}</option>
+          <template v-if="rule.property === 'resource-kind'"><option v-for="group in categories" :key="group.id" :value="group.id">{{ group.label }}</option></template>
+          <template v-else><optgroup v-for="group in categories" :key="group.id" :label="group.label"><option v-for="type in group.items" :key="type.id" :value="type.id">{{ type.displayName }}</option></optgroup></template>
+        </select>
+        <select v-else-if="fieldOf(rule)?.type === 'boolean'" :id="`${id}-${gi}-${ri}-value`" class="select" :value="String(rule.value)" @change="patch(gi, ri, { value: ($event.target as HTMLSelectElement).value === 'true' })"><option value="true">是</option><option value="false">否</option></select>
         <input v-else :id="`${id}-${gi}-${ri}-value`" class="input" :type="fieldOf(rule)?.type === 'number' ? 'number' : 'text'" step="any" maxlength="1024" :value="rule.value" @input="patch(gi, ri, { value: fieldOf(rule)?.type === 'number' ? Number(($event.target as HTMLInputElement).value) : ($event.target as HTMLInputElement).value })">
         <button type="button" class="button quiet small" :aria-label="`删除条件 ${gi + 1}-${ri + 1}`" @click="remove(gi, ri)">删除</button>
       </div>

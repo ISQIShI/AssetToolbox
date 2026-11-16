@@ -164,6 +164,8 @@ it('searches operations and formats, supports back navigation and keeps a cancel
     await add.trigger('click');
     const search = wrapper.find('input[aria-label="搜索操作或格式"]');
     expect(document.activeElement).toBe(search.element);
+    await search.setValue('图片');
+    expect(wrapper.findAll('.choice')).toHaveLength(2);
     await search.setValue(' .PNG ');
     expect(wrapper.findAll('.choice')).toHaveLength(2);
     await search.setValue('缩放');
@@ -171,8 +173,11 @@ it('searches operations and formats, supports back navigation and keeps a cancel
     await search.trigger('keydown', { key: 'ArrowDown' });
     expect(document.activeElement).toBe(wrapper.find('.choice').element);
     await wrapper.find('.choice').trigger('click');
-    const formats = wrapper.find('input[aria-label="搜索资源类型"]');
+    const formats = wrapper.find('input[aria-label="搜索资源格式"]');
     expect(document.activeElement).toBe(formats.element);
+    await formats.setValue('图片');
+    expect(wrapper.findAll('.choice')).toHaveLength(1);
+    expect(wrapper.get('.category-title').text()).toContain('图片');
     await formats.setValue('jpg');
     expect(wrapper.findAll('.choice')).toHaveLength(0);
     expect(wrapper.find('[role="status"]').text()).toContain('没有匹配项');

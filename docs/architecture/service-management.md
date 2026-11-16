@@ -14,6 +14,8 @@
 
 桌面“工具 → Agent 接入与服务管理”提供全部动作。CLI 提供 `service status/configure/start/stop/client-config`，同时保留 `api service-*`；HTTP 使用 `POST /api/v8/service-*`；两种 MCP 使用 `asset_service-*`。MCP 从公共 schema 枚举动作，缺少工具说明直接失败，不能悄悄漏掉新能力。
 
+桌面面板与存储维护共用折叠标题样式，展开分为本机服务、访问配置、Agent 连接。刷新仅更新状态，不覆盖正在编辑的配置；保存/启动/停止/生成配置仍分别调用上述公共动作。权限、认证和生命周期均由核心负责，布局改动不新增应用契约。
+
 stdio 需要与 Agent 宿主建立标准输入/输出管道，不能在桌面中启动一个没有宿主连接的 stdio 进程；桌面生成可供宿主采用的配置，宿主负责按会话启动。HTTP 与 MCP HTTP 共用同一监听器和 policy 应用服务，不监听局域网。
 
 ## 配置与权限

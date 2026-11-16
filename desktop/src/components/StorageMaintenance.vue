@@ -22,7 +22,7 @@ const modes: Record<string, string> = { process: '处理', preview: '扫描预�
 
 <template>
   <details class="storage">
-    <summary><Icon name="chevron" :size="14" /><strong>存储维护</strong><span>手动清理旧报告与执行明细</span></summary>
+    <summary class="tool-panel-heading"><Icon name="chevron" :size="14" /><strong>存储维护</strong><span class="panel-description">手动清理旧报告与执行明细</span></summary>
     <div class="storage-body">
       <p class="muted">先预览，再选择要清理的作业。任务日志、原素材、输出文件、备份和幂等记录始终保留；清理后无法打开这些作业的报告或查询明细。</p>
       <div class="storage-commands">
@@ -63,10 +63,6 @@ const modes: Record<string, string> = { process: '处理', preview: '扫描预�
 
 <style scoped>
 .storage { border: 1px solid var(--border-soft); border-radius: var(--r-panel); background: var(--control); }
-summary { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3); list-style: none; }
-summary::-webkit-details-marker { display: none; }
-summary > span { color: var(--text-2); margin-left: auto; font-size: var(--t-small); }
-.storage[open] > summary > .icon { transform: rotate(90deg); }
 .storage-body { display: grid; gap: var(--s-3); padding: 0 var(--s-3) var(--s-3); }
 .storage-commands { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .days { width: 90px; }
