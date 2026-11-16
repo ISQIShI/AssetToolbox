@@ -18,7 +18,7 @@ const { installType } = require('../../resource-core/tests/helpers');
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function fixture(t, permissions = {}) {
+async function fixture(t, permissions = {}, pausePublication) {
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'asset-mcp-http-'));
     const tool = copyTool(root), core = path.join(tool, 'resource-core'), serverRoot = path.join(tool, 'agent-mcp');
     fs.mkdirSync(serverRoot);
@@ -34,11 +34,36 @@ async function fixture(t, permissions = {}) {
     const policy = path.join(root, 'policy.json'), tokenFile = path.join(root, 'token.txt'), token = randomBytes(32).toString('base64url');
     fs.writeFileSync(policy, JSON.stringify({ schema: 'asset-toolbox.automation-policy/2', sourceRoots: [source], outputRoots: [output], backupRoots: [], ...permissions }));
     fs.writeFileSync(tokenFile, token);
-    const child = spawn(process.execPath, [path.join(serverRoot, 'server.mjs'), '--transport', 'http', '--policy', policy, '--token-file', tokenFile, '--port', '0'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const publicationReady = path.join(root, 'publication-ready'), publicationContinue = path.join(root, 'publication-continue');
+    const preload = path.join(root, 'pause-publication.cjs');
+    if (pausePublication) fs.writeFileSync(preload, `
+        const fs = require('node:fs'), path = require('node:path'), open = fs.openSync, write = fs.writeFileSync;
+        const files = new Map(); let paused = false;
+        fs.openSync = function(filename, ...args) { const fd = open(filename, ...args); files.set(fd, String(filename)); return fd; };
+        fs.writeFileSync = function(filename, data, options) {
+            const name = typeof filename === 'number' ? files.get(filename) : String(filename);
+            if (!paused && name?.split(path.sep).some(part => part === ${JSON.stringify(pausePublication)} || part.startsWith(${JSON.stringify(pausePublication + '.')}))) {
+                paused = true;
+                const fd = typeof filename === 'number' ? filename : open(filename, options?.flag || 'w');
+                try {
+                    write(${JSON.stringify(publicationReady)}, name);
+                    const end = Date.now() + 15000;
+                    while (!fs.existsSync(${JSON.stringify(publicationContinue)})) {
+                        if (Date.now() >= end) throw Error('测试发布门闩等待超时');
+                        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+                    }
+                    return write(fd, data, options);
+                } finally { if (typeof filename !== 'number') fs.closeSync(fd); }
+            }
+            return write(filename, data, options);
+        };
+    `);
+    const child = spawn(process.execPath, [...(pausePublication ? ['--require', preload] : []), path.join(serverRoot, 'server.mjs'), '--transport', 'http', '--policy', policy, '--token-file', tokenFile, '--port', '0'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const exited = new Promise(resolve => child.once('close', resolve));
     let stderr = '', stdout = ''; child.stdout.on('data', chunk => { stdout += chunk; });
     const clients = [], cleanups = [];
     t.after(async () => {
+        if (pausePublication) fs.writeFileSync(publicationContinue, '');
         for (const cleanup of cleanups) await cleanup();
         for (const client of clients) await client.close();
         child.kill(); await exited;
@@ -75,13 +100,39 @@ async function fixture(t, permissions = {}) {
         return { status: response.status, body: await response.json() };
     };
     const request = { mode: 'process', folder: source, outputDir: output, pipeline: [{ id: 'compress', resourceType: 'fixture', operation: 'compress', provider: 'fixture', enabled: true }] };
-    return { ...ready, token, connect, api, request, source, output, core, root, tool, policy, serverRoot, cleanups };
+    return { ...ready, token, connect, api, request, source, output, core, root, tool, policy, serverRoot, cleanups, publicationReady, publicationContinue };
 }
 async function until(call, jobId, predicate = state => state.done) {
     const deadline = Date.now() + 20000;
     while (Date.now() < deadline) { const response = await call('status', { jobId }); assert.equal(response.ok, true, JSON.stringify(response)); if (predicate(response.result)) return response.result; await delay(35); }
     throw new Error('HTTP MCP 作业等待超时');
 }
+
+for (const filename of ['dispatch.json', 'worker.json']) test(`cross-entry status never observes partially published ${filename} after HTTP MCP disconnect`, async t => {
+    const f = await fixture(t, {}, filename), remote = await f.connect();
+    const stdio = new Client({ name: 'publication-observer', version: '1.0.0' });
+    f.cleanups.push(() => stdio.close());
+    await stdio.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(f.serverRoot, 'server.mjs'), '--policy', f.policy], stderr: 'pipe' }));
+    const { ApplicationService, respond } = require(path.join(f.core, 'application/service'));
+    const desktop = ApplicationService.forDesktop(); f.cleanups.push(() => desktop.shutdown());
+    const submitted = await remote.call('submit', { request: { ...f.request, mode: 'preview' }, idempotencyKey: 'publication-window' });
+    assert.equal(submitted.ok, true, JSON.stringify(submitted)); const { jobId } = submitted.result;
+    await remote.client.close();
+    let observed, local;
+    try {
+        const end = Date.now() + 15000;
+        while (!fs.existsSync(f.publicationReady)) { assert.ok(Date.now() < end, '未进入真实写入窗口'); await delay(10); }
+        observed = (await stdio.callTool({ name: 'asset_status', arguments: { jobId } })).structuredContent;
+        local = await respond(desktop, 'status', { jobId });
+    } finally { fs.writeFileSync(f.publicationContinue, ''); }
+    const completed = await until(async (action, input) => (await f.api(action, input)).body, jobId);
+    assert.equal(completed.exitCode, 0, JSON.stringify(completed));
+    for (const response of [observed, local]) {
+        assert.equal(response.ok, true, JSON.stringify(response));
+        assert.equal(response.result.done, false);
+    }
+    assert.equal(fs.readFileSync(path.join(f.source, '0.pack'), 'utf8'), 'PACK:' + 'data'.repeat(100));
+});
 
 test('Streamable HTTP supports both protocol eras and concurrent clients without sharing MCP request state', async t => {
     const f = await fixture(t);

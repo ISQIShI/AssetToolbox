@@ -55,6 +55,8 @@ node scripts/check-docs.cjs
 
 只验证源码时不要求外部 EXE。完整功能验收还需安装全部本地提供方，然后运行 `npm test --prefix resource-core`，重新 `npm run build --prefix desktop`，最后 `npm run test:e2e --prefix desktop`。原生测试使用系统 WebView2，生成隔离素材，不要求下载 Playwright 浏览器；联网安装验收另用 `npm run test:e2e:network --prefix desktop`。
 
+GitHub 源码 CI 和源码 Release 无需手动设置仓库 Secrets/Variables：发布使用自动生成、按 job 限权的 `GITHUB_TOKEN`，标签和提交信息来自 GitHub 上下文。步骤自身的 `env:` 与仓库设置页是两回事，解释见[发布流程](../docs/releasing.md#为什么无需手动配置-secret-或环境变量)。
+
 ## 移动、更新与分发
 
 本机移动构建结果时，EXE、完整 `runtime/`、`resource-core/` 必须相邻；需要 MCP 时还携带完整 `agent-mcp/`。保留处理工具及其许可证、核心 node_modules、受管理依赖目录。文件夹应由当前用户可写，避免在只读目录运行。

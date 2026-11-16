@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { writeExclusive } = require('./publication');
 // 仅管理已由应用服务校验并落盘的作业进程，不定义第二套业务请求。
 class JobSession {
     constructor() { this.job = null; this.jobs = new Map(); this.closing = false; }
@@ -11,7 +12,7 @@ class JobSession {
         const job = { id, directory, exited: false, state: { phase: 'starting', done: false, processed: 0, total: 0 }, stderr: '' };
         try {
             const filename = path.join(directory, 'request.json');
-            fs.writeFileSync(filename, JSON.stringify(request), { flag: 'wx' });
+            writeExclusive(filename, request);
             job.child = spawn(process.execPath, [path.join(__dirname, '..', request.mode === 'dependency-install' ? 'framework/dependencies/worker.js' : 'batch.js'), filename], {
                 cwd: path.join(__dirname, '..'), windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'],
             });
@@ -21,12 +22,12 @@ class JobSession {
                 job.child.on('error', error => { job.error = error.message; });
                 job.child.once('close', code => {
                     job.exited = true; job.code = code;
-                    try { fs.writeFileSync(path.join(directory, 'exit.json'), JSON.stringify({ code, error: job.error || job.stderr }), { flag: 'wx' }); }
+                    try { writeExclusive(path.join(directory, 'exit.json'), { code, error: job.error || job.stderr }); }
                     catch (error) { job.error = error.message; }
                     resolve();
                 });
             });
-            fs.writeFileSync(path.join(directory, 'worker.json'), JSON.stringify({ pid: job.child.pid }));
+            writeExclusive(path.join(directory, 'worker.json'), { pid: job.child.pid });
             return { id: job.id };
         } catch (error) {
             throw error;

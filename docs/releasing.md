@@ -38,6 +38,21 @@ Git 标签为 `v` 加完整版本，例如 `v1.3.0-rc.1`。不使用日期版本
 
 GitHub 托管 CI 只覆盖源码层，不能声称完成真实编码器或原生验收。涉及桌面、Rust、桥接或版本元数据时，发布前在本机重新构建并跑原生 E2E；涉及提供方再跑真实编码器和必要的联网安装测试。结果写入版本说明并链接验证记录，未运行项明确列出。云端不能自动核验本机记录的真实性，维护者负责审核；无需为了 CI 上传本地第三方 EXE。
 
+## 为什么无需手动配置 Secret 或环境变量
+
+当前工作流无需仓库 Settings 中的自定义 Secrets、Variables 或 Environments：
+
+| 来源 | 本项目如何使用 |
+| --- | --- |
+| GitHub 自动生成的 `secrets.GITHUB_TOKEN` | 每个 job 的临时仓库令牌；仅 publish job 请求 `contents: write`，用于调用 Release REST API；结束后失效，不是手动创建的 PAT |
+| GitHub 上下文 `github.ref_name` / `github.sha` | 当前标签名/提交；YAML 将标签名作为步骤级 `RELEASE_TAG` 注入，检出指定提交 |
+| Runner 默认 `GITHUB_*` 环境变量 | 脚本核验仓库、运行 ID、push 事件、标签 ref 和 SHA，防止在错误上下文发布 |
+| 仓库文件与公共下载 | `.nvmrc` 决定 Node，锁文件决定 npm 依赖；GitHub 托管 Windows runner 执行检查，不使用本机安装与配置 |
+
+例如 `env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` 是把自动令牌显式传给发布脚本，不要求先在设置页保存同名 Secret。源码 CI 的 `contents: read` 足以检出代码；测试自行生成隔离权限文件和随机本机 HTTP 令牌，它们与 GitHub 发布令牌无关。这里没有配置 `environment:` 部署环境。未来接入外部云服务或签名服务时，再按其认证方式独立配置凭据。
+
+来源：[GitHub 自动令牌](https://docs.github.com/en/actions/concepts/security/github_token)、[默认环境变量](https://docs.github.com/en/actions/reference/workflows-and-actions/variables)。
+
 ## 准备与发布操作
 
 以下命令均从仓库根执行，使用 `.nvmrc` 对应 Node。工作区先整理干净，拉取最新 main 与标签；版本号只是示例，实际取决于上面的规则。

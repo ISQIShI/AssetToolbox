@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { JobSession } = require('./job-session');
+const { writeExclusive, publishJob } = require('./publication');
 const { acquire, alive } = require('./lock');
 const { fail, record, canonical, within } = require('./policy');
 const { localContext, policyContext, assertContext } = require('./context');
@@ -10,11 +11,6 @@ const ROOT = path.join(__dirname, '..', 'data', 'jobs', 'v6');
 const fingerprint = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const read = filename => JSON.parse(fs.readFileSync(filename, 'utf8'));
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
-function writeExclusive(filename, value) {
-    const fd = fs.openSync(filename, 'wx');
-    try { fs.writeFileSync(fd, JSON.stringify(value)); fs.fsyncSync(fd); }
-    finally { fs.closeSync(fd); }
-}
 function page(items, { offset = 0, limit = 50 }) {
     if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) fail('INVALID_REQUEST', '分页要求 offset >= 0，limit 为 1–100');
     return { items: items.slice(offset, offset + limit), total: items.length, nextOffset: offset + limit < items.length ? offset + limit : null };
@@ -128,9 +124,8 @@ class ApplicationService {
                 if (missing.length) fail('DEPENDENCY_MISSING', missing.map(provider => provider.id + '：' + provider.availability.reason + '；' + provider.acquisition?.instructions).join('\n'));
             }
             const resources = require('./resources').plan(request);
-            fs.mkdirSync(directory, { recursive: true });
             const meta = { schema: JOB, id, scope: this.scope, requestHash, request, resources, createdAt: new Date().toISOString(), ownerPid: process.pid, owner: this.owner, sequence: queue.reduce((max, item) => Math.max(max, item.sequence), 0) + 1, publicRequest: input };
-            writeExclusive(path.join(directory, 'job.json'), meta);
+            publishJob(directory, meta);
             this.owned.add(id); this.queue.wake();
             return { jobId: id, replayed: false };
         } finally { unlock(); }

@@ -4,7 +4,7 @@
 
 ## 当前基线
 
-首个正式源码版本 [v1.0.0](https://github.com/ISQIShI/AssetToolbox/releases/tag/v1.0.0) 已由 CI 发布，标签提交 `e7630f9`；仓库已公开，MIT 已识别。新增独立[用户文档 guides](../guides/README.md)，使用与接入说明从根 README 导航。原生 EXE 已重新构建验收，产品版本值与处理/应用协议未变。只发行源码，二进制分发未放行；规则见[发布流程](releasing.md)。
+main 基于 `de64bed` 修复跨入口状态查询读取半写入 JSON 的竞争，首次作业记录与目录改为原子发布；[确定性复现与验收](verification/2026-11-15-mcp-publication.md)覆盖旧实现失败、新实现通过。已重新构建 EXE，公共契约未变；本轮不发行新版本，既有 [v1.0.0](https://github.com/ISQIShI/AssetToolbox/releases/tag/v1.0.0) 尚不含此修复。仓库公开、源码 MIT，二进制分发未放行；用户入口见 [guides](../guides/README.md)。
 
 | 领域 | 当前能力与专题 |
 | --- | --- |
@@ -24,15 +24,15 @@
 
 ## 最近验收
 
-Windows x64；开发 Node 26.13.0，便携 Node 24.19.0。范围、首版 EXE 摘要及远端操作见[本轮验证](verification/2026-11-15-public-first-release.md)。
+Windows x64；开发 Node 26.13.0，便携 Node 24.19.0。范围、EXE 摘要、旧版失败证据和远端结果见[本轮验证](verification/2026-11-15-mcp-publication.md)。
 
 | 检查 | 最近结果 |
 | --- | --- |
-| 核心源码 / 真实编码器 | 全量 178 项通过 |
+| 核心源码 / 真实编码器 | 全量 186 项通过，新增 publication 回归 8 项 |
 | 前端组件 / 类型检查 | 61 通过；typecheck 通过 |
-| MCP 与跨入口一致性 | 完整复测 7 通过；一次状态查询失败已补诊断，定向 3 次通过；根因未确认 |
-| 原生构建 / E2E | 新 release EXE 构建通过；3 项 E2E 通过，约 1.1 分钟 |
-| 发布工具 / 工作流 | 5 项回归通过；[main CI](https://github.com/ISQIShI/AssetToolbox/actions/runs/43817670748) 与 [v1.0.0 发布工作流](https://github.com/ISQIShI/AssetToolbox/actions/runs/43818264450) 全部通过；匿名核验正式 Release 与源码归档 |
+| MCP 与跨入口一致性 | 9 项通过，新增两个真实跨进程门闩回归；半写入记录竞争已修复 |
+| 原生构建 / E2E | 新 release EXE 构建通过；3 项 E2E 通过，约 1 分钟 |
+| 远端工作流 | 本轮源码 CI 待推送后核验；不修改已发布标签 |
 | 文档 / 源码发布检查 | 文档链接有效；源码检查通过，二进制未放行 |
 
 ## 已知限制
@@ -47,7 +47,7 @@ Windows x64；开发 Node 26.13.0，便携 Node 24.19.0。范围、首版 EXE �
 - 同一安装协调资源；不同安装及外部编辑器仍需人工协调。没有常驻后台接管、崩溃自动重放或运行中自动调节预算。
 - 历史作业同步扫描、筛选限于当前页；大报告先完整读取再分页，尚无索引或流式读取。
 - [二进制分发](distribution.md)尚未放行；JPG-C 授权及其他工具的对应源码/组件许可义务不能用本地可运行代替。未接入 Cordis。
-- 云端源码 CI 不替代本机编码器/原生验收；仓库保护规则尚未启用。MCP 偶发状态查询失败仍需按新增诊断定位，本轮独立复测通过不代表根因修复。
+- 云端源码 CI 不替代本机编码器/原生验收；仓库保护规则尚未启用。历史另一次网络 ECONNRESET 尚无单独根因证据，本轮未复现，不能归入本次 JSON 发布修复。
 
 ## 下一步（建议，尚未实施）
 

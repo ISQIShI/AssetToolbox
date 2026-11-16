@@ -29,6 +29,8 @@ coverage/
 /resCompress/reports/
 
 # 编辑器与操作系统临时文件
+.claude/
+.agents/
 .DS_Store
 Thumbs.db
 *.swp

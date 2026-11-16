@@ -16,7 +16,7 @@ CPU 核心数不直接作为作业上限。queue 返回 availableProcessors（No
 
 ## 调度与公平性
 
-桌面、CLI、MCP stdio/HTTP 和 HTTP API 共用 ApplicationService。提交锁内预检请求、权限及依赖，计算资源集合，分配递增 sequence，排他写入并 fsync `data/jobs/v6/<jobId>/job.json`。幂等键重放原 ID；容量满不登记身份。capabilities.scheduling 公布当前 maxConcurrent、范围、maxPending 和 ordering=conflict-fifo。
+桌面、CLI、MCP stdio/HTTP 和 HTTP API 共用 ApplicationService。提交锁内预检请求、权限及依赖，计算资源集合，分配递增 sequence，在同级 `.pending-*` 暂存目录写完并 fsync job.json，再原子重命名为 `data/jobs/v6/<jobId>/`。只有完整目录才进入列表/队列，幂等键重放原 ID；容量满不登记身份。capabilities.scheduling 公布当前 maxConcurrent、范围、maxPending 和 ordering=conflict-fifo。
 
 各原持有会话每 100ms 调度一次；无需常驻进程。调度同时取得提交锁、短执行登记锁，从持久启动声明和存活 worker 占用计算容量；启动声明一经落盘就占槽，不等待 worker 自己抢槽。只有原持有者可以启动自己的作业，不转移权限。
 
@@ -51,6 +51,10 @@ worker 独立登记 execution/2 占用（PID、随机 token、jobId、资源集�
 存储清理持有提交锁和独占执行屏障，并拒绝任何等待/运行项；排队、启动中、孤儿 worker 均不能被清理穿过。取消不提前释放占用。正常运行必须确认退出后才释放持久启动预约；无进程创建的启动失败写最终状态和退出确认，防止永久卡槽。
 
 ## 状态与取消
+
+`publication.js` 统一首次发布 job、dispatch、request、worker、exit 及无 worker 的终态记录：以 `<文件名>.writing/` 预约排他写者，写临时 JSON、fsync 并关闭，再重命名到尚不存在的最终路径。目标已存在时拒绝覆盖；不使用硬链接，不放宽维护模块的链接拒绝规则。其他入口只能看到缺省状态或完整记录，不能读取 open 与 write 之间的空文件。运行中的 status 更新继续使用既有临时文件替换；已公布的损坏 JSON 仍明确报错，不吞掉解析错误或伪造终态。
+
+`.pending-*` 不符合 jobId 格式，不能被调度；正常失败清理本次暂存内容，崩溃遗留不自动接管或重试。未完成的写者预约、未知文件和坏记录继续保守阻塞写入/维护；不因达到等待时间就删除身份。文件/目录原子发布不改变 job/6 或公共接口格式。
 
 queued 状态包含 sequence、queuePosition、waitReason、runningCount、concurrencyLimit。queuePosition 是包含运行项的登记顺位，**不是启动顺序或预计时间**。waitReason 为 resource-conflict（运行资源冲突）、earlier-conflict（较早等待项优先）、capacity（槽位满）或 owner-dispatch（等待持有者）。原因是查询时的快照；短执行锁/维护争用和崩溃元数据窗口可能使实际派发继续等待。界面显示原因与槽位用量，不披露其他权限范围的路径或请求。
 
