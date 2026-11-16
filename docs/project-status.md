@@ -1,6 +1,6 @@
 # 项目状态
 
-更新：2026-11-15。这里只维护当前概况；历史见[验证索引](verification/README.md)，长期规则见[文档管理规范](documentation.md)。
+更新：2026-11-16。这里只维护当前概况；历史见[验证索引](verification/README.md)，长期规则见[文档管理规范](documentation.md)。
 
 ## 当前基线
 
@@ -13,7 +13,7 @@ main 基于 `de64bed` 修复跨入口状态查询读取半写入 JSON 的竞争�
 | 界面分组 | [类别 → 格式](architecture/frontend.md#属性过滤编辑)，添加步骤继续选择操作；过滤属性/格式与步骤格式使用多级菜单，保存原始 ID |
 | 界面控件 | [自绘外观 + 无样式行为库](design/frontend-design.md#下拉选择与提示)：下拉、提示、确认对话框、右键菜单经封装使用 Reka UI，其余控件自写；步骤可拖拽或用键盘排序 |
 | 处理页与外观 | [三栏布局](design/frontend-design.md#概览栏)：处理线、编辑器、常驻概览栏（作业进度与结果、扫描数字、各格式文件数）；面板不描边；可拖入来源文件夹；窗口不透明、不使用系统材质（[ADR 0019](decisions/0019-inspector-and-window-material.md)、[0020](decisions/0020-activity-workspace-and-number-controls.md)） |
-| 导航与控件 | 活动栏四项：处理、[活动](design/frontend-design.md#活动工作区)（任务 / 作业队列两个视图）、恢复、工具；恢复页选中任务即检查；数值参数带步进按钮，范围有限时带滑块 |
+| 导航与控件 | 活动栏四项：处理、[活动](design/frontend-design.md#活动工作区)（任务 / 作业队列两个视图）、恢复、工具；任务详情显示处理前后体积并可打开来源/写入/备份文件夹；恢复页选中任务即检查；数值参数带步进按钮，范围有限时带滑块 |
 | 应用入口 | [统一应用服务](architecture/application.md)供桌面、CLI、MCP stdio/HTTP、HTTP API 复用；权限和生命周期由上下文控制 |
 | 服务管理 | [公共五动作](architecture/service-management.md)配置/启停/查询 HTTP 与 MCP HTTP，生成 stdio/HTTP 连接配置；桌面、CLI 和 Agent 均有访问路径 |
 | 队列与并行 | [资源感知调度](architecture/queue.md)，1–8 项可配置、默认 2，100 个未结束项；冲突 FIFO，固定槽位，空闲时修改预算 |
@@ -26,13 +26,13 @@ main 基于 `de64bed` 修复跨入口状态查询读取半写入 JSON 的竞争�
 
 ## 最近验收
 
-Windows x64；开发 Node 26.13.0，便携 Node 24.19.0。范围、EXE 摘要、旧版失败证据和远端结果见[本轮验证](verification/2026-11-15-mcp-publication.md)。 界面两轮另见[概览栏与外观](verification/2026-11-15-inspector-and-material.md)、[活动页与数值控件](verification/2026-11-15-activity-and-number-controls.md)。
+Windows x64；开发 Node 26.13.0，便携 Node 24.19.0。范围、EXE 摘要、旧版失败证据和远端结果见[本轮验证](verification/2026-11-15-mcp-publication.md)。 界面两轮另见[概览栏与外观](verification/2026-11-15-inspector-and-material.md)、[活动页与数值控件](verification/2026-11-15-activity-and-number-controls.md)、[任务体积与打开文件夹](verification/2026-11-16-task-sizes-and-folders.md)。
 
 | 检查 | 最近结果 |
 | --- | --- |
-| 核心源码 / 真实编码器 | 全量 186 项通过，新增 publication 回归 8 项 |
-| 前端组件 / 类型检查 | 67 通过；typecheck 通过 |
-| MCP 与跨入口一致性 | 9 项通过，新增两个真实跨进程门闩回归；半写入记录竞争已修复 |
+| 核心源码 / 真实编码器 | 全量 186 项通过；续跑用例补充任务体积统计断言 |
+| 前端组件 / 类型检查 | 68 通过；typecheck 通过 |
+| MCP 与跨入口一致性 | 9 项通过；任务摘要的体积字段经同一对象透传到各入口 |
 | 原生构建 / E2E | 新 release EXE 构建通过；3 项 E2E 通过，约 1.2 分钟 |
 | 远端工作流 | 修复提交 `39c5419` 的 [GitHub 源码 CI](https://github.com/ISQIShI/AssetToolbox/actions/runs/43820735233) 全部通过；不修改已发布标签 |
 | 文档 / 源码发布检查 | 文档链接有效；源码检查通过，二进制未放行 |
@@ -41,7 +41,7 @@ Windows x64；开发 Node 26.13.0，便携 Node 24.19.0。范围、EXE 摘要、
 
 - 资源类别仅用于统一界面组织和筛选，步骤仍指定一个格式；本轮按用户选择未实现单步骤同时处理 JPEG/PNG。
 - 多级菜单的点选、左右方向键、Esc、焦点及边界已有原生测试；对话框和右键菜单仍未逐项覆盖键盘操作，屏幕阅读器未人工验收。级联菜单没有跨层全文搜索；添加步骤支持当前层搜索。拖拽排序不会在滚动区边缘自动滚动，停用的按钮不显示提示。
-- 拖入文件夹没有原生自动化用例。数值参数没有单位后缀与宽高锁定（字段描述里没有对应信息）；任务详情没有体积统计和“打开文件夹”。工具页结构未调整。
+- 拖入文件夹和“打开文件夹”没有原生自动化用例。数值参数没有单位后缀与宽高锁定（字段描述里没有对应信息）。任务体积只统计已完成的文件，恢复原文件后不回退。工具页结构未调整。
 
 - 图片属性仅有界读取 PNG/JPEG 头部，不代替完整解码；JPEG 考虑 EXIF 方向，PNG eXIf 尚未解释；音频专属属性尚未实现。
 - 扫描只应用来源过滤，不执行转换来预测步骤条件。属性读取失败明确报错，来源排除不复制或备份；步骤全部跳过时另存仍复制原文件。

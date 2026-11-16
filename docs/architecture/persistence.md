@@ -8,7 +8,7 @@
 | --- | --- |
 | `data/settings.json` | `schema: asset-toolbox.settings/3`，路径、保存方式和完整 pipeline |
 | `data/tasks/<id>/task.json` | `schema: asset-toolbox.task/2`，固定任务头 |
-| `data/tasks/<id>/events.jsonl` | 文件计划、提交及恢复事件 |
+| `data/tasks/<id>/events.jsonl` | 文件计划、提交及恢复事件。任务摘要（`tasks` 动作与作业状态里的 `task`）由它推导，其中体积统计为只读派生值：`totalBytes` 是固定清单在扫描时的总大小，`originalBytes` / `outputBytes` / `savedBytes` 只累计已完成（已处理或保持原样）文件的结果记录；失败与待处理文件不计入，恢复不改变这些数字。新增这些字段不改变任务文件格式 |
 | `data/tasks/<id>/task.lock` 与 claim | PID/token 执行锁 |
 | `data/reports/<id>/report.json`、`files.csv` | `schema: asset-toolbox.report/2` 报告及 CSV |
 | `data/dependencies/<provider>/active.json`、`installs/<uuid>/` | `schema: 1` 受管理依赖启用记录与不可变副本，详见[依赖管理](dependencies.md)；不属于素材任务 |
