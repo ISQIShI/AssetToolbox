@@ -32,7 +32,8 @@ actionlint 从官方固定版本下载，Windows ZIP 与官方 checksums 文件�
 
 ## 远端与范围
 
-- 已核对私有状态、main 和空 Release 列表；工作流推送后的运行结果待补充。
+- 已提交并推送 `c16a306` 及此前未推送的开发提交，仓库保持私有，Release 列表仍为空。
+- [GitHub 源码 CI #43814975778](https://github.com/ISQIShI/AssetToolbox/actions/runs/43814975778) 在 `c16a306c24f4001e16f004526b7054b032197ff5` 上全部通过：核心源码、版本/发布工具、MCP 双传输、前端交互、类型/生产前端以及文档/分发检查。远端本次未复现本地 MCP ECONNRESET。
 - 真正的标签触发及 Release 创建未执行，避免为验证流程产生虚假的产品发行；发布 API 的调用及失败/重复边界由模拟测试覆盖。
 - 未重建 EXE、未执行核心真实编码器全量和联网安装：产品版本值、前端/Rust 与构建配方未变，EXE 沿用[菜单验收](2026-11-15-hierarchical-menus.md)；MCP 版本声明变更另重跑 MCP 和原生服务联动验收。
 - main/标签保护、不可变 Release 属于仓库设置，本轮没有自动修改或宣称启用；便携包仍未放行。

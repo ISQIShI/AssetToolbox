@@ -32,7 +32,7 @@ Windows x64；开发 Node 26.13.0，便携 Node 24.19.0。测试范围及未执�
 | 前端组件 / 类型检查 | 61 通过；typecheck 通过 |
 | MCP 与跨入口一致性 | 7 通过；首次并行运行发生一次 ECONNRESET，未认定根因已修复 |
 | 原生构建 / E2E | EXE 沿用菜单验收产物；最终核心/MCP 组合重跑 3 项 E2E 通过，约 1.1 分钟 |
-| 发布工具 / 工作流 | 5 项工具回归与 actionlint 通过；远端新工作流运行待推送后核验；未创建 Release |
+| 发布工具 / 工作流 | 5 项工具回归与 actionlint 通过；`c16a306` 的 [GitHub 源码 CI](https://github.com/ISQIShI/AssetToolbox/actions/runs/43814975778) 全部通过；未创建 Release |
 | 文档 / 源码发布检查 | 文档链接有效；源码检查通过，二进制未放行 |
 
 ## 已知限制
