@@ -6,6 +6,7 @@ import { date, folderName } from '../core/model';
 import PathField from '../components/PathField.vue';
 import RestoreTable from '../components/RestoreTable.vue';
 import Icon from '../components/Icon.vue';
+import SelectBox from '../components/SelectBox.vue';
 
 const bench = useWorkbench();
 const { tasks, restoreSource, restorePreview, restoreScope, restoreRevision, busy, job } = bench;
@@ -40,10 +41,7 @@ function check() {
       <div v-if="mode === 'task'" class="inputs">
         <div class="field stacked grow">
           <label class="label" for="restore-task">任务</label>
-          <select id="restore-task" v-model="taskId" class="select" :disabled="busy || !backedUp.length">
-            <option value="" disabled>{{ backedUp.length ? '选择一个有备份的任务' : '还没有启用备份的任务' }}</option>
-            <option v-for="task in backedUp" :key="task.id" :value="task.id">{{ task.source ? folderName(task.source) : task.id }}，{{ date(task.createdAt) }}，备份 {{ task.backupCount }} 个</option>
-          </select>
+          <SelectBox id="restore-task" v-model="taskId" :options="backedUp.map(task => ({ value: task.id, label: `${task.source ? folderName(task.source) : task.id}，${date(task.createdAt)}，备份 ${task.backupCount} 个` }))" :placeholder="backedUp.length ? '选择一个有备份的任务' : '还没有启用备份的任务'" :disabled="busy || !backedUp.length" />
         </div>
         <button type="button" class="button primary" :disabled="busy" @click="check"><Icon name="scan" />检查备份</button>
       </div>

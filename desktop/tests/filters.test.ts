@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import FilterEditor from '../src/components/FilterEditor.vue';
 import { definition, config as configuration } from './fixtures';
 import { createStep, processingRequest, resetStep, retargetStep } from '../src/core/model';
+import { choose, optionLabels, selectBox } from './select';
 import type { ResourceFilter } from '../src/core/types';
 
 describe('共享属性过滤编辑器', () => {
@@ -15,7 +16,7 @@ describe('共享属性过滤编辑器', () => {
         };
         expect(wrapper.text()).toContain('未设置条件');
         await wrapper.get('.add-group').trigger('click'); await sync();
-        await wrapper.get('select.property').setValue('image-width'); await sync();
+        await choose(selectBox(wrapper, 'property'), 'image-width'); await sync();
         await wrapper.get('input[type=number]').setValue('1024');
         const value = await sync(); expect(value.any[0]!.all[0]).toEqual({ property: 'image-width', operator: 'gte', value: 1024 });
         await wrapper.get('.filter-group > button').trigger('click'); expect((await sync()).any[0]!.all).toHaveLength(2);
@@ -25,7 +26,7 @@ describe('共享属性过滤编辑器', () => {
     it('步骤只列出适用属性，修改值移除旧版本，忙碌禁止编辑', async () => {
         const initial: ResourceFilter = { schema: 'asset-toolbox.filter/1', any: [{ all: [{ property: 'file-size', operator: 'gt', value: 1, version: '1.0.0' }] }] };
         const wrapper = mount(FilterEditor, { props: { properties: definition.properties, resourceType: 'mp3', modelValue: initial, title: '步骤过滤', hint: '' } });
-        expect(wrapper.get('select.property').text()).not.toContain('图片');
+        expect(optionLabels(selectBox(wrapper, 'property')).join()).not.toContain('图片');
         await wrapper.get('input').setValue('42');
         const next = wrapper.emitted('update:modelValue')![0]![0] as ResourceFilter;
         expect(next.any[0]!.all[0]!.version).toBeUndefined(); expect(initial.any[0]!.all[0]!.value).toBe(1);

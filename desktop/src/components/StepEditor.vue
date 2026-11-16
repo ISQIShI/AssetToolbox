@@ -5,6 +5,7 @@ import type { Definition, Step } from '../core/types';
 import { isMissing, resetStep, retargetStep, stepTitle } from '../core/model';
 import ParameterFields from './ParameterFields.vue';
 import Icon from './Icon.vue';
+import SelectBox from './SelectBox.vue';
 import FilterEditor from './FilterEditor.vue';
 import { resourceGroups } from '../core/resource-groups';
 
@@ -60,22 +61,16 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
     <section class="group combo" aria-label="步骤组合">
       <div class="field">
         <label class="label" :for="`${id}-type`">资源格式</label>
-        <select :id="`${id}-type`" class="select" :value="step.resourceType" :disabled="disabled" @change="retarget(($event.target as HTMLSelectElement).value)">
-          <optgroup v-for="group in categories" :key="group.id" :label="group.label"><option v-for="type in group.items" :key="type.id" :value="type.id">{{ type.displayName }}</option></optgroup>
-        </select>
+        <SelectBox :id="`${id}-type`" :model-value="step.resourceType" :options="categories.map(group => ({ label: group.label, items: group.items.map(type => ({ value: type.id, label: type.displayName })) }))" :disabled="disabled" @update:model-value="retarget($event)" />
       </div>
       <div class="field">
         <label class="label" :for="`${id}-operation`">操作</label>
-        <select :id="`${id}-operation`" class="select" :value="step.operation" :disabled="disabled" @change="retarget(step.resourceType, ($event.target as HTMLSelectElement).value)">
-          <option v-for="item in operations" :key="item.id" :value="item.id">{{ item.displayName }}</option>
-        </select>
+        <SelectBox :id="`${id}-operation`" :model-value="step.operation" :options="operations.map(item => ({ value: item.id, label: item.displayName }))" :disabled="disabled" @update:model-value="retarget(step.resourceType, $event)" />
         <p class="hint about">{{ about }}</p>
       </div>
       <div class="field">
         <label class="label" :for="`${id}-provider`">处理工具</label>
-        <select :id="`${id}-provider`" class="select" :value="step.provider" :disabled="disabled" @change="retarget(step.resourceType, step.operation, ($event.target as HTMLSelectElement).value)">
-          <option v-for="item in providers" :key="item.id" :value="item.id">{{ item.displayName }}{{ isMissing(item) ? '（缺少依赖）' : '' }}</option>
-        </select>
+        <SelectBox :id="`${id}-provider`" :model-value="step.provider" :options="providers.map(item => ({ value: item.id, label: item.displayName + (isMissing(item) ? '（缺少依赖）' : '') }))" :disabled="disabled" @update:model-value="retarget(step.resourceType, step.operation, $event)" />
       </div>
     </section>
 
@@ -101,5 +96,4 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
 .switch { flex: none; height: var(--control-small); color: var(--text-2); }
 .commands { display: flex; flex-wrap: wrap; gap: var(--s-1); }
 .end { margin-left: auto; }
-.combo .select { max-width: 320px; }
 </style>

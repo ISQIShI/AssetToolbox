@@ -6,6 +6,7 @@ import { folderName, isMissing, providerOf, stepGroups, stepTitle } from '../cor
 import type { ResourceType } from '../core/types';
 import { resourceGroups, resourceKindLabel } from '../core/resource-groups';
 import Icon from './Icon.vue';
+import Tip from './Tip.vue';
 
 const bench = useWorkbench();
 const { config, definition, station, scan, scanStale, busy } = bench;
@@ -126,7 +127,7 @@ onUnmounted(() => close(false));
         </button>
         <section v-if="adding" :id="menuId" ref="menu" class="step-picker" :style="menuStyle" role="dialog" aria-label="添加步骤" @focusout="focusOut" @keydown.esc.stop.prevent="close(true)" @keydown="menuKey">
           <div class="picker-heading">
-            <button v-if="selectedGroup" type="button" class="button quiet small icon-only" aria-label="返回操作列表" title="返回操作列表" @click="selectOperation('')"><Icon class="back" name="chevron" /></button>
+            <Tip v-if="selectedGroup" text="返回操作列表"><button type="button" class="button quiet small icon-only" aria-label="返回操作列表" @click="selectOperation('')"><Icon class="back" name="chevron" /></button></Tip>
             <strong>{{ selectedGroup ? selectedGroup.operation.displayName : '选择操作' }}</strong>
             <span>{{ selectedGroup ? '选择资源格式' : '再选资源格式' }}</span>
           </div>

@@ -8,6 +8,7 @@ import { createWorkbench, workbenchKey } from '../src/core/workbench';
 import { call, openProviderSource } from '../src/core/api';
 import { config, definition, missingProvider, task } from './fixtures';
 import { createStep, processingRequest, resetStep, retargetStep, sizeChange, stepGroups, taskStatus } from '../src/core/model';
+import { choose, selectBox } from './select';
 import type { Step, RestoreFile, RestorePreview } from '../src/core/types';
 
 vi.mock('../src/core/api', () => ({ call: vi.fn(), chooseFolder: vi.fn(), openReport: vi.fn(), openProviderSource: vi.fn() }));
@@ -28,7 +29,7 @@ describe('步骤编辑器', () => {
         expect(wrapper.findAll('input[type=number]')).toHaveLength(2);
         expect(wrapper.find('input[step="0.05"]').attributes('max')).toBe('1');
         expect(wrapper.text()).toContain('测试工具 · 压缩参数');
-        await byLabel(wrapper, '模式').setValue('b');
+        await choose(selectBox(wrapper, '模式'), 'b');
         expect(lastEmitted(wrapper)).toMatchObject({ providerOptions: { mode: 'b' }, parameters: {} });
         const long = '中文'.repeat(7000); await byLabel(wrapper, '文字').setValue(long);
         expect(lastEmitted(wrapper).providerOptions.text).toBe(long);
@@ -41,7 +42,7 @@ describe('步骤编辑器', () => {
         const wrapper = mount(StepEditor, { props: { definition, modelValue: step, index: 0, count: 2 } });
         expect(wrapper.findAll('.parameters input').every(input => input.attributes('disabled') !== undefined)).toBe(true);
         expect(wrapper.text()).toContain('已停用的步骤不会执行');
-        await byLabel(wrapper, '操作').setValue('image-resize');
+        await choose(selectBox(wrapper, '操作'), 'image-resize');
         expect(lastEmitted(wrapper)).toMatchObject({ id: 'first', operation: 'image-resize', parameters: { width: 512 }, enabled: false });
         expect(resetStep(definition, step)).toMatchObject({ id: 'first', enabled: false, providerOptions: { level: 4, rate: .7 } });
     });
@@ -58,7 +59,7 @@ describe('步骤编辑器', () => {
 
     it('switches adapters within one provider without leaking fields or options between operations', async () => {
         const wrapper = mount(StepEditor, { props: { definition, modelValue: config.pipeline[0]!, index: 0, count: 1 } });
-        await byLabel(wrapper, '操作').setValue('image-resize');
+        await choose(selectBox(wrapper, '操作'), 'image-resize');
         const resized = lastEmitted(wrapper);
         expect(resized.parameters).toEqual({ width: 512 });
         expect(resized.providerOptions).toEqual({ quality: 90 });
@@ -67,7 +68,7 @@ describe('步骤编辑器', () => {
         expect(wrapper.text()).not.toContain('额外开关');
         await byLabel(wrapper, '缩放质量').setValue(71);
         expect(lastEmitted(wrapper).providerOptions).toEqual({ quality: 71 });
-        await byLabel(wrapper, '操作').setValue('compress');
+        await choose(selectBox(wrapper, '操作'), 'compress');
         expect(lastEmitted(wrapper).parameters).toEqual({});
         expect(lastEmitted(wrapper).providerOptions).toEqual({ level: 4, rate: .7, flag: false, mode: 'a', text: '默认' });
         wrapper.unmount();
@@ -82,14 +83,14 @@ describe('步骤编辑器', () => {
             parameters: { width: 256 }, providerOptions: { quality: 61 },
             versions: { resourceType: '1.0.0', operation: '1.0.0', provider: '1.0.0', adapter: '1.0.0' } };
         const wrapper = mount(StepEditor, { props: { definition: catalog, modelValue: original, index: 0, count: 1 } });
-        await byLabel(wrapper, '处理工具').setValue('other');
+        await choose(selectBox(wrapper, '处理工具'), 'other');
         const changed = lastEmitted(wrapper);
         expect(changed).toMatchObject({ id: original.id, enabled: false, parameters: { width: 256 }, providerOptions: { speed: 3 } });
         expect(changed.versions).toBeUndefined();
         expect(changed.parameters).not.toBe(original.parameters);
         await wrapper.setProps({ modelValue: changed });
         expect(wrapper.text()).toContain('工具速度'); expect(wrapper.text()).not.toContain('缩放质量');
-        await byLabel(wrapper, '处理工具').setValue('test');
+        await choose(selectBox(wrapper, '处理工具'), 'test');
         expect(lastEmitted(wrapper).parameters).toEqual({ width: 256 });
         expect(lastEmitted(wrapper).providerOptions).toEqual({ quality: 90 });
         expect(resetStep(catalog, changed).parameters).toEqual({ width: 512 });

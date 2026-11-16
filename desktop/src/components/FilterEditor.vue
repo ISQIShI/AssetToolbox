@@ -2,6 +2,7 @@
 import { computed, useId } from 'vue';
 import type { FilterRule, ResourceFilter, ResourceProperty, ResourceType } from '../core/types';
 import { resourceGroups } from '../core/resource-groups';
+import SelectBox, { type SelectEntry } from './SelectBox.vue';
 const props = defineProps<{ modelValue?: ResourceFilter; properties: ResourceProperty[]; resourceTypes?: ResourceType[]; resourceType?: string; disabled?: boolean; title: string; hint: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: ResourceFilter] }>();
 const id = useId();
@@ -13,6 +14,12 @@ const fieldOf = (rule: FilterRule) => fields.value.find(field => field.id === ru
 const categories = computed(() => resourceGroups(props.resourceTypes || []));
 const catalogValue = (rule: FilterRule) => categories.value.length && ['eq', 'ne'].includes(rule.operator) && ['resource-kind', 'resource-type'].includes(rule.property);
 const knownValue = (rule: FilterRule) => rule.property === 'resource-kind' ? categories.value.some(group => group.id === rule.value) : props.resourceTypes?.some(type => type.id === rule.value);
+// 目录值的选项：类别直接列出；格式按类别分组。目录外的旧值保留为一个可见选项，避免静默丢失。
+function catalogOptions(rule: FilterRule): SelectEntry[] {
+    const unknown: SelectEntry[] = knownValue(rule) || rule.value === '' ? [] : [{ value: String(rule.value), label: `${rule.value}（目录外的值）` }];
+    if (rule.property === 'resource-kind') return [...unknown, ...categories.value.map(group => ({ value: group.id, label: group.label }))];
+    return [...unknown, ...categories.value.map(group => ({ label: group.label, items: group.items.map(type => ({ value: type.id, label: type.displayName })) }))];
+}
 const fieldLabel = (field: ResourceProperty) => field.id === 'resource-kind' ? '资源类别' : field.id === 'resource-type' ? '资源格式' : field.label;
 function update(change: (next: ResourceFilter) => void) {
     const next = structuredClone(JSON.parse(JSON.stringify(filter.value))) as ResourceFilter;
@@ -39,20 +46,12 @@ function remove(group: number, index: number) {
       <legend>{{ gi ? '或：' : '' }}第 {{ gi + 1 }} 组 · 以下条件全部满足</legend>
       <div v-for="(rule, ri) in group.all" :key="ri" class="filter-rule">
         <label class="visually-hidden" :for="`${id}-${gi}-${ri}-property`">属性 {{ gi + 1 }}-{{ ri + 1 }}</label>
-        <select :id="`${id}-${gi}-${ri}-property`" class="select property" :value="rule.property" @change="update(next => { next.any[gi]!.all[ri] = newRule(($event.target as HTMLSelectElement).value); })">
-          <option v-for="field in fields" :key="field.id" :value="field.id">{{ fieldLabel(field) }}{{ field.unit ? ` (${field.unit})` : '' }}</option>
-        </select>
+        <SelectBox :id="`${id}-${gi}-${ri}-property`" class="property" :model-value="rule.property" :options="fields.map(field => ({ value: field.id, label: fieldLabel(field) + (field.unit ? ` (${field.unit})` : '') }))" @update:model-value="update(next => { next.any[gi]!.all[ri] = newRule($event); })" />
         <label class="visually-hidden" :for="`${id}-${gi}-${ri}-operator`">比较 {{ gi + 1 }}-{{ ri + 1 }}</label>
-        <select :id="`${id}-${gi}-${ri}-operator`" class="select" :value="rule.operator" @change="patch(gi, ri, { operator: ($event.target as HTMLSelectElement).value })">
-          <option v-for="op in fieldOf(rule)?.operators || []" :key="op" :value="op">{{ labels[op] || op }}</option>
-        </select>
+        <SelectBox :id="`${id}-${gi}-${ri}-operator`" :model-value="rule.operator" :options="(fieldOf(rule)?.operators || []).map(op => ({ value: op, label: labels[op] || op }))" @update:model-value="patch(gi, ri, { operator: $event })" />
         <label class="visually-hidden" :for="`${id}-${gi}-${ri}-value`">值 {{ gi + 1 }}-{{ ri + 1 }}</label>
-        <select v-if="catalogValue(rule)" :id="`${id}-${gi}-${ri}-value`" class="select" :value="rule.value" @change="patch(gi, ri, { value: ($event.target as HTMLSelectElement).value })">
-          <option v-if="!knownValue(rule)" :value="rule.value">{{ rule.value === '' ? '请选择…' : `${rule.value}（目录外的值）` }}</option>
-          <template v-if="rule.property === 'resource-kind'"><option v-for="group in categories" :key="group.id" :value="group.id">{{ group.label }}</option></template>
-          <template v-else><optgroup v-for="group in categories" :key="group.id" :label="group.label"><option v-for="type in group.items" :key="type.id" :value="type.id">{{ type.displayName }}</option></optgroup></template>
-        </select>
-        <select v-else-if="fieldOf(rule)?.type === 'boolean'" :id="`${id}-${gi}-${ri}-value`" class="select" :value="String(rule.value)" @change="patch(gi, ri, { value: ($event.target as HTMLSelectElement).value === 'true' })"><option value="true">是</option><option value="false">否</option></select>
+        <SelectBox v-if="catalogValue(rule)" :id="`${id}-${gi}-${ri}-value`" :model-value="String(rule.value)" :options="catalogOptions(rule)" @update:model-value="patch(gi, ri, { value: $event })" />
+        <SelectBox v-else-if="fieldOf(rule)?.type === 'boolean'" :id="`${id}-${gi}-${ri}-value`" :model-value="String(rule.value)" :options="[{ value: 'true', label: '是' }, { value: 'false', label: '否' }]" @update:model-value="patch(gi, ri, { value: $event === 'true' })" />
         <input v-else :id="`${id}-${gi}-${ri}-value`" class="input" :type="fieldOf(rule)?.type === 'number' ? 'number' : 'text'" step="any" maxlength="1024" :value="rule.value" @input="patch(gi, ri, { value: fieldOf(rule)?.type === 'number' ? Number(($event.target as HTMLInputElement).value) : ($event.target as HTMLInputElement).value })">
         <button type="button" class="button quiet small" :aria-label="`删除条件 ${gi + 1}-${ri + 1}`" @click="remove(gi, ri)">删除</button>
       </div>

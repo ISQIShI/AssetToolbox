@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
+import { pickOption } from './native-select';
 const require = createRequire(import.meta.url);
 const project = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -32,11 +33,11 @@ test('native source and step filters use real image properties and preserve excl
         browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`); page = browser.contexts()[0]!.pages()[0]!;
         const sourceEditor = page.getByRole('region', { name: '来源过滤', exact: true });
         await sourceEditor.getByRole('button', { name: '添加过滤条件', exact: true }).click();
-        await sourceEditor.getByLabel('属性 1-1', { exact: true }).selectOption('resource-type');
-        await sourceEditor.getByLabel('值 1-1', { exact: true }).selectOption('jpg');
+        await pickOption(page!, sourceEditor, '属性 1-1', 'resource-type');
+        await pickOption(page!, sourceEditor, '值 1-1', 'jpg');
         await sourceEditor.getByRole('button', { name: '且：添加条件', exact: true }).click();
-        await sourceEditor.getByLabel('属性 1-2', { exact: true }).selectOption('image-width');
-        await sourceEditor.getByLabel('比较 1-2', { exact: true }).selectOption('gt');
+        await pickOption(page!, sourceEditor, '属性 1-2', 'image-width');
+        await pickOption(page!, sourceEditor, '比较 1-2', 'gt');
         await sourceEditor.getByLabel('值 1-2', { exact: true }).fill('40');
         await page.setViewportSize({ width: 1220, height: 850 });
         await page.evaluate(() => document.documentElement.dataset.theme = 'light');
@@ -48,8 +49,8 @@ test('native source and step filters use real image properties and preserve excl
         await page.locator('.rail [data-step-id="second"] button').click();
         const stepEditor = page.getByRole('region', { name: '步骤过滤', exact: true });
         await stepEditor.getByRole('button', { name: '添加过滤条件', exact: true }).click();
-        await stepEditor.getByLabel('属性 1-1', { exact: true }).selectOption('image-width');
-        await stepEditor.getByLabel('比较 1-1', { exact: true }).selectOption('gt');
+        await pickOption(page!, stepEditor, '属性 1-1', 'image-width');
+        await pickOption(page!, stepEditor, '比较 1-1', 'gt');
         await stepEditor.getByLabel('值 1-1', { exact: true }).fill('30');
         await page.screenshot({ path: info.outputPath('step-filters-840-dark.png') });
         await page.getByRole('button', { name: '扫描预览', exact: true }).click();

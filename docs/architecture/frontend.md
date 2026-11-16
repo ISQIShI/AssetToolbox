@@ -22,6 +22,8 @@
 | `views/ToolsView.vue` | 工具页：处理工具可用性、获取渠道、识别类型 |
 | `components/TitleBar.vue` | 自绘标题栏：拖动区域与最小化、最大化、关闭；没有原生窗口时只显示标题 |
 | `components/Icon.vue` | 自绘的单色线条图标 |
+| `components/SelectBox.vue` | 下拉选择：封装 Reka UI 的 Select，接口为 `modelValue`、`options`（可分组）、`id`、`disabled`、`placeholder` |
+| `components/Tip.vue` | 提示：封装 Reka UI 的 Tooltip，接口为 `text`、`shortcut`、`side` |
 | `components/PipelineRail.vue` | 处理线与“操作 → 资源类型”两级步骤选择器、搜索与键盘导航 |
 | `components/StepEditor.vue` | 单个步骤：启用、排序与删除命令、组合、两组参数 |
 | `components/ParameterFields.vue` | 按字段描述渲染参数控件 |
@@ -112,6 +114,13 @@ stateDiagram-v2
 ## 恢复勾选
 
 `RestoreTable` 独立维护勾选集合。筛选和搜索只改变显示，被隐藏的已勾选项保留并提示数量。重新检查后，之前出现过的可选文件沿用用户勾选，新出现的文件按范围（全部 / 上次未完成 / 上次失败）默认勾选。冲突和已恢复文件不可勾选；检查被取消时整表只读。
+
+## 下拉选择与提示的封装
+
+- 视图不直接引入 `reka-ui`。`SelectBox` 把分组或平铺的 `options` 渲染为 Reka 的 Select，自己计算并显示当前项文字，不依赖库去读取已挂载的选项；空字符串视为“未选择”，改用占位文字。触发按钮透传 `id`、`class`、`aria-label`，所以 `<label for>` 和按类名定位仍然有效。
+- 弹出列表和提示由 Reka 通过 Teleport 挂到 `body`，不在组件的 scoped 样式作用域内，样式统一写在 `styles/base.css`。父组件要调整触发按钮的布局时用 `:deep()` 或 `base.css` 中的共享规则。
+- `Tip` 自带 `TooltipProvider`，单独挂载的组件（包括组件测试）不需要额外的提供者。它用 `as-child` 把行为加到插槽里的控件上，不增加 DOM 层级，因此不影响已有的选择器。
+- 组件测试（jsdom）不模拟指针与浮层交互：用 `tests/select.ts` 的 `selectBox()`、`choose()`、`optionLabels()` 通过 `SelectBox` 的公开接口验证本项目的逻辑。原生 E2E 用 `tests/native-select.ts` 的 `pickOption(page, scope, 标签, 核心ID)` 真实点开并点选，选项通过 `role="option"` 与 `data-value` 定位。
 
 ## 验证
 

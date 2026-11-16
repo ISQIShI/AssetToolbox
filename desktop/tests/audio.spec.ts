@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
+import { pickOption } from './native-select';
 const require = createRequire(import.meta.url);
 const project = fileURLToPath(new URL('../../', import.meta.url));
 const browserOnly = process.env.ASSET_TOOLBOX_AUDIO_BROWSER === '1';
@@ -59,7 +60,7 @@ test(`${browserOnly ? 'browser with real core' : 'native'} audio analysis, peak-
         await page.screenshot({ path: info.outputPath('audio-analysis.png'), fullPage: true });
         await button('关闭作业结果').click();
         await page.locator('[data-step-id="audio"] button').click();
-        await page.getByLabel('操作', { exact: true }).selectOption('audio-gain');
+        await pickOption(page!, page!, '操作', 'audio-gain');
         await page.getByLabel('增益（dB）', { exact: true }).fill('30');
         await page.locator('[data-station="output"]').click(); await expect(page.getByLabel('另存到新文件夹', { exact: false })).toBeChecked();
         await page.getByLabel('另存文件夹', { exact: true }).fill(output);
@@ -74,12 +75,12 @@ test(`${browserOnly ? 'browser with real core' : 'native'} audio analysis, peak-
         }
         await page.locator('.tab.theme').click(); await page.screenshot({ path: info.outputPath('audio-gain-dark.png'), fullPage: true });
         await button('关闭作业结果').click();
-        await page.locator('[data-step-id="audio"] button').click(); await page.getByLabel('超峰处理', { exact: true }).selectOption('reject');
+        await page.locator('[data-step-id="audio"] button').click(); await pickOption(page!, page!, '超峰处理', 'reject');
         await page.locator('[data-station="output"]').click(); await page.getByLabel('另存文件夹', { exact: true }).fill(output + '-reject');
         await run(); await expect(page.locator('.audio-results')).toContainText('未提交');
         await expect(page.locator('.audio-results')).toContainText('预计真峰值');
         await button('关闭作业结果').click();
-        await page.locator('[data-step-id="audio"] button').click(); await page.getByLabel('操作', { exact: true }).selectOption('audio-normalize');
+        await page.locator('[data-step-id="audio"] button').click(); await pickOption(page!, page!, '操作', 'audio-normalize');
         await page.getByLabel('目标响度（LUFS）', { exact: true }).fill('-18');
         await page.locator('[data-station="output"]').click(); await page.getByLabel('另存文件夹', { exact: true }).fill(output + '-normalized');
         await run(); await expect(page.locator('.audio-results')).toContainText('已达到');

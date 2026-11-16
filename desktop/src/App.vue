@@ -12,6 +12,7 @@ import ToolsView from './views/ToolsView.vue';
 import JobsView from './views/JobsView.vue';
 import JobDock from './components/JobDock.vue';
 import TitleBar from './components/TitleBar.vue';
+import Tip from './components/Tip.vue';
 import Icon, { type IconName } from './components/Icon.vue';
 
 const bench = createWorkbench();
@@ -72,19 +73,21 @@ onUnmounted(() => { window.removeEventListener('keydown', shortcut); bench.stop(
     <div class="body">
       <aside class="activity">
         <nav class="tabs" aria-label="工作区">
-          <button v-for="(tab, index) in tabs" :key="tab.id" type="button" class="tab" :title="`${tab.label}（Ctrl+${index + 1}）`" :aria-current="page === tab.id ? 'page' : undefined" @click="go(tab.id)">
-            <Icon :name="tab.icon" :size="18" />
-            <span>{{ tab.label }}</span>
-            <span v-if="tab.missing" class="tab-missing" :title="`${tab.missing} 个处理工具缺少依赖`">{{ tab.missing }}<span class="visually-hidden"> 个缺少依赖</span></span>
-          </button>
+          <Tip v-for="(tab, index) in tabs" :key="tab.id" :text="tab.label" :shortcut="`Ctrl+${index + 1}`" side="right">
+            <button type="button" class="tab" :aria-current="page === tab.id ? 'page' : undefined" @click="go(tab.id)">
+              <Icon :name="tab.icon" :size="18" />
+              <span>{{ tab.label }}</span>
+              <span v-if="tab.missing" class="tab-missing">{{ tab.missing }}<span class="visually-hidden"> 个缺少依赖</span></span>
+            </button>
+          </Tip>
         </nav>
-        <button type="button" class="tab theme" :title="`外观：${themeLabel}。点击切换`" :aria-label="`外观：${themeLabel}`" @click="toggleTheme"><Icon name="theme" :size="18" /></button>
+        <Tip :text="`外观：${themeLabel}`" side="right"><button type="button" class="tab theme" :aria-label="`外观：${themeLabel}`" @click="toggleTheme"><Icon name="theme" :size="18" /></button></Tip>
       </aside>
 
       <div class="workspace">
         <div v-if="error || notice || boot?.warnings?.length" class="messages">
-          <div v-if="error" role="alert" class="callout danger"><Icon name="alert" class="tone danger" /><p class="selectable">{{ error }}</p><button type="button" class="button quiet small icon-only" aria-label="关闭错误" title="关闭" @click="error = ''"><Icon name="close" :size="14" /></button></div>
-          <div v-if="notice" role="status" class="callout ok"><Icon name="ok" class="tone ok" /><p>{{ notice }}</p><button type="button" class="button quiet small icon-only" aria-label="关闭提示" title="关闭" @click="notice = ''"><Icon name="close" :size="14" /></button></div>
+          <div v-if="error" role="alert" class="callout danger"><Icon name="alert" class="tone danger" /><p class="selectable">{{ error }}</p><Tip text="关闭"><button type="button" class="button quiet small icon-only" aria-label="关闭错误" @click="error = ''"><Icon name="close" :size="14" /></button></Tip></div>
+          <div v-if="notice" role="status" class="callout ok"><Icon name="ok" class="tone ok" /><p>{{ notice }}</p><Tip text="关闭"><button type="button" class="button quiet small icon-only" aria-label="关闭提示" @click="notice = ''"><Icon name="close" :size="14" /></button></Tip></div>
           <div v-for="warning in boot?.warnings" :key="warning" class="callout warn"><Icon name="alert" class="tone warn" /><p>{{ warning }}</p></div>
         </div>
 

@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { createJobCenter, jobModes, jobLabel } from '../core/job-center';
 import JobCard from '../components/JobCard.vue';
+import SelectBox from '../components/SelectBox.vue';
 import { openReport } from '../core/api';
 import { useWorkbench } from '../core/workbench';
 const bench = useWorkbench(), center = createJobCenter();
@@ -50,7 +51,7 @@ onMounted(center.start); onUnmounted(center.stop);
         </section>
         <section aria-label="作业记录" class="history-section">
           <div class="section-title"><h3>作业记录</h3><span class="muted">共 {{ total }} 项 · 当前活动项见上方</span></div>
-          <div class="commands"><input v-model="query" class="input" aria-label="搜索本页作业" placeholder="搜索本页编号或操作"><select v-model="filter" class="input" aria-label="筛选本页状态"><option value="all">全部记录</option><option value="failed">失败 / 中断</option><option value="cancelled">已取消</option></select></div>
+          <div class="commands"><input v-model="query" class="input" aria-label="搜索本页作业" placeholder="搜索本页编号或操作"><SelectBox v-model="filter" class="status-filter" aria-label="筛选本页状态" :options="[{ value: 'all', label: '全部记录' }, { value: 'failed', label: '失败 / 中断' }, { value: 'cancelled', label: '已取消' }]" /></div>
           <div class="history-cards"><JobCard v-for="row in visible" :key="row.jobId" :row="row" :selected="selected?.jobId === row.jobId" @select="center.select" /></div>
           <p v-if="!visible.length" class="muted">{{ loading ? '正在读取作业…' : '本页没有其他匹配记录。' }}</p>
           <div class="commands pagination"><button class="button" :disabled="loading || offset === 0" @click="center.changePage(Math.max(0, offset - 20))">上一页</button><span class="muted">{{ total ? offset + 1 : 0 }}–{{ Math.min(offset + 20, total) }} / {{ total }}</span><button class="button" :disabled="loading || next === null" @click="center.changePage(next!)">下一页</button></div>
@@ -106,6 +107,7 @@ onMounted(center.start); onUnmounted(center.stop);
 .waiting-section, .history-section { margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px solid var(--border-soft); }
 .waiting-cards, .history-cards { display: grid; gap: var(--s-2); }
 .history-section .commands .input { flex: 1 1 180px; width: 0; min-width: 130px; }
+.history-section .commands :deep(.status-filter) { flex: 0 1 180px; width: auto; min-width: 130px; }
 .pagination { margin-top: var(--s-3); justify-content: space-between; }
 .job-detail, .detail-placeholder { position: sticky; top: 0; padding: var(--s-4); background: var(--control); border: 1px solid var(--border-soft); border-radius: var(--r-panel); max-height: calc(100vh - 140px); overflow: auto; }
 .detail-placeholder { color: var(--text-2); }

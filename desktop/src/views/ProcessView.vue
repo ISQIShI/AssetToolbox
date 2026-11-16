@@ -7,6 +7,7 @@ import StepEditor from '../components/StepEditor.vue';
 import PathField from '../components/PathField.vue';
 import ScanSummary from '../components/ScanSummary.vue';
 import Icon from '../components/Icon.vue';
+import Tip from '../components/Tip.vue';
 import FilterEditor from '../components/FilterEditor.vue';
 import { groupByResourceKind } from '../core/resource-groups';
 
@@ -47,14 +48,16 @@ const canStart = computed(() => !busy.value && !blockedSteps.value.length && Boo
         </template>
         <template v-else>
           <span class="muted">{{ config.pipeline.length ? `${enabledCount} / ${config.pipeline.length} 个步骤已启用` : '还没有步骤，添加后才会改动文件' }}</span>
-          <button type="button" class="summary-link" :class="{ 'tone warn': config.saveMode === 'overwrite' && !config.backupEnabled }" title="打开写入方式" @click="station = 'output'">
-            {{ observationOnly ? '仅分析，不写入素材' : config.saveMode === 'saveAs' ? '另存结果，保留原文件' : config.backupEnabled ? '覆盖原文件，替换前备份' : '覆盖原文件，不保留备份' }}
-          </button>
+          <Tip text="打开写入方式">
+            <button type="button" class="summary-link" :class="{ 'tone warn': config.saveMode === 'overwrite' && !config.backupEnabled }" @click="station = 'output'">
+              {{ observationOnly ? '仅分析，不写入素材' : config.saveMode === 'saveAs' ? '另存结果，保留原文件' : config.backupEnabled ? '覆盖原文件，替换前备份' : '覆盖原文件，不保留备份' }}
+            </button>
+          </Tip>
         </template>
       </div>
       <div class="run-actions">
-        <button type="button" class="button quiet" title="保存配置（Ctrl+S）" :disabled="busy" @click="bench.saveConfig()"><Icon name="save" />保存配置</button>
-        <button type="button" class="button" title="只统计文件，不改动任何内容" :disabled="busy" @click="bench.runPipeline('preview')"><Icon name="scan" />扫描预览</button>
+        <Tip text="保存当前处理线，下次打开时恢复" shortcut="Ctrl+S"><button type="button" class="button quiet" :disabled="busy" @click="bench.saveConfig()"><Icon name="save" />保存配置</button></Tip>
+        <Tip text="只统计文件，不改动任何内容"><button type="button" class="button" :disabled="busy" @click="bench.runPipeline('preview')"><Icon name="scan" />扫描预览</button></Tip>
         <button type="button" class="button primary" :disabled="!canStart" @click="bench.runPipeline('process')"><Icon name="play" />开始处理</button>
       </div>
     </header>

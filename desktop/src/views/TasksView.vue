@@ -5,6 +5,7 @@ import { useWorkbench } from '../core/workbench';
 import { date, folderName, taskStatus } from '../core/model';
 import type { Task } from '../core/types';
 import Icon from '../components/Icon.vue';
+import Tip from '../components/Tip.vue';
 
 const bench = useWorkbench();
 const { tasks, selectedTaskId, busy } = bench;
@@ -24,7 +25,7 @@ const share = (item: Task, value: number) => item.total ? `${(value / item.total
     <aside class="list" aria-label="任务列表">
       <div class="tools">
         <input v-model="query" class="input" type="search" aria-label="搜索任务" placeholder="搜索文件夹或任务编号">
-        <button type="button" class="button icon-only" aria-label="刷新任务列表" title="刷新" :disabled="busy" @click="bench.refreshTasks().catch(bench.fail)"><Icon name="refresh" /></button>
+        <Tip text="刷新任务列表"><button type="button" class="button icon-only" aria-label="刷新任务列表" :disabled="busy" @click="bench.refreshTasks().catch(bench.fail)"><Icon name="refresh" /></button></Tip>
       </div>
       <ul v-if="rows.length" class="rows">
         <li v-for="item in rows" :key="item.id">
@@ -46,8 +47,8 @@ const share = (item: Task, value: number) => item.total ? `${(value / item.total
             <p class="badge" :class="taskStatus(task).tone">{{ taskStatus(task).label }}</p>
           </div>
           <div class="actions">
-            <button type="button" class="button" :class="{ primary: task.canResume }" :disabled="busy || !task.canResume" title="只处理还没完成的文件" @click="bench.continueTask(task, 'resume')">继续未完成</button>
-            <button type="button" class="button" :disabled="busy || !task.canRetry" title="重新处理上次失败的文件" @click="bench.continueTask(task, 'retry')">重试失败项</button>
+            <Tip text="只处理还没完成的文件"><button type="button" class="button" :class="{ primary: task.canResume }" :disabled="busy || !task.canResume" @click="bench.continueTask(task, 'resume')">继续未完成</button></Tip>
+            <Tip text="重新处理上次失败的文件"><button type="button" class="button" :disabled="busy || !task.canRetry" @click="bench.continueTask(task, 'retry')">重试失败项</button></Tip>
           </div>
         </header>
         <p v-if="task.error" class="callout danger selectable"><Icon name="alert" class="tone danger" /><span>{{ task.error }}</span></p>

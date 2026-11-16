@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import { resourceGroups } from '../src/core/resource-groups';
 import type { ResourceFilter, ResourceType, ScanPreview } from '../src/core/types';
 import { previewProperties } from '../src/core/preview-properties';
+import { choose, optionGroups, optionLabels, selectBoxes } from './select';
 import FilterEditor from '../src/components/FilterEditor.vue';
 import ScanSummary from '../src/components/ScanSummary.vue';
 
@@ -22,15 +23,16 @@ it('groups by declared kind, preserves individual formats and keeps future categ
 it('uses Chinese categories and grouped formats while emitting unchanged core IDs and preserving unknown values', async () => {
     const initial: ResourceFilter = { schema: 'asset-toolbox.filter/1', any: [{ all: [{ property: 'resource-kind', operator: 'eq', value: 'image', version: '1.0.0' }] }] };
     const wrapper = mount(FilterEditor, { props: { modelValue: initial, properties: previewProperties, resourceTypes: types, title: '来源过滤', hint: '' } });
-    const selects = () => wrapper.findAll('select');
-    expect(selects()[2]!.text()).toContain('图片');
-    await selects()[2]!.setValue('audio');
+    const selects = () => selectBoxes(wrapper);
+    expect(optionLabels(selects()[2]!)).toContain('图片');
+    await choose(selects()[2]!, 'audio');
     const next = wrapper.emitted('update:modelValue')!.at(-1)![0] as ResourceFilter;
     expect(next.any[0]!.all[0]).toEqual({ property: 'resource-kind', operator: 'eq', value: 'audio' });
     await wrapper.setProps({ modelValue: { ...initial, any: [{ all: [{ property: 'resource-type', operator: 'ne', value: 'removed-format' }] }] } });
-    expect(wrapper.findAll('optgroup').map(group => group.attributes('label'))).toEqual(['图片', '音频', 'model']);
-    expect(selects()[2]!.element.value).toBe('removed-format');
-    await selects()[2]!.setValue('jpg');
+    expect(optionGroups(selects()[2]!).map(group => group.label)).toEqual(['图片', '音频', 'model']);
+    expect(selects()[2]!.props('modelValue')).toBe('removed-format');
+    expect(optionLabels(selects()[2]!)[0]).toBe('removed-format（目录外的值）'); expect(wrapper.text()).toContain('removed-format（目录外的值）');
+    await choose(selects()[2]!, 'jpg');
     expect((wrapper.emitted('update:modelValue')!.at(-1)![0] as ResourceFilter).any[0]!.all[0]!.value).toBe('jpg');
     wrapper.unmount();
 });
