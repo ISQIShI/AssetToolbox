@@ -2,6 +2,8 @@
 
 日期：2026-11-15。基线 `b1268de`。用户要求继续改进界面的现代感、美观和易用性，并确认先做“处理页重构”和“视觉层次”两组；任务/作业页面整合与新控件留到后续。决策见 [ADR 0019](../decisions/0019-inspector-and-window-material.md)。核心、协议与数据格式不变。
 
+> 后续：本轮的“窗口材质”已在同日被撤回，见 [ADR 0020](../decisions/0020-activity-workspace-and-number-controls.md) 与[后一轮验证](2026-11-15-activity-and-number-controls.md)。下文保留当时的记录。
+
 ## 变更与边界
 
 - **概览栏**（`RunInspector.vue`）：处理页右侧常驻，显示当前作业、扫描数字、各资源格式的步骤数与文件数。删除 `ScanSummary.vue` 和处理线末端的“扫描结果”站点；扫描不再改变选中的站点。“来源”站点里的“会识别的资源”表并入概览栏。

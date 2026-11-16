@@ -79,7 +79,7 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
     <div v-if="!running && (state.error || notes.length || state.cancelled || state.message)" class="details selectable">
       <p v-if="state.error" class="tone danger">{{ state.error }}</p>
       <p v-for="note in notes" :key="note" class="tone warn">{{ note }}</p>
-      <p v-if="state.cancelled && job.kind !== 'dependency'" class="muted">{{ state.task ? '已完成的文件已记录，可在“任务”页继续剩余文件。' : '已停止。可重新扫描或检查后再继续。' }}</p>
+      <p v-if="state.cancelled && job.kind !== 'dependency'" class="muted">{{ state.task ? '已完成的文件已记录，可在“活动”页的任务里继续剩余文件。' : '已停止。可重新扫描或检查后再继续。' }}</p>
       <p v-if="state.message" class="muted">{{ state.message }}</p>
     </div>
   </section>

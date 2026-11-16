@@ -17,7 +17,8 @@
 | `core/theme.ts` | 外观：浅色 / 深色，默认跟随系统，一次点击切换；写入 `<html data-theme>` 并保存到 `localStorage` |
 | `core/preview-core.ts` | 仅浏览器调试使用的模拟核心，生产构建不包含 |
 | `views/ProcessView.vue` | 处理页：命令栏 + 处理线 + 站点编辑器 |
-| `views/TasksView.vue` | 任务页：任务列表与详情 |
+| `views/ActivityView.vue` | 活动工作区：顶部分段选择在 `TasksView`（任务）与 `JobsView`（作业队列）之间切换；`page` 仍取 `tasks` / `jobs` |
+| `views/TasksView.vue` | 任务视图：任务列表与详情 |
 | `views/RestoreView.vue` | 恢复页：选择备份来源并检查 |
 | `views/ToolsView.vue` | 工具页：处理工具可用性、获取渠道、识别类型 |
 | `components/TitleBar.vue` | 自绘标题栏：拖动区域与最小化、最大化、关闭；没有原生窗口时只显示标题 |
@@ -33,7 +34,7 @@
 | `components/RunInspector.vue` | 处理页右侧的概览栏：当前作业、扫描数字、各资源格式的步骤数与文件数 |
 | `components/RestoreTable.vue` | 恢复检查结果的筛选、搜索、勾选、分页 |
 | `components/JobDock.vue` | 作业栏：处理页以 `panel` 变体放在概览栏里，其他页面停靠在工作区底部 |
-| `core/material.ts` | 判断 Windows 11 并给 `<html>` 标记 `data-material="mica"`，令窗口框架透出系统材质 |
+| `components/NumberField.vue` | 数值输入：数字框、步进按钮，范围有限时带滑块；由 `ParameterFields` 按字段描述使用 |
 | `styles/tokens.css`、`styles/base.css` | 浅色与深色设计令牌、共享控件；组件布局写在各自的 scoped 样式中 |
 
 ## 工作台状态
@@ -138,8 +139,8 @@ stateDiagram-v2
 
 | 层级 | 文件 | 覆盖 |
 | --- | --- | --- |
-| 组件与模型 | `desktop/tests/ui.test.ts` | 动态参数及命名空间、组合切换、停用只读、缺依赖提示、数值越界提示、窗口材质判断；恢复筛选与勾选、范围预选、取消后只读；工具页渠道与刷新；请求构造、体积格式、操作分组与去重、任务状态 |
-| 应用流程 | `desktop/tests/app.test.ts` | 扫描结果留在概览栏与过期、处理页作业卡片与底部作业栏互斥、拖入来源与非文件夹拒绝、来源落地区、跨页取消、作业栏持久与关闭、预览错误、缺依赖拦截、三级步骤选择/搜索/返回/焦点/关闭、排序与删除步骤、续跑与重试请求、任务恢复与独立备份请求、快捷键与状态栏、外观切换 |
+| 组件与模型 | `desktop/tests/ui.test.ts` | 动态参数及命名空间、组合切换、停用只读、缺依赖提示、数值越界提示、数值控件的步进/夹取/取整与滑块条件；恢复筛选与勾选、范围预选、取消后只读；工具页渠道与刷新；请求构造、体积格式、操作分组与去重、任务状态 |
+| 应用流程 | `desktop/tests/app.test.ts` | 扫描结果留在概览栏与过期、处理页作业卡片与底部作业栏互斥、拖入来源与非文件夹拒绝、来源落地区、跨页取消、作业栏持久与关闭、预览错误、缺依赖拦截、三级步骤选择/搜索/返回/焦点/关闭、排序与删除步骤、续跑与重试请求、任务恢复与独立备份请求、活动页的视图切换与记忆、恢复页选中即检查、快捷键与状态栏、外观切换 |
 | 原生 | `desktop/tests/native.spec.ts` | 构建后的 EXE：工具缺失与恢复、动态扩展参数、选择器在 1220×850/840×620（视口尺寸；窗口默认 1280×850） 和浅色/深色下的边界及截图、键盘添加、扫描、另存、覆盖备份、跨页取消、续跑、重试、选择性恢复、真实图片缩放、配置重启、运行中关闭 |
 
 测试只依赖语义选择器、`data-station`、`data-step-id`、`data-provider-id`、作业栏的 `data-job-id`、`data-state`，以及少量结构类名（`nav.tabs`、`.rail`、`.adder`、`.choice`、`.editor`、`.runbar`、`.summary-link`、`.dock`、`.inspector`、`.statusbar`、`.restore-table .foot`、工具行的 `.state`）。调整样式类名时保持这些钩子。原生窗口的拖动、缩放与窗口按钮无法由 CDP 测试覆盖，改动标题栏后需要人工核对。截图保存在 `desktop/test-results/`，不提交。

@@ -122,9 +122,6 @@
   --scrim: rgb(0 0 0 / 0.5);
 }
 
-/* Windows 11：窗口框架透出系统 Mica 材质（见 core/material.ts）。工作区仍是不透明的内容面 */
-:root[data-material='mica'] { --chrome: transparent; }
-
 @media (max-width: 1160px) {
   :root { --rail-width: 228px; --list-width: 252px; --inspector-width: 272px; --pane-padding: 16px; --label-width: 108px; }
 }

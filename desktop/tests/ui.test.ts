@@ -1,6 +1,7 @@
 // 组件与纯函数：动态参数、步骤组合、恢复勾选、工具获取渠道、请求构造。
 import { describe, it, expect, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
+import NumberField from '../src/components/NumberField.vue';
 import ParameterFields from '../src/components/ParameterFields.vue';
 import StepEditor from '../src/components/StepEditor.vue';
 import RestoreTable from '../src/components/RestoreTable.vue';
@@ -227,11 +228,35 @@ it('shows a range only when the value is out of bounds, keeping the field hint o
     wrapper.unmount();
 });
 
-it('enables the window material only on Windows 11 and later', async () => {
-    const { supportsMica } = await import('../src/core/material');
-    expect(supportsMica('Windows', '19.0.0')).toBe(true);
-    expect(supportsMica('Windows', '13.0.0')).toBe(true);
-    expect(supportsMica('Windows', '10.0.0')).toBe(false);
-    expect(supportsMica('macOS', '15.0.0')).toBe(false);
-    expect(supportsMica('Windows', undefined)).toBe(false);
+it('pairs bounded numbers with a slider and steps, clamps and tidies values', async () => {
+    const quality = mount(NumberField, { props: { id: 'q', modelValue: 99, min: 1, max: 100 } });
+    const emitted = () => quality.emitted('update:modelValue')!.at(-1)![0];
+    expect(quality.find('input[type="range"]').attributes('aria-hidden')).toBe('true');
+    const [up, down] = quality.findAll('.steppers button');
+    await up!.trigger('click'); expect(emitted()).toBe(100);
+    await quality.setProps({ modelValue: 100 });
+    expect(up!.attributes('disabled')).toBeDefined();
+    await down!.trigger('click'); expect(emitted()).toBe(99);
+    await quality.find('input[type="range"]').setValue(40); expect(emitted()).toBe(40);
+    await quality.find('input[type="number"]').setValue(''); expect(emitted()).toBe('');
+    // 越界的手动输入原样上报，由参数表单提示；滑块位置夹在范围内。
+    await quality.find('input[type="number"]').setValue(500); expect(emitted()).toBe(500);
+    await quality.setProps({ modelValue: 500 });
+    expect((quality.find('input[type="range"]').element as HTMLInputElement).value).toBe('100');
+    quality.unmount();
+
+    const rate = mount(NumberField, { props: { id: 'r', modelValue: 0.1, min: 0, max: 1, step: 0.05, decimalPlaces: 2 } });
+    await rate.findAll('.steppers button')[0]!.trigger('click');
+    expect(rate.emitted('update:modelValue')!.at(-1)![0]).toBe(0.15);
+    rate.unmount();
+
+    // 像素宽度这类大范围只有输入框和步进按钮；没有上下界时也不出现滑块。
+    const width = mount(NumberField, { props: { id: 'w', modelValue: 1024, min: 1, max: 16384 } });
+    expect(width.find('input[type="range"]').exists()).toBe(false);
+    expect(width.findAll('.steppers button')).toHaveLength(2);
+    width.unmount();
+    const free = mount(NumberField, { props: { id: 'f', modelValue: '', disabled: true } });
+    expect(free.find('input[type="range"]').exists()).toBe(false);
+    expect(free.findAll('.steppers button').every(item => item.attributes('disabled') !== undefined)).toBe(true);
+    free.unmount();
 });

@@ -18,8 +18,6 @@
         "minWidth": 840,
         "minHeight": 620,
         "decorations": false,
-        "transparent": true,
-        "windowEffects": { "effects": ["mica"] },
         "center": true
       }
     ],

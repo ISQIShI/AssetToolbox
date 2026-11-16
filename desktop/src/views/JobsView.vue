@@ -3,6 +3,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { createJobCenter, jobModes, jobLabel } from '../core/job-center';
 import JobCard from '../components/JobCard.vue';
 import SelectBox from '../components/SelectBox.vue';
+import Tip from '../components/Tip.vue';
+import Icon from '../components/Icon.vue';
 import { openReport } from '../core/api';
 import { useWorkbench } from '../core/workbench';
 const bench = useWorkbench(), center = createJobCenter();
@@ -22,25 +24,28 @@ onMounted(center.start); onUnmounted(center.stop);
 <template>
   <section class="job-center">
     <header class="center-header">
-      <div><h2>统一作业中心</h2><p class="muted">查看各入口的作业，保持各自的运行会话。</p></div>
-      <div class="commands"><span v-if="queue" class="summary">{{ queue.runningCount }} 运行 · {{ queue.waitingCount }} 等待</span><button class="button" :disabled="loading" @click="center.refresh">刷新作业</button></div>
+      <p class="summary">{{ queue ? `${queue.runningCount} 个运行中 · ${queue.waitingCount} 个等待` : '尚未读取队列' }}</p>
+      <button class="button" :disabled="loading" @click="center.refresh"><Icon name="refresh" />刷新作业</button>
     </header>
     <p v-if="error" role="alert" class="callout danger selectable">{{ error }}</p>
     <div class="columns">
       <div class="queue-board">
         <section aria-label="执行槽位">
-          <div class="section-title"><h3>执行槽位</h3><span class="muted">每 2 秒刷新</span></div>
-          <div class="budget-bar" v-if="queue">
-            <label>并行数量 <input class="input" type="number" v-model.number="limit" :min="queue.minConcurrent" :max="queue.maxAllowedConcurrent" :disabled="!queue.canConfigure || saving" aria-label="并行数量"></label>
-            <button class="button" :disabled="!queue.canConfigure || saving || loading || limit === queue.maxConcurrent || !Number.isInteger(limit) || limit < 1 || limit > queue.maxAllowedConcurrent" @click="center.configure(limit)">应用</button>
-            <button class="button" :disabled="!queue.canConfigure || saving || loading || queue.maxConcurrent === queue.recommendedConcurrent" @click="center.configure(queue.recommendedConcurrent)">使用建议值（{{ queue.recommendedConcurrent }}）</button>
-            <small class="muted">{{ queue.availableProcessors }} 个可用逻辑处理器。编码器也会使用多线程，建议值为保守估算。{{ queue.canConfigure ? '空闲时可调整。' : '队列空闲后可调整。' }}</small>
+          <div class="section-title">
+            <h3>执行槽位</h3>
+            <!-- 并行数量：只在队列空闲时可改，紧凑地放在标题行右侧，解释收进提示 -->
+            <div class="budget-bar" v-if="queue">
+              <label>并行数量 <input class="input" type="number" v-model.number="limit" :min="queue.minConcurrent" :max="queue.maxAllowedConcurrent" :disabled="!queue.canConfigure || saving" aria-label="并行数量"></label>
+              <button class="button small" :disabled="!queue.canConfigure || saving || loading || limit === queue.maxConcurrent || !Number.isInteger(limit) || limit < 1 || limit > queue.maxAllowedConcurrent" @click="center.configure(limit)">应用</button>
+              <button class="button quiet small" :disabled="!queue.canConfigure || saving || loading || queue.maxConcurrent === queue.recommendedConcurrent" @click="center.configure(queue.recommendedConcurrent)">使用建议值（{{ queue.recommendedConcurrent }}）</button>
+              <Tip :text="`同时执行的作业数。${queue.availableProcessors} 个可用逻辑处理器；编码器自己也会用多线程，建议值是保守估算。${queue.canConfigure ? '队列空闲时可以调整。' : '有作业在运行或等待，队列空闲后才能调整。'}`"><button type="button" class="info" aria-label="并行数量说明"><Icon name="info" /></button></Tip>
+            </div>
           </div>
           <div v-if="queue" class="slots">
             <div v-for="slot in queue.slots" :key="slot.slot" class="slot" :data-slot="slot.slot" :data-occupied="slot.occupied">
               <div class="slot-label"><span>槽位</span><strong>{{ String(slot.slot).padStart(2, '0') }}</strong></div>
               <JobCard v-if="slot.job" :row="slot.job" :selected="selected?.jobId === slot.job.jobId" @select="center.select" />
-              <div v-else class="empty-slot"><span class="slot-dot" :class="{ occupied: slot.occupied }"></span><span>{{ slot.occupied ? '已占用 · 当前上下文无法查看作业' : '空闲，等待可执行作业' }}</span></div>
+              <div v-else class="empty-slot"><span class="slot-dot" :class="{ occupied: slot.occupied }"></span><span>{{ slot.occupied ? '已占用 · 当前上下文无法查看作业' : '空闲' }}</span></div>
             </div>
           </div>
           <p v-else class="muted">执行槽位尚未读取，点击刷新重试。</p>
@@ -73,7 +78,7 @@ onMounted(center.start); onUnmounted(center.stop);
         </template>
         <p v-else-if="selected.state?.done && !selected.state.resultsExpired" class="muted">此作业无可显示的文件明细，或明细正在读取。</p>
       </article>
-      <aside v-else class="detail-placeholder"><strong>作业详情</strong><p>选择槽位或队列中的卡片，查看进度与逐文件结果。</p><p>仅观察不会接管作业，关闭窗口不取消其他入口作业。</p></aside>
+      <aside v-else class="detail-placeholder"><strong>作业详情</strong><p>选择一张作业卡片，查看进度与逐文件结果。</p><p class="small">这里只是观察：离开页面或关闭窗口不会取消其他入口提交的作业。</p></aside>
     </div>
   </section>
 </template>
@@ -81,27 +86,28 @@ onMounted(center.start); onUnmounted(center.stop);
 <style scoped>
 .job-center { padding: var(--s-4); overflow: hidden; height: 100%; display: flex; flex-direction: column; }
 .center-header, .section-title { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
-.center-header { margin-bottom: var(--s-4); flex-shrink: 0; }
-.center-header p { margin: var(--s-1) 0 0; font-size: var(--t-small); }
-.summary { color: var(--accent); white-space: nowrap; }
+.center-header { margin-bottom: var(--s-3); flex-shrink: 0; }
+.summary { color: var(--text-2); white-space: nowrap; }
 .commands, .budget-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
 .commands { margin-bottom: var(--s-3); }
-.center-header .commands { margin: 0; }
 .columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 34%); gap: var(--s-4); align-items: start; overflow: auto; min-height: 0; flex: 1; }
 .columns > *, .queue-board { min-width: 0; }
 .section-title { margin-bottom: var(--s-3); }
 .section-title h3 { margin: 0; }
 .section-title h3 span { color: var(--text-3); font-weight: normal; margin-left: var(--s-2); }
-.budget-bar { padding: var(--s-3); background: var(--pane); border-radius: var(--r-panel); margin-bottom: var(--s-3); }
-.budget-bar label { display: flex; align-items: center; gap: var(--s-2); }
-.budget-bar input { width: 64px; }
-.budget-bar small { flex-basis: 100%; }
+.budget-bar { justify-content: flex-end; gap: var(--s-1); color: var(--text-2); font-size: var(--t-small); }
+.budget-bar label { display: flex; align-items: center; gap: var(--s-2); margin-right: var(--s-1); }
+.budget-bar input { width: 56px; height: var(--control-small); }
+.info { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-3); }
+.info:hover { color: var(--text); background: var(--hover); }
 .slots { display: grid; gap: var(--s-2); }
-.slot { display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: stretch; gap: var(--s-2); }
+.slot { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: stretch; gap: var(--s-2); }
 .slot-label { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-1); color: var(--text-3); font-size: var(--t-small); }
-.slot-label strong { font-family: var(--font-mono); font-size: var(--t-figure); font-weight: normal; }
+.slot-label { flex-direction: row; }
+.slot-label span { display: none; }
+.slot-label strong { font-family: var(--font-mono); font-size: var(--t-title); font-weight: normal; }
 .slot[data-occupied='true'] .slot-label { color: var(--accent); }
-.empty-slot { display: flex; align-items: center; gap: var(--s-2); min-height: 76px; padding: var(--s-3); border: 1px dashed var(--border); border-radius: var(--r-panel); color: var(--text-3); }
+.empty-slot { display: flex; align-items: center; gap: var(--s-2); min-height: 40px; padding: 0 var(--s-3); border: 1px dashed var(--border); border-radius: var(--r-panel); color: var(--text-3); }
 .slot-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
 .slot-dot.occupied { background: var(--warn); }
 .waiting-section, .history-section { margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px solid var(--border-soft); }
@@ -109,10 +115,12 @@ onMounted(center.start); onUnmounted(center.stop);
 .history-section .commands .input { flex: 1 1 180px; width: 0; min-width: 130px; }
 .history-section .commands :deep(.status-filter) { flex: 0 1 180px; width: auto; min-width: 130px; }
 .pagination { margin-top: var(--s-3); justify-content: space-between; }
-.job-detail, .detail-placeholder { position: sticky; top: 0; padding: var(--s-4); background: var(--control); border: 1px solid var(--border-soft); border-radius: var(--r-panel); max-height: calc(100vh - 140px); overflow: auto; }
+.job-detail, .detail-placeholder { position: sticky; top: 0; padding: var(--s-4); background: var(--control); box-shadow: var(--shadow-card); border-radius: var(--r-panel); max-height: calc(100vh - 140px); overflow: auto; }
 .detail-placeholder { color: var(--text-2); }
 .job-detail > code { display: block; font-size: var(--t-small); color: var(--text-2); }
 code, td, p { overflow-wrap: anywhere; white-space: normal; }
 table { width: 100%; table-layout: fixed; margin: var(--s-3) 0; }
-@media (max-width: 900px) { .columns { grid-template-columns: minmax(0, 1fr) 280px; } .center-header { align-items: start; flex-wrap: wrap; } }
+.job-detail h2 { font-size: var(--t-title); letter-spacing: 0; }
+.columns { padding: 1px; }
+@media (max-width: 900px) { .columns { grid-template-columns: minmax(0, 1fr) 280px; } .section-title { flex-wrap: wrap; } }
 </style>

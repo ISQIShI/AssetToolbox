@@ -1,6 +1,6 @@
 # ADR 0019：处理页概览栏、不描边面板与窗口材质
 
-状态：已采用。日期：2026-11-15。
+状态：已采用；其中“窗口材质”一项已被 [ADR 0020](0020-activity-workspace-and-number-controls.md) 撤回（实机上框架色调与工作区不统一），`core/material.ts`、透明窗口配置与主题同步权限均已删除。其余决定仍然有效。日期：2026-11-15。
 
 关联：[前端设计规范](../design/frontend-design.md)、[前端架构](../architecture/frontend.md)、[ADR 0006](0006-desktop-application-shell.md)、[ADR 0018](0018-headless-ui-primitives.md)、`desktop/src/components/RunInspector.vue`、`desktop/src/core/material.ts`。
 

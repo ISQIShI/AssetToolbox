@@ -63,7 +63,7 @@ it('shows scan progress in the inspector, then keeps the result there instead of
     // 选中的站点不因扫描而改变；格式表补上文件数与体积。
     expect(wrapper.find('.station-button[aria-current]').attributes('data-station')).toBe('source');
     expect(wrapper.find('.inspector tbody[aria-label="图片"]').text()).toContain('6.8 KB');
-    await go('任务'); expect(wrapper.text()).not.toContain('扫描结果');
+    await go('活动'); expect(wrapper.text()).not.toContain('扫描结果');
     await go('处理'); expect(wrapper.text()).toContain('扫描结果');
     // 扫描后修改配置，结果标为过期。
     await wrapper.findAll('.station-button')[0]!.trigger('click');
@@ -90,7 +90,7 @@ it('keeps a finished result in the dock across pages until dismissed, without to
     await mountApp();
     await button('开始处理').trigger('click'); await flushPromises();
     expect(call).toHaveBeenCalledWith('save', expect.anything());
-    await go('任务');
+    await go('活动');
     await finish({ processed: 35, summary: { total: 35, processed: 30, skipped: 4, failed: 1, savedBytes: 2048 }, task, hasReport: true });
     const dock = wrapper.find('.dock');
     expect(dock.attributes('data-state')).toBe('done');
@@ -148,7 +148,7 @@ it('adds a step from the catalog menu, selects it, and removes it again', async 
 });
 
 it('resumes and retries tasks by task file only', async () => {
-    await mountApp(); await go('任务');
+    await mountApp(); await go('活动');
     await button('继续未完成').trigger('click'); await flushPromises();
     expect(call).toHaveBeenCalledWith('submit', { request: { mode: 'resume', taskId: task.id }, idempotencyKey: expect.any(String) });
     await finish({ summary: { total: 3, processed: 3, skipped: 0, failed: 0, savedBytes: 0 } });
@@ -245,7 +245,7 @@ it('allows configuring a missing tool while preserving the execution guard', asy
 });
 
 it('checks a task backup, then restores exactly the selected files with hashes', async () => {
-    await mountApp(); await go('任务');
+    await mountApp(); await go('活动');
     await button('检查备份').trigger('click'); await flushPromises();
     expect(call).toHaveBeenCalledWith('submit', { request: { mode: 'restore-preview', taskId: task.id }, idempotencyKey: expect.any(String) });
     await finish({ preview: restorePreview });
@@ -307,7 +307,8 @@ it('switches workspaces and saves with keyboard shortcuts, and reports health in
     expect(wrapper.find('.statusbar').text()).toContain('1 个任务可继续');
     expect(wrapper.find('.statusbar').text()).toContain('处理工具 1 / 1 可用');
     await press('2');
-    expect(tab('任务').attributes('aria-current')).toBe('page');
+    expect(tab('活动').attributes('aria-current')).toBe('page');
+    expect(wrapper.find('.activity-view .segmented .chosen').text()).toContain('任务');
     await press('s');
     expect(call).not.toHaveBeenCalledWith('save', expect.anything());
     await press('1'); await press('s');
@@ -387,7 +388,37 @@ it('offers a landing zone while no source is chosen and keeps finished results i
     const card = wrapper.find('.inspector .dock.panel');
     expect(card.attributes('data-state')).toBe('done'); expect(card.text()).toContain('−2.0 KB');
     // 离开处理页后同一个结果回到底部作业栏。
-    await go('任务');
+    await go('活动');
     expect(wrapper.find('.inspector').exists()).toBe(false);
     expect(wrapper.find('.dock').classes()).not.toContain('panel');
+});
+
+it('groups tasks and the job queue under one activity tab and remembers the last view', async () => {
+    await mountApp();
+    expect(wrapper.findAll('nav.tabs button').map(item => item.text().replace(/\d+.*$/, ''))).toEqual(['处理', '活动', '恢复', '工具']);
+    await go('活动');
+    expect(wrapper.find('.tasks').exists()).toBe(true); expect(wrapper.find('.job-center').exists()).toBe(false);
+    await wrapper.findAll('.activity-view .segmented input')[1]!.setValue(true); await flushPromises();
+    expect(wrapper.find('.job-center').exists()).toBe(true); expect(wrapper.find('.tasks').exists()).toBe(false);
+    expect(tab('活动').attributes('aria-current')).toBe('page');
+    // 离开再回来仍是作业队列；从作业结果“查看任务”等入口进入时切回任务。
+    await go('工具'); await go('活动');
+    expect(wrapper.find('.job-center').exists()).toBe(true);
+    await wrapper.findAll('.activity-view .segmented input')[0]!.setValue(true); await flushPromises();
+    expect(wrapper.find('.tasks').exists()).toBe(true);
+    // Ctrl+5 不再对应任何工作区。
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '5', ctrlKey: true })); await flushPromises();
+    expect(tab('活动').attributes('aria-current')).toBe('page');
+});
+
+it('checks a task backup as soon as it is chosen on the restore page, without submitting twice', async () => {
+    await mountApp(); await go('恢复');
+    const submits = () => vi.mocked(call).mock.calls.filter(([action]) => action === 'submit');
+    expect(submits()).toHaveLength(0);
+    wrapper.findComponent({ name: 'SelectBox' }).vm.$emit('update:modelValue', task.id); await flushPromises();
+    expect(submits()).toHaveLength(1);
+    expect(submits()[0]![1]).toMatchObject({ request: { mode: 'restore-preview', taskId: task.id } });
+    await finish({ preview: restorePreview });
+    expect(wrapper.find('.restore-table').exists()).toBe(true);
+    expect(submits()).toHaveLength(1);
 });

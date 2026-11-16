@@ -17,6 +17,11 @@ const backupDir = ref(restoreSource.value?.kind === 'export' ? restoreSource.val
 const outputDir = ref(restoreSource.value?.kind === 'export' ? restoreSource.value.outputDir : '');
 const backedUp = computed(() => tasks.value.filter(task => task.backupCount > 0));
 watch(restoreSource, source => { if (source?.kind === 'task') { mode.value = 'task'; taskId.value = source.taskId; } });
+// 选中任务就开始检查，不用再点一次按钮；同一任务已有结果或正在检查时不重复提交。
+watch(taskId, id => {
+    const current = restoreSource.value?.kind === 'task' && restoreSource.value.taskId === id && Boolean(restorePreview.value);
+    if (id && mode.value === 'task' && !busy.value && !current) check();
+});
 
 function check() {
     if (mode.value === 'task') {
@@ -43,7 +48,7 @@ function check() {
           <label class="label" for="restore-task">任务</label>
           <SelectBox id="restore-task" v-model="taskId" :options="backedUp.map(task => ({ value: task.id, label: `${task.source ? folderName(task.source) : task.id}，${date(task.createdAt)}，备份 ${task.backupCount} 个` }))" :placeholder="backedUp.length ? '选择一个有备份的任务' : '还没有启用备份的任务'" :disabled="busy || !backedUp.length" />
         </div>
-        <button type="button" class="button primary" :disabled="busy" @click="check"><Icon name="scan" />检查备份</button>
+        <button type="button" class="button" :disabled="busy || !taskId" @click="check"><Icon name="refresh" />重新检查</button>
       </div>
       <div v-else class="inputs">
         <PathField v-model="backupDir" class="grow" stacked label="备份文件夹" dialog-title="选择备份批次文件夹" :disabled="busy" />
@@ -57,8 +62,9 @@ function check() {
       <RestoreTable v-if="restorePreview" :key="restoreRevision" :preview="restorePreview" :scope="restoreScope" :disabled="busy" @restore="bench.restoreSelected" @recheck="bench.recheckRestore()" />
       <p v-else-if="job?.kind === 'restore-check' && !job.state.done" class="empty muted">正在比较备份和目标中的文件…</p>
       <div v-else class="empty">
-        <h2>恢复前先逐个核对</h2>
-        <p class="muted">检查会比较备份和目标中的每个文件，分为可恢复、已恢复和冲突三类。只恢复你勾选的文件，备份本身不会被修改或删除。</p>
+        <Icon name="restore" :size="28" />
+        <h2>{{ mode === 'task' ? '选择一个任务，查看它备份了哪些文件' : '选择备份文件夹和恢复目标' }}</h2>
+        <p class="muted">检查会逐个比较备份和目标中的文件，分为可恢复、已恢复和冲突三类。只恢复你勾选的文件，备份本身不会被修改或删除。</p>
       </div>
     </section>
   </div>
@@ -71,5 +77,7 @@ function check() {
 .grow { flex: 1 1 240px; }
 .body { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .body > * { flex: 1; min-height: 0; }
-.empty { display: grid; align-content: start; gap: var(--s-1); max-width: 60ch; padding: var(--pane-padding); }
+.empty { display: grid; align-content: center; justify-items: center; gap: var(--s-2); max-width: 52ch; margin: 0 auto; padding: var(--pane-padding); text-align: center; }
+.empty .icon { color: var(--text-3); }
+.empty h2 { font-size: var(--t-title); letter-spacing: 0; }
 </style>

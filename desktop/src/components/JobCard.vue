@@ -21,9 +21,9 @@ defineEmits<{ select: [row: JobRow] }>();
 </template>
 
 <style scoped>
-.job-row { width: 100%; min-width: 0; display: grid; gap: var(--s-2); padding: var(--s-3); text-align: left; border: 1px solid var(--border-soft); border-radius: var(--r-panel); background: var(--control); color: var(--text); }
-.job-row:hover { border-color: var(--border); background: var(--hover); }
-.job-row[aria-current='true'] { border-color: var(--accent); background: var(--accent-wash); box-shadow: inset 3px 0 var(--accent); }
+.job-row { width: 100%; min-width: 0; display: grid; gap: var(--s-1); padding: var(--s-2) var(--s-3); text-align: left; border: 0; border-radius: var(--r-panel); background: var(--control); box-shadow: var(--shadow-card); color: var(--text); }
+.job-row:hover { background-image: linear-gradient(var(--hover), var(--hover)); }
+.job-row[aria-current='true'] { background: var(--accent-wash); box-shadow: 0 0 0 1.5px var(--accent); }
 .job-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .card-heading, .card-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--s-2); min-width: 0; }
 .state { flex-shrink: 0; font-size: var(--t-small); color: var(--text-2); }

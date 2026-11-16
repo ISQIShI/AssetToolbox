@@ -54,6 +54,8 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     const tab = (name: string) => page.getByRole('navigation', { name: '工作区' }).getByRole('button', { name, exact: false });
     const station = (name: 'source' | 'output') => page.locator(`[data-station="${name}"]`);
     const button = (name: string) => page.getByRole('button', { name, exact: true });
+    // 作业队列是“活动”工作区里的第二个视图。
+    const openJobs = async () => { await tab('活动').click(); await page.getByText('作业队列', { exact: true }).click(); };
     let observedJob = '';
     async function started() {
         await expect.poll(async () => (await page.locator('.dock').getAttribute('data-job-id', { timeout: 200 }).catch(() => null)) || observedJob).not.toBe(observedJob);
@@ -97,11 +99,11 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect(page.getByRole('heading', { name: '扫描结果', exact: true })).toBeVisible();
         await expect(page.locator('.dock')).toHaveCount(0);
         await page.screenshot({ path: info.outputPath('scan-result.png'), fullPage: true });
-        for (const name of ['任务', '恢复']) {
+        for (const name of ['活动', '恢复']) {
             await tab(name).click();
             await expect(page.locator('.dock')).toHaveCount(0);
             await expect(page.getByRole('heading', { name: '扫描结果', exact: true })).toHaveCount(0);
-            await page.screenshot({ path: info.outputPath(name === '任务' ? 'preview-tasks.png' : 'preview-restore.png'), fullPage: true });
+            await page.screenshot({ path: info.outputPath(name === '活动' ? 'preview-tasks.png' : 'preview-restore.png'), fullPage: true });
         }
         await tab('处理').click();
         expect(fs.existsSync(path.join(tool, 'resource-core/config'))).toBe(false);
@@ -119,7 +121,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await button('开始处理').click();
         await started();
         await expect.poll(processedCount).toBeGreaterThan(0);
-        await tab('任务').click();
+        await tab('活动').click();
         await button('取消').click();
         await tab('处理').click(); await done(true);
         await button('查看任务').click();
@@ -326,7 +328,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         const cliPreview = spawnSync(path.join(tool, 'runtime/node.exe'), [path.join(tool, 'resource-core/cli.js'), 'api', 'submit', '--local', '--input', '-'], { input: JSON.stringify({ request: { mode: 'preview', folder: source, pipeline: config.pipeline }, idempotencyKey: 'job-center-native' }), encoding: 'utf8', windowsHide: true, timeout: 15000 });
         expect(cliPreview.status, cliPreview.stderr).toBe(0);
         const externalJobId = JSON.parse(cliPreview.stdout).result.jobId;
-        await tab('作业').click();
+        await openJobs();
         await expect(page.locator('.slot')).toHaveCount(2);
         await page.getByLabel('并行数量', { exact: true }).fill('3'); await button('应用').click();
         await expect(page.locator('.slot')).toHaveCount(3);
@@ -337,7 +339,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await page.screenshot({ path: info.outputPath('jobs-eight-slots.png') });
         await page.getByLabel('并行数量', { exact: true }).fill('3'); await button('应用').click();
         await expect(page.locator('.slot')).toHaveCount(3);
-        await close(); await launch(); await tab('作业').click();
+        await close(); await launch(); await openJobs();
         await expect(page.locator('.slot')).toHaveCount(3);
         await expect(page.getByLabel('并行数量', { exact: true })).toHaveValue('3');
         await page.locator('.job-row').filter({ hasText: externalJobId }).click();
@@ -392,7 +394,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await close(); expect(external.exitCode).toBeNull();
         expect(JSON.parse(fs.readFileSync(path.join(tool, 'resource-core/data/jobs/v6', closingQueued.jobId, 'status.json'), 'utf8')).cancelled).toBe(true);
         expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v6', runningId, 'cancel'))).toBe(false);
-        await launch(); await tab('作业').click();
+        await launch(); await openJobs();
         await page.locator('.job-row').filter({ hasText: runningId }).click();
         await button('取消此作业').click();
         await expect(page.locator('.job-detail')).toContainText('已取消');
