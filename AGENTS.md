@@ -11,7 +11,7 @@
 - `desktop/src/`：Vue 3、TypeScript 界面；`desktop/src-tauri/`：Rust/Tauri 2 宿主。
 - `resource-core/`：Node CommonJS 引擎、任务、恢复、配置和桌面桥接。
 - `resource-types/`、`operations/`、`providers/` 位于核心目录内，分别定义格式识别、处理语义、工具实现；`properties/` 定义通用与专属属性，`framework/` 负责发现、schema、过滤和进程调用。
-- `resource-core/tests/`、`desktop/tests/`：核心、组件及原生 E2E 测试；`docs/`：架构、流程和决策。
+- `resource-core/tests/`、`desktop/tests/`：核心、组件及原生 E2E 测试；`guides/`：面向使用者的独立指南；`docs/`：架构、流程和决策。
 - `resource-core/data/`：运行时配置、任务、报告，禁止提交。
 - `resource-core/application/`：统一应用服务、共享作业与 HTTP API；`agent-mcp/`：独立 stdio/HTTP MCP 包，`examples/`：接入样例。
 
@@ -41,15 +41,17 @@ JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分�
 
 核心用 Node 内置测试（`*.test.js`），组件用 Vitest（`*.test.ts`），原生用 Playwright（`*.spec.ts`）。无数值覆盖门槛；覆盖新增行为及文件安全边界，不删除安全断言来通过测试。仅用生成素材和隔离副本，不操作真实用户数据。
 
+面向使用者的使用、MCP 配置、开发部署及排错文档统一放 `guides/`，从根 README 与 guides/README 导航；内部架构和验证记录继续放 docs。用户流程变化同步对应指南。
+
 遵循[文档管理规范](docs/documentation.md)：行为、协议、格式或依赖变化同步更新对应专题、索引及项目状态，记录实际通过和未执行项。项目状态只保留当前基线、最近验证摘要、限制及优先待办，目标不超过 100 行；逐轮证据写入 `docs/verification/日期-主题.md`，旧状态放 `docs/archive/`，禁止继续在状态页累加历史章节。新 EXE 必须重新验证。
 
 提交使用 Conventional Commits，例如 `feat(core)!: 实现资源处理流水线`。提交前检查暂存差异及 `git diff --cached --check`；PR 说明最终行为、验证结果、关联问题和文档更新，界面改动附截图。
 
 ## 来源、许可与发布
 
-版本/CI/CD 改动必读[发布流程](docs/releasing.md)。产品版本以根 `VERSION` 为准，用 `node scripts/version.mjs --set <版本>` 同步三个包及锁文件、Tauri/Cargo；不连带修改 schema/提供方版本。分支提交不自动发布；只有明确发布时才准备版本说明、验收最终版本并推送单个 `v*` 标签。标签调用共享源码 CI，全部通过后创建私有 GitHub 源码 Release；禁止自动附带便携包、移动既有标签或覆盖同名不匹配的 Release。发布工具回归为 `node --test scripts/tests/*.test.mjs`。
+版本/CI/CD 改动必读[发布流程](docs/releasing.md)。产品版本以根 `VERSION` 为准，用 `node scripts/version.mjs --set <版本>` 同步三个包及锁文件、Tauri/Cargo；不连带修改 schema/提供方版本。分支提交不自动发布；只有明确发布时才准备版本说明、验收最终版本并推送单个 `v*` 标签。标签调用共享源码 CI，全部通过后创建公开 GitHub 源码 Release；禁止自动附带便携包、移动既有标签或覆盖同名不匹配的 Release。发布工具回归为 `node --test scripts/tests/*.test.mjs`。
 
-项目自有源码使用 MIT，第三方许可见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md)。提供方必须登记官方获取渠道、安装说明、版本与许可；缺依赖需在前端可见。对外发布前执行[分发核对](docs/distribution.md)，不能把本地可运行视为允许分发。当前仅发布私有源码仓库，禁止上传第三方 EXE/DLL、node_modules 或包含这些文件的历史备份。
+项目自有源码使用 MIT，第三方许可见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md)。提供方必须登记官方获取渠道、安装说明、版本与许可；缺依赖需在前端可见。对外发布前执行[分发核对](docs/distribution.md)，不能把本地可运行视为允许分发。当前发布公开源码仓库及源码 Release，禁止上传第三方 EXE/DLL、node_modules 或包含这些文件的历史备份。
 
 自动安装依赖必读[依赖管理](docs/architecture/dependencies.md)：清单固定版本、来源与摘要，前端仅传提供方 ID；校验后写入独立目录并原子启用，不覆盖手动文件或运行中的依赖，不放宽 TLS、摘要、解包和文件安全断言。
 

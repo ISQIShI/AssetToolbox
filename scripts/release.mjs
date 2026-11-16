@@ -41,7 +41,7 @@ export async function publishRelease(plan, { repository, token, runId, request =
         if (!response.ok) throw new Error(`GitHub ${method} ${route} 失败：HTTP ${response.status}（令牌与响应正文不写日志）`);
         return response.json();
     }
-    if (!(await api('')).private) throw new Error('当前分发策略只允许私有仓库');
+    if ((await api('')).private !== false) throw new Error('当前分发策略要求公开源码仓库');
     if ((await api(`/commits/${encodeURIComponent(plan.tag)}`)).sha !== plan.sha) throw new Error('远端标签已变化，拒绝发布');
     const marker = `<!-- asset-toolbox-release:${plan.sha} -->`;
     const existing = await api(`/releases/tags/${encodeURIComponent(plan.tag)}`, 'GET', undefined, true);

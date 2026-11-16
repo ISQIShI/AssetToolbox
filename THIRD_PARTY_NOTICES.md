@@ -1,6 +1,6 @@
 # 第三方来源与许可声明
 
-AssetToolbox 自有源码按根目录 [MIT License](LICENSE) 发布。MIT 不替换或重新许可第三方工具、依赖、源码及许可证文本。当前 GitHub 仓库仅发布项目源码、锁文件、来源记录和许可说明，不携带 EXE、DLL、Node 运行时或 node_modules；私有可见性本身不免除第三方义务。
+AssetToolbox 自有源码按根目录 [MIT License](LICENSE) 发布。MIT 不替换或重新许可第三方工具、依赖、源码及许可证文本。当前 GitHub 仓库仅发布项目源码、锁文件、来源记录和许可说明，不携带 EXE、DLL、Node 运行时或 node_modules；公开源码不等于允许分发上述二进制。
 
 音频提供方核验日期：2026-11-10；其余工具记录沿用 2026-11-08/09 的核验。可安装渠道同步记录于每个提供方的 `provenance.json`，前端“工具”页读取这些记录。
 

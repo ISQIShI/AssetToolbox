@@ -61,7 +61,7 @@ test('标签、main 归属、递增版本与人工版本说明均为发布门槛
     assert.throws(() => releasePlan(plan.tag, directory), /占位/);
 });
 
-function fakeApi({ isPrivate = true, remoteSha = 'abc', existing = null, failure = false } = {}) {
+function fakeApi({ isPrivate = false, remoteSha = 'abc', existing = null, failure = false } = {}) {
     const calls = [];
     return { calls, request: async (url, options) => {
         calls.push({ url, ...options });
@@ -86,8 +86,8 @@ test('只创建源码 Release，预发布不替换 Latest，已发布重跑不�
         assert.equal(again.calls.some(call => call.method !== 'GET'), false);
     }
 });
-test('公开仓库、移动标签、外来 Release 或网络错误均不静默写入/覆盖', async () => {
-    for (const options of [{ isPrivate: false }, { remoteSha: 'changed' }, { existing: { body: 'foreign' } }]) {
+test('非公开仓库、移动标签、外来 Release 或网络错误均不静默写入/覆盖', async () => {
+    for (const options of [{ isPrivate: true }, { isPrivate: null }, { remoteSha: 'changed' }, { existing: { body: 'foreign' } }]) {
         const api = fakeApi(options);
         await assert.rejects(publishRelease(plan, { ...context, ...api }));
         assert.equal(api.calls.some(call => call.method !== 'GET'), false);

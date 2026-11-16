@@ -79,7 +79,7 @@ async function fixture(t, permissions = {}) {
 }
 async function until(call, jobId, predicate = state => state.done) {
     const deadline = Date.now() + 20000;
-    while (Date.now() < deadline) { const response = await call('status', { jobId }); assert.equal(response.ok, true); if (predicate(response.result)) return response.result; await delay(35); }
+    while (Date.now() < deadline) { const response = await call('status', { jobId }); assert.equal(response.ok, true, JSON.stringify(response)); if (predicate(response.result)) return response.result; await delay(35); }
     throw new Error('HTTP MCP 作业等待超时');
 }
 

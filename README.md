@@ -1,99 +1,42 @@
 # AssetToolbox 资源工具箱
 
-版本准备与 GitHub Release 自动化见[发布流程](docs/releasing.md)。当前 Release 只提供源码，便携二进制分发尚未放行。
+面向游戏素材的 Windows 本地资源处理工具。把图片、音频的处理步骤组合成流水线，通过桌面、CLI、MCP 或 HTTP API 执行；支持先预览、保留原文件、任务续跑与备份恢复。
 
-面向游戏等资源的 Windows 本地处理工具。已支持 PNG/JPG/MP3 压缩、PNG/JPG 图片缩放、可排序处理步骤、预览、取消、任务续跑/重试与选择性恢复。新增 WAV/FLAC/MP3/Ogg 音频分析、固定增益与响度归一化；跨格式转换仍未实现。
+## 能做什么
 
-开发者从 [AGENTS.md](AGENTS.md)、[文档索引](docs/README.md)、[项目状态](docs/project-status.md)开始。本版本使用全新契约，不读取或迁移旧版配置、任务、资源模块和 CLI。
+| 资源 | 功能 |
+| --- | --- |
+| 图片（JPEG、PNG） | 压缩、等比缩放、裁剪填充、拉伸；按格式、尺寸、文件大小过滤 |
+| 音频（WAV、FLAC、MP3、Ogg） | 音频分析、固定增益、响度归一化；MP3 另支持压缩 |
+| 批处理 | 顺序执行多个步骤、扫描预览、另存或备份覆盖、取消、续跑、失败重试与选择性恢复 |
+| Agent 接入 | CLI、MCP stdio、MCP Streamable HTTP 与本机 HTTP API，共用作业中心和资源感知队列 |
 
-外部 Agent 可使用结构化 CLI、stdio MCP，或额外启动本机 HTTP API / MCP Streamable HTTP，进行能力发现、预览/处理、取消、续跑、结果查询和受控依赖安装。各入口与桌面桥接共用应用服务，外部转换默认保留原文件。见[Agent 接入指南](docs/architecture/automation.md)及[HTTP 启动与认证](docs/architecture/http.md)；stdio 仍为默认，HTTP 不随桌面自动启动。
+默认保留原文件。音频超峰时限制增益或报错，不自动启用动态压缩。当前不支持跨格式转换；HTTP 只监听本机，不提供公网服务。
 
-## 许可与源码获取
+## 开始使用
 
-项目自有源码采用 [MIT](LICENSE)。第三方工具适用各自许可，见[来源与许可声明](THIRD_PARTY_NOTICES.md)。GitHub 版本只含源码，第三方 EXE/DLL 留在本地；新克隆先在 resource-core 执行 `npm ci`，再按界面“工具”页的说明安装所需处理工具。完整便携包尚未对外发布。
+首版为 **v1.0.0 源码发行版**，项目自有代码使用 [MIT](LICENSE)。在 [GitHub Releases](https://github.com/ISQIShI/AssetToolbox/releases) 获取源码；**目前没有可直接运行的 EXE 下载包**，需要自行构建。第三方处理工具按需另行安装，适用各自许可。
 
-## 便携运行
+1. 阅读[快速开始](guides/getting-started.md)，选择桌面或 Agent 接入方式。
+2. 按[开发与部署](guides/development.md)准备 Windows 环境、安装依赖并构建。
+3. 先用素材副本执行预览和另存处理，再用于实际项目。
 
-Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移动本地工具时一起携带 `runtime/` 和完整 `resource-core/`（包括使用中的手动依赖或 `data/dependencies/` 受管理副本及许可证）；完整便携布局的使用者无需另装 Node。源码克隆后的构建步骤见[开发指南](docs/development.md)。
+## 用户文档
 
-## 处理资源
+重要的对外说明统一放在 [`guides/`](guides/README.md)，按任务查阅：
 
-窗口左侧的活动栏有“处理”“任务”“恢复”“工具”四个工作区（Ctrl+1 至 Ctrl+4），底部的按钮切换浅色、深色或跟随系统。“处理”页左侧的处理线按执行顺序列出来源、各步骤和写入方式，点选一项在右侧编辑；步骤可以按住拖动排序（或 Alt+↑ / Alt+↓），右键步骤有上移、下移、停用和删除；删除步骤、以及不备份就覆盖原文件时开始处理，会先弹出确认；保存配置（Ctrl+S）、扫描预览和开始处理在页面顶部的命令栏。窗口最下方的状态栏显示当前是否有作业在运行，以及可继续的任务和处理工具的可用情况。
+| 文档 | 解决什么问题 |
+| --- | --- |
+| [快速开始](guides/getting-started.md) | 下载什么、需要什么、第一次怎样运行 |
+| [使用指南](guides/usage.md) | 添加步骤、过滤资源、图片/音频处理、任务和恢复 |
+| [处理工具安装](guides/dependencies.md) | 哪些依赖可一键安装、手动安装位置与渠道 |
+| [MCP 配置](guides/mcp.md) | stdio 与 Streamable HTTP 接入、目录授权、验证连接 |
+| [命令行](guides/cli.md) / [HTTP API](guides/http-api.md) | 脚本调用、提交作业、查询结果和管理服务 |
+| [开发与部署](guides/development.md) | 从源码构建桌面、只部署 Agent 服务、测试与更新 |
+| [常见问题](guides/troubleshooting.md) | 缺依赖、权限拒绝、连接失败、处理或恢复失败 |
 
-1. 若活动栏的“工具”带品红数字，或状态栏的处理工具一项显示品红的缺件图标，说明有处理工具缺少依赖。打开“工具”页，LAME 与 Sharp 可点击“获取并安装”；其他工具按说明手动放置文件后刷新。也可以停用用到它的步骤。
-2. 在处理线上点“来源”，选择来源文件夹；点最下方的写入站点，选择“覆盖原文件”或“另存到新文件夹”（新配置默认另存）。覆盖时建议勾选“替换前备份原文件”。
-3. 点“添加步骤”，依次选择资源分组、资源格式、操作（例如“图片 → PNG → 图片缩放”）。每一级可以搜索，返回按钮可重选上一级，Esc 退出；选定操作才创建步骤。添加后在右侧选择处理工具并设置参数。同一操作切换工具保留宽高等公共参数，工具专属参数恢复为目标工具默认值；切换操作会重置两组参数。用“上移”“下移”调整顺序，用“启用此步骤”开关停用步骤。
-4. “扫描预览”只检查范围、输出冲突及依赖，不保存配置、不处理素材。结果出现在处理线末端的“扫描结果”中；之后修改配置会提示结果已过期。
-5. 点击“开始处理”。同一文件执行所有匹配类型的启用步骤，全部成功后才提交一次；不同类型的步骤自动跳过。进度和结果显示在窗口底部的作业栏，切换页面也能看到并取消。
+## 参与开发
 
-默认 PNG/JPG 压缩启用，MP3 压缩关闭。PNG 默认速度 3、质量 50–80，JPG 质量 5（0 跳过），MP3 ABR 24 kbps。压缩只有比该步骤输入更小才采用，否则保留该步骤输入继续执行。
+贡献者和 AI 从 [AGENTS.md](AGENTS.md)、[开发文档索引](docs/README.md)和[项目状态](docs/project-status.md)开始；版本规则及自动发布流程见[发布指南](docs/releasing.md)。扩展采用“资源类型—处理操作—实现提供方”契约，详见[扩展文档](docs/architecture/extensions.md)。
 
-“图片缩放”可用于 PNG 与 JPEG。支持等比适应、居中裁剪填充、拉伸；最近邻适合像素画，Lanczos3 提供平滑插值。默认 512×512、仅缩小；取消“仅缩小”可放大，结果体积允许增加。PNG 保留透明度，JPEG 质量可调；按 EXIF 方向处理并移除附加元数据。首版限静态单页 PNG/JPEG，输入和目标均最多 4000 万像素，单边 1–16384。半透明颜色可能产生一个色阶的舍入。
-
-“音频分析”只生成测量结果，不复制或改写素材。“音频增益”按 dB 调整整段音量；“响度归一化”按 LUFS 计算固定增益。默认另存，覆盖必须备份；超峰默认限制整段增益，也可报错保留原文件，不自动动态压缩。作业栏显示输入/输出测量与警告，完整报告含 audio.csv。有损格式重编码有额外损失，非零处理移除元数据和循环标记；短音效/静音可能无法可靠归一化。范围与原理见[音频专题](docs/architecture/audio.md)。
-
-例如把“PNG 图片缩放”移到“PNG 压缩”之前，即可先调整尺寸再压缩。后续步骤失败不会提交中间图片。没有适用步骤的已知文件，覆盖时不改动，另存时原样复制；未知格式不进入任务。
-
-“开始处理”或“保存配置”保存路径、步骤及参数到 `resource-core/data/settings.json`；步骤编辑器中的“恢复默认参数”只重置当前步骤的参数，保留组合、顺序和开关。
-
-## 安装和更新处理工具
-
-“工具”页展示当前版本、可安装的核验版本与来源。LAME、Sharp 支持一键安装、修复和重新安装；应用的核验清单变化时提供“更新到核验版本”。更新不会自动追随上游最新版，手动安装的文件会保留。
-
-下载仅使用固定 HTTPS 渠道并匹配文件摘要，完成加载检查后才启用。进度、错误与取消显示在底部；安装过程中不能同时处理素材。网络失败或摘要不符时保留旧安装，可重试或使用手动指引。pngquant 3.0.3 仍需 Cargo 编译，JPG-C 仍按作者渠道获取；FFmpeg/FFprobe 9.0.2 按工具页的 Gyan 官方推荐渠道手动安装。
-
-受管理文件位于 `resource-core/data/dependencies/`；本地移动应用时连同该目录携带。旧安装目录暂不自动清理，不要删除当前启用目录。详情与分发限制见[依赖管理](docs/architecture/dependencies.md)。
-
-## 文件保护与任务恢复
-
-- 递归扫描忽略目录链接；输出/备份不可等于源目录或位于其上级。源目录内的输出/备份子树自动排除。
-- 另存保持源文件与相对目录，已有同名输出不覆盖；处理失败时复制原文件并标为失败。只允许任务重试替换其拥有且哈希未变的失败副本。
-- 覆盖前校验源文件未变化，写入成功才记为完成；备份保留原始字节。作业栏中“体积变化”的 −号表示变小，+号表示变大。
-- 取消及关闭窗口在文件边界生效，当前文件的全部步骤先完成；不会强杀正在执行的工具。
-- “任务”页可“继续未完成”或“重试失败项”。任务固定文件清单、参数、步骤和实现版本，不采用当前表单；版本不一致会拒绝续跑。要改变步骤需新建任务。
-- 在“任务”页点“检查备份”，或在“恢复”页选择任务后检查。检查会核对备份/目标哈希，只恢复明确勾选项；用户后来编辑的文件列为冲突。开始恢复后禁止原任务继续处理，恢复本身可继续/重试。
-- 没有任务记录的独立备份，在“恢复”页选“独立备份文件夹”，检查后导出到指定目录；目标已有不同内容时不会覆盖。
-
-当前配置契约为 `asset-toolbox.settings/3`，旧 /1–2 配置拒绝且不自动迁移，也不覆盖原文件，需重新建立配置。任务/报告升级 /2，旧 /1 任务不能续跑或按任务恢复；已有备份普通文件保留，可通过“独立备份文件夹”检查并导出恢复。
-
-配置、持久任务和报告分别位于核心 `data/settings.json`、`data/tasks/`、`data/reports/`；报告有 JSON 与 UTF-8 CSV。预览不创建任务或报告。不要删除仍需续跑或恢复的任务记录。
-
-## 命令行
-
-资源按图片、音频等类别分组，JPEG/PNG 等格式保留独立步骤。来源和每个步骤都可以设置属性条件。例如来源选择“资源格式等于 JPEG”且“图片宽度大于 1024 px”；也可选“资源类别等于图片”涵盖所有已识别图片格式。排除文件不复制、不处理、不备份。步骤过滤读取前一步的实际产物，未匹配只跳过该步骤。分辨率可分别约束宽/高或总像素数；规则支持“且/或”，详见[属性与过滤器](docs/architecture/properties-and-filters.md)。恢复不继承处理过滤条件。
-
-将步骤数组保存为 `pipeline.json`，格式见[扩展契约示例](docs/architecture/extensions.md#步骤及参数)，在工具根目录执行：
-
-```powershell
-.\runtime\node.exe resource-core/cli.js "D:\Assets" --pipeline pipeline.json --preview
-.\runtime\node.exe resource-core/cli.js "D:\Assets" --pipeline pipeline.json --output "D:\Results"
-.\runtime\node.exe resource-core/cli.js "D:\Assets" --pipeline pipeline.json --source-filter examples/source-filter.example.json --preview
-```
-
-上述快捷命令与桌面、CLI API、MCP 和 HTTP 使用同一应用 /8 服务，返回结构化响应并创建持久 jobId；处理还生成 taskId，可续跑和恢复。API 的本机人工调用可显式使用 --local，外部 Agent 使用固定 --policy。
-
-```powershell
-.\runtime\node.exe resource-core/cli.js api submit --local --input request.json
-.\runtime\node.exe resource-core/cli.js api jobs --local
-.\runtime\node.exe resource-core/cli.js api status --local --input status.json
-```
-
-续跑 request.json 示例：`{"request":{"mode":"resume","taskId":"<任务 ID>"},"idempotencyKey":"resume-001"}`；status.json 为 `{"jobId":"<作业 ID>"}`。恢复先提交 restore-preview，再从 results 的 restore 分页选择 `{path,backupHash,targetHash}`，执行时显式传非空 selection；省略或空数组均拒绝。batch.js 仅为内部 worker，旧批处理 CLI 不再支持。退出码 0 完成、1 失败、2 取消（失败优先）。
-
-桌面和 Agent 共用[资源感知队列](docs/architecture/queue.md)：同安装按配置的 1–8 个槽位并行（默认 2），冲突项按登记顺序等待，最多 100 个未结束项。作业中心显示等待原因及槽位用量；登记顺位不是预计启动顺序。
-
-应用/响应 /8、HTTP /api/v8，旧 /api/v1–7 明确拒绝；持久 job 升级 /6，不读取或迁移旧 /1–5 作业。升级前关闭旧入口，桌面、核心和 MCP 必须成套更新。详细契约和最终架构见[统一应用接口](docs/architecture/application.md)。
-
-## 存储维护
-
-在“工具 → 存储维护”展开面板，默认保留最近 30 天。先点击“预览清理范围”，查看每项可清理或受保护的原因，再勾选需要清理的记录并执行；不会默认全选或定时删除。修改保留天数需重新预览，翻页清空选择。
-
-仅清理成功旧作业的报告和执行明细；素材、输出、任务、备份、依赖以及作业身份/幂等记录保留。清理后旧报告和逐文件结果不可再查询，已有备份仍可检查恢复。部分失败须重新预览，不能直接重复旧请求。详细规则见[存储维护](docs/architecture/storage.md)。
-
-## 统一作业中心
-
-点击活动栏“作业”（Ctrl+5）查看同一安装中桌面、CLI、MCP 与 HTTP 的作业。重启后仍可查询；列表每页 20 项，可搜索/筛选本页，查看分页结果、打开报告或跳转素材任务。选择运行中的作业后可显式取消；只查看外部作业时，关闭窗口不会取消它。当前按单安装 资源感知排队，最多 100 个未结束作业；排队可取消，提交后仍须查询最终状态。方案比较见[统一作业中心与入口冲突](docs/architecture/job-center.md)。
-
-作业中心按实际槽位纵向排列任务卡片，等待项与历史分开。并行数量可在队列空闲时设为 1–8，默认 2；支持采用基于可用逻辑处理器的保守建议。编码器也会使用多线程，建议值不等于 CPU 核心数或性能保证。设置重启保留，HTTP/MCP 只能查询。
-
-桌面“工具 → Agent 接入与服务管理”可配置素材/输出/备份目录权限、端口及 MCP HTTP，启动/安全停止服务并生成 stdio 或 HTTP 连接配置。CLI 使用 `service configure/start/status/stop/client-config`；相同五个动作也通过 MCP 工具与 HTTP API 访问。policy/2 的服务管理授权默认关闭，Agent 不能扩大启动权限。服务跟随原启动入口退出，离开工具页不停止；详细命令与边界见[服务管理](docs/architecture/service-management.md)。
+问题反馈请附版本、复现步骤和脱敏错误信息，勿上传素材、令牌或运行时数据。第三方来源和许可见 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md)；完整便携包的分发条件尚未核验完毕。

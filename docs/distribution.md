@@ -1,14 +1,14 @@
 # 源码发布与二进制分发核对
 
-当前授权范围：GitHub 私有源码仓库及源码 Release，项目自有代码 MIT。用户已明确选择第三方 EXE 留在本地；Release 仅使用 GitHub 自动生成的源码归档，不上传完整便携包或二进制附件。标签触发、版本规则与发布门槛见[发布流程](releasing.md)。来源与许可事实集中于 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md)，前端获取说明来自提供方 provenance.json。
+当前授权范围：GitHub 公开源码仓库及源码 Release，项目自有代码 MIT。2026-11-15 用户明确要求将既有私有仓库转为 public 并发布首版；此前“仅私有”限制由此取代，第三方 EXE 留在本地的范围不变。Release 仅使用 GitHub 自动生成的源码归档，不上传完整便携包或二进制附件。标签触发、版本规则与发布门槛见[发布流程](releasing.md)。来源与许可事实集中于 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md)，前端获取说明来自提供方 provenance.json。
 
 ## 源码发布条件
 
 1. 提交根 LICENSE、包 license 元数据、第三方署名和可核验的来源/版本/哈希。
 2. 当前树及将上传的全部可达历史都不得包含 EXE/DLL/.node、node_modules、个人 data、.local 或凭据；仅增加 .gitignore 不能移除历史 blob。
-3. 先保留本地 Git 归档，再在隔离副本过滤历史中的第三方二进制。只推送核对过的 main，不推送本地历史备份或全部 refs。
+3. 核对远端全部分支/标签、可达历史及 Actions 日志/附件；如发现敏感内容，先在隔离副本处理并复核，不直接公开。既有历史已清除第三方二进制；不推送本地历史备份或全部 refs。
 4. 执行 `node scripts/check-release.mjs --source`，检查源码与历史边界；另审查变更、敏感数据及 Git 暂存内容。
-5. 用 GitHub API 确认目标 owner、仓库不存在后创建私有仓库，再推送 main。发布后验证 private=true、MIT 识别和远端 HEAD。不可因创建失败改为公开仓库。
+5. 确认目标为 `ISQIShI/AssetToolbox`、main 已通过 CI，完成上述检查后按授权将既有仓库设为 public。再推送明确的版本标签，由 CI 创建 Release；验证 private=false、MIT 识别、远端 HEAD、标签提交与 Release 资产范围。可见性与标签操作失败应明确处理，不能绕过发布门槛手工附带二进制。
 
 当前发布策略不妨碍本地使用已安装工具。新克隆只需安装 Sharp npm 依赖即可使用缩放；其余工具通过前端官方获取页面和安装位置说明配置。缺依赖的启用步骤会禁用“开始处理”，可禁用该步骤继续其他功能；刷新只读检查，不丢失当前参数。
 

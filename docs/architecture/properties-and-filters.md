@@ -64,7 +64,7 @@ module.exports = {
 
 ## 入口与验证
 
-桌面在来源与每个步骤显示同一过滤编辑器，支持 AND/OR、清除及忙碌禁用。属性选择按 group 展开为“通用文件属性 → 文件大小”“图片属性 → 图片宽度”等，格式值按“资源类别 → 格式”展开；分支不修改规则，选中叶子才写入原属性/格式 ID，目录外的已存值保留。比较符与布尔值保持单层；同类型切换工具保留条件，改变类型清空条件，恢复参数不清空过滤。CLI 快捷命令增加 `--source-filter examples/source-filter.example.json`（仓库根执行）；通用 CLI API、MCP stdio/HTTP 和 HTTP 的 validate/submit 直接接受 sourceFilter 与 step.filter。示例见[根 README](../../README.md)。恢复请求不接受过滤字段。
+桌面在来源与每个步骤显示同一过滤编辑器，支持 AND/OR、清除及忙碌禁用。属性选择按 group 展开为“通用文件属性 → 文件大小”“图片属性 → 图片宽度”等，格式值按“资源类别 → 格式”展开；分支不修改规则，选中叶子才写入原属性/格式 ID，目录外的已存值保留。比较符与布尔值保持单层；同类型切换工具保留条件，改变类型清空条件，恢复参数不清空过滤。CLI 快捷命令增加 `--source-filter examples/source-filter.example.json`（仓库根执行）；通用 CLI API、MCP stdio/HTTP 和 HTTP 的 validate/submit 直接接受 sourceFilter 与 step.filter。示例见[命令行指南](../../guides/cli.md)。恢复请求不接受过滤字段。
 
 界面将 resource-kind 显示为“资源类别”，resource-type 显示为“资源格式”；eq/ne 提供图片/音频及分组格式选项，仍保存原始 kind/格式 ID，不改变 filter/1。contains 等操作保持文本输入，已保存的目录外值保留显示。类别筛选 image 可涵盖 JPEG 与 PNG，步骤仍分别指定一个格式。
 
