@@ -4,7 +4,7 @@
 
 ## 当前基线
 
-本轮基于 `cd17f71`，新增独立[用户文档 guides](../guides/README.md)，按用户授权准备公开仓库与首个 `v1.0.0` 正式源码 Release（[发布流程](releasing.md)、[版本说明](releases/1.0.0.md)）。原生 EXE 已重新构建验收，产品版本值与处理/应用协议未变；公开及发布结果仍待远端操作确认。只发行源码，二进制分发未放行。
+首个正式源码版本 [v1.0.0](https://github.com/ISQIShI/AssetToolbox/releases/tag/v1.0.0) 已由 CI 发布，标签提交 `e7630f9`；仓库已公开，MIT 已识别。新增独立[用户文档 guides](../guides/README.md)，使用与接入说明从根 README 导航。原生 EXE 已重新构建验收，产品版本值与处理/应用协议未变。只发行源码，二进制分发未放行；规则见[发布流程](releasing.md)。
 
 | 领域 | 当前能力与专题 |
 | --- | --- |
@@ -32,7 +32,7 @@ Windows x64；开发 Node 26.13.0，便携 Node 24.19.0。范围、首版 EXE �
 | 前端组件 / 类型检查 | 61 通过；typecheck 通过 |
 | MCP 与跨入口一致性 | 完整复测 7 通过；一次状态查询失败已补诊断，定向 3 次通过；根因未确认 |
 | 原生构建 / E2E | 新 release EXE 构建通过；3 项 E2E 通过，约 1.1 分钟 |
-| 发布工具 / 工作流 | 5 项公开发布工具回归通过；首版 main CI 和标签工作流待远端验证 |
+| 发布工具 / 工作流 | 5 项回归通过；[main CI](https://github.com/ISQIShI/AssetToolbox/actions/runs/43817670748) 与 [v1.0.0 发布工作流](https://github.com/ISQIShI/AssetToolbox/actions/runs/43818264450) 全部通过；匿名核验正式 Release 与源码归档 |
 | 文档 / 源码发布检查 | 文档链接有效；源码检查通过，二进制未放行 |
 
 ## 已知限制

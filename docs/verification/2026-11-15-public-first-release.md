@@ -34,9 +34,14 @@ MCP 首次在五入口一致性用例中，关闭 HTTP MCP 客户端后由桌面
 ## 公开前审查
 
 - 初始远端只有 main，无标签、Release、Issues/PR 或 Actions 附件；MIT 已识别。4 次既有 Actions 运行日志已下载到忽略目录审查。未启用 Pages/Discussions；Wiki Git 入口返回不存在，无可读取的 Wiki 历史。
-- 官方 Gitleaks 8.30.1 固定 Windows 包经上游 checksums 比对；ZIP SHA-256 为 `d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e`。32 个既有提交及 4 次 Actions 日志扫描均无命中；扫描不是没有任何敏感内容的绝对保证。
+- 官方 Gitleaks 8.30.1 固定 Windows 包经上游 checksums 比对；ZIP SHA-256 为 `d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e`。首次扫描 32 个既有提交/4 次 Actions 日志，公开前再次扫描包含准备提交的 33 个提交/5 次日志，均无命中；扫描不是没有任何敏感内容的绝对保证。
 - 当前树/历史禁止二进制、用户 data、node_modules 和凭据的边界继续由 `scripts/check-release.mjs --source` 核对；公开前还检查最终提交及暂存差异。
 
 ## 远端发布
 
-准备完成后推送 main 并等待源码 CI，再修改可见性、推送单个 v1.0.0 标签，由 Release 工作流发布。此处暂不将尚未发生的可见性变更或 Release 创建记为成功；实际结果随后更新本记录与项目状态。
+- 准备提交 `e7630f9f3bf3bbbc44654707117029f1ba4749fd` 已推送；[main 源码 CI #43817670748](https://github.com/ISQIShI/AssetToolbox/actions/runs/43817670748) 全部通过。
+- 经同仓库 REST API 将可见性改为 public，匿名查询确认 `private=false`、MIT；只修改可见性，没有改权限、分支保护或其他设置。
+- 注释标签 `v1.0.0` 指向上述提交，本地发布门槛检查通过后推送单个标签；[发布工作流 #43818264450](https://github.com/ISQIShI/AssetToolbox/actions/runs/43818264450) 的共享源码验证与 publish 两项全部通过。
+- [v1.0.0 Release](https://github.com/ISQIShI/AssetToolbox/releases/tag/v1.0.0) 由 `github-actions[bot]` 于 `2026-11-16T06:41:31Z`（本地 11 月 15 日）创建；匿名核对 `draft=false`、`prerelease=false`、说明与提交标记一致。附件为 0，仅有 GitHub 自动源码下载。
+- 匿名下载标签源码 ZIP：356 个条目、9 篇 guides 文档、VERSION 为 1.0.0，无 EXE/DLL/.node、node_modules、data 或 .local。此次下载 SHA-256：`a9dc5219e66436672938f2f4253088c4b8c9bfe493d276640beab2ed3d649607`（仅为本次核验记录，不承诺 GitHub 自动归档永不重生成）。
+- 发布后的证据补充只提交到 main，不移动 v1.0.0 或修改已发布版本说明；标签内的验收记录保存发布前事实，当前文件补齐实际远端结果。
