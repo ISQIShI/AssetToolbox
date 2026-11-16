@@ -22,7 +22,9 @@ async function fixture(t, permissions = {}) {
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'asset-mcp-http-'));
     const tool = copyTool(root), core = path.join(tool, 'resource-core'), serverRoot = path.join(tool, 'agent-mcp');
     fs.mkdirSync(serverRoot);
-    for (const file of ['server.mjs', 'tools.mjs', 'transports.mjs']) fs.copyFileSync(path.join(packageRoot, file), path.join(serverRoot, file));
+    for (const file of ['server.mjs', 'tools.mjs', 'transports.mjs', 'package.json']) fs.copyFileSync(path.join(packageRoot, file), path.join(serverRoot, file));
+    const metadata = JSON.parse(fs.readFileSync(path.join(serverRoot, 'package.json'), 'utf8'));
+    fs.writeFileSync(path.join(serverRoot, 'package.json'), JSON.stringify({ ...metadata, version: '9.8.7-rc.1' }));
     fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(serverRoot, 'node_modules'), 'junction');
     installType(tool, 'fixture');
     const provider = path.join(core, 'providers/fixture'); fs.mkdirSync(provider);
@@ -59,6 +61,7 @@ async function fixture(t, permissions = {}) {
         const client = new Client({ name: 'asset-http-integration', version: '1.0.0' }, { versionNegotiation: { mode } });
         clients.push(client);
         await client.connect(new StreamableHTTPClientTransport(new URL(ready.mcpUrl), { requestInit: { headers: { Authorization: 'Bearer ' + token } } }));
+        assert.equal(client.getServerVersion().version, '9.8.7-rc.1');
         const call = async (action, args = {}) => {
             const response = await client.callTool({ name: 'asset_' + action, arguments: args });
             assert.ok(response.structuredContent, JSON.stringify(response));

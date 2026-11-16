@@ -13,6 +13,9 @@
 *.json text eol=lf
 *.jsonl text eol=lf
 *.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+VERSION text eol=lf
 *.lock text eol=lf
 *.rs text eol=lf
 *.exe binary

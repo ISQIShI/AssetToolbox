@@ -22,7 +22,9 @@
 
 ## 自动验证
 
-GitHub Actions 在 push、pull_request 和手动触发时使用 Windows runner；按 `.nvmrc` 和三个锁文件安装依赖，执行 source、MCP、组件、`build:web`、文档及源码检查。安装依赖需要网络，但不下载/上传第三方 EXE，不执行真实编码器或原生 E2E。不使用仓库写权限、凭据持久化或二进制 artifact。
+GitHub Actions 在分支 push、pull_request 和手动触发时使用 Windows runner；`workflow_call` 供标签发布复用。按 `.nvmrc` 和三个锁文件安装依赖，执行版本一致性、发布脚本测试、source、MCP、组件、`build:web`、文档及源码检查，完整拉取历史。安装依赖需要网络，但不下载/上传外部编码器 EXE，不执行真实编码器或原生 E2E。源码 CI 不使用仓库写权限、凭据持久化或二进制 artifact；只有[Release 工作流](releasing.md)的发布 job 获得 contents:write，用于创建源码 Release。
+
+根目录 `node scripts/version.mjs --check` 验证产品版本一致，`node --test scripts/tests/*.test.mjs` 验证版本同步、标签/main/说明门槛、模拟 GitHub 发布、重复发布与拒绝边界。该套件独立于核心测试分层，不访问真实发布 API。
 
 官方 Actions 固定提交摘要：[checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1) 对应 `3d3c42e5aac5ba805825da76410c181273ba90b1`；[setup-node v7.1.0](https://github.com/actions/setup-node/releases/tag/v7.1.0) 对应 `949feb2413d6458794dcd2491c4babbbce0c15c1`。升级时重新核对发布及提交来源。
 

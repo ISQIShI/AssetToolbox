@@ -1,6 +1,6 @@
 # 源码发布与二进制分发核对
 
-当前授权范围：GitHub 私有源码仓库，项目自有代码 MIT。用户已明确选择第三方 EXE 留在本地；没有发布完整便携包或 GitHub Release 附件。来源与许可事实集中于 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md)，前端获取说明来自提供方 provenance.json。
+当前授权范围：GitHub 私有源码仓库及源码 Release，项目自有代码 MIT。用户已明确选择第三方 EXE 留在本地；Release 仅使用 GitHub 自动生成的源码归档，不上传完整便携包或二进制附件。标签触发、版本规则与发布门槛见[发布流程](releasing.md)。来源与许可事实集中于 [THIRD_PARTY_NOTICES](../THIRD_PARTY_NOTICES.md)，前端获取说明来自提供方 provenance.json。
 
 ## 源码发布条件
 

@@ -21,7 +21,9 @@ async function fixture(t) {
     const provider = path.join(core, 'providers/fixture'); fs.mkdirSync(provider);
     fs.writeFileSync(path.join(provider, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:2,version:'1.0.0',displayName:'MCP 测试',adapters:{compress:{version:'1.0.0',resourceTypes:['fixture'],execute({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,150);fs.writeFileSync(output,fs.readFileSync(input).subarray(0,8));return {output};}}}};`);
     const serverRoot = path.join(tool, 'agent-mcp'); fs.mkdirSync(serverRoot);
-    for (const file of ['server.mjs', 'tools.mjs', 'transports.mjs']) fs.copyFileSync(path.join(packageRoot, file), path.join(serverRoot, file));
+    for (const file of ['server.mjs', 'tools.mjs', 'transports.mjs', 'package.json']) fs.copyFileSync(path.join(packageRoot, file), path.join(serverRoot, file));
+    const metadata = JSON.parse(fs.readFileSync(path.join(serverRoot, 'package.json'), 'utf8'));
+    fs.writeFileSync(path.join(serverRoot, 'package.json'), JSON.stringify({ ...metadata, version: '9.8.7-rc.1' }));
     fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(serverRoot, 'node_modules'), 'junction');
     const source = path.join(root, '素材'), output = path.join(root, '输出'); fs.mkdirSync(source);
     for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(source, i + '.pack'), 'PACK:' + 'test'.repeat(100));
@@ -33,6 +35,7 @@ async function fixture(t) {
         const transport = new StdioClientTransport({ command: process.execPath, args: [path.join(serverRoot, 'server.mjs'), '--policy', policy], stderr: 'pipe' });
         let stderr = ''; transport.stderr?.on('data', bytes => { stderr += bytes; });
         await client.connect(transport); clients.push(client);
+        assert.equal(client.getServerVersion().version, '9.8.7-rc.1');
         const call = async (action, args = {}) => {
             const result = await client.callTool({ name: 'asset_' + action, arguments: args });
             assert.ok(result.structuredContent, JSON.stringify(result) + stderr);

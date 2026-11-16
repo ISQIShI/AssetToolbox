@@ -1,5 +1,7 @@
 # AssetToolbox 资源工具箱
 
+版本准备与 GitHub Release 自动化见[发布流程](docs/releasing.md)。当前 Release 只提供源码，便携二进制分发尚未放行。
+
 面向游戏等资源的 Windows 本地处理工具。已支持 PNG/JPG/MP3 压缩、PNG/JPG 图片缩放、可排序处理步骤、预览、取消、任务续跑/重试与选择性恢复。新增 WAV/FLAC/MP3/Ogg 音频分析、固定增益与响度归一化；跨格式转换仍未实现。
 
 开发者从 [AGENTS.md](AGENTS.md)、[文档索引](docs/README.md)、[项目状态](docs/project-status.md)开始。本版本使用全新契约，不读取或迁移旧版配置、任务、资源模块和 CLI。

@@ -20,7 +20,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     fs.copyFileSync(path.join(project, 'AssetToolbox.exe'), path.join(tool, 'AssetToolbox.exe'));
     fs.copyFileSync(path.join(project, 'resource-core/desktop-bridge.js'), path.join(tool, 'resource-core/desktop-bridge.js'));
     const mcpRoot = path.join(tool, 'agent-mcp'); fs.mkdirSync(mcpRoot);
-    for (const file of ['server.mjs', 'tools.mjs', 'transports.mjs']) fs.copyFileSync(path.join(project, 'agent-mcp', file), path.join(mcpRoot, file));
+    for (const file of ['server.mjs', 'tools.mjs', 'transports.mjs', 'package.json']) fs.copyFileSync(path.join(project, 'agent-mcp', file), path.join(mcpRoot, file));
     fs.symlinkSync(path.join(project, 'agent-mcp/node_modules'), path.join(mcpRoot, 'node_modules'), 'junction');
     const module = path.join(tool, 'resource-core/providers/extra'); fs.mkdirSync(module); require(path.join(project, 'resource-core/tests/helpers.js')).installType(tool, 'extra');
     fs.writeFileSync(path.join(module, 'config.js'), 'module.exports=' + JSON.stringify({ displayName: '扩展测试模块', order: 5, extensions: ['.pack'], enabledKey: 'extraEnabled', defaults: { extraLevel: 3, extraMode: 'fast', extraText: '原参数' }, limits: { extraLevel: { label: '测试级别', min: 1, max: 9 } }, parameters: { extraMode: { label: '测试模式', type: 'enum', choices: ['fast', 'best'] }, extraText: { label: '测试文字', type: 'text', maxLength: 32767 } } }));

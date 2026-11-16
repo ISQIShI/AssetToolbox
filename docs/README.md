@@ -29,6 +29,8 @@
 | [测试分层与 CI](testing.md) | 源码、真实编码器、原生离线/联网验收、固定 Actions 和检查命令 |
 | [开发与验证](development.md) | 环境、构建、测试矩阵、Git 与 Conventional Commits |
 | [分发核对](distribution.md) | MIT 源码发布范围、历史清理、提供方许可与二进制放行条件 |
+| [版本与 Release 流程](releasing.md) | 统一版本、发布时机、标签触发 CI/CD、源码 Release、失败重试及权限边界 |
+| [版本说明](releases/README.md) | 每个待发布/已发布版本的说明规范与模板 |
 | [第三方声明](../THIRD_PARTY_NOTICES.md) | 来源、版本、许可证及当前分发结论 |
 | [项目状态](project-status.md) | 接手基线、实际验证结果、已知限制和后续事项 |
 | [验证记录索引](verification/README.md) | 每轮命令、环境、原生产物及验证边界；历史不混入当前状态 |
