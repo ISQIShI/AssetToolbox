@@ -3,8 +3,7 @@
 import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue';
 import { useWorkbench } from '../core/workbench';
 import { folderName, isMissing, providerOf, stepGroups, stepTitle } from '../core/model';
-import type { ResourceType } from '../core/types';
-import { resourceGroups, resourceKindLabel } from '../core/resource-groups';
+import { resourceGroups } from '../core/resource-groups';
 import Icon from './Icon.vue';
 import Tip from './Tip.vue';
 import StepMenu from './StepMenu.vue';
@@ -19,16 +18,17 @@ const menuStyle = ref<Record<string, string>>({});
 const menuId = useId();
 const search = ref<HTMLInputElement>();
 const query = ref('');
-const operationId = ref('');
-
+const kindId = ref(''), typeId = ref('');
 const groups = computed(() => definition.value ? stepGroups(definition.value) : []);
-const selectedGroup = computed(() => groups.value.find(group => group.operation.id === operationId.value));
-const term = computed(() => query.value.trim().toLocaleLowerCase());
-const matches = (value: string) => value.toLocaleLowerCase().includes(term.value);
-const matchesType = (type: ResourceType) => matches([resourceKindLabel(type.kind), type.kind, type.displayName, type.id, ...type.extensions].join(' '));
-const filteredGroups = computed(() => groups.value.filter(group => matches(`${group.operation.displayName} ${group.operation.id}`) || group.resourceTypes.some(matchesType)));
-const filteredTypes = computed(() => selectedGroup.value?.resourceTypes.filter(matchesType) || []);
-const typeGroups = computed(() => resourceGroups(filteredTypes.value));
+const categories = computed(() => resourceGroups((definition.value?.resourceTypes || []).filter(type => groups.value.some(group => group.resourceTypes.some(item => item.id === type.id)))));
+const category = computed(() => categories.value.find(group => group.id === kindId.value));
+const resourceType = computed(() => category.value?.items.find(type => type.id === typeId.value));
+const stage = computed(() => resourceType.value ? '操作' : category.value ? '资源格式' : '资源分组');
+const choices = computed(() => resourceType.value
+    ? groups.value.filter(group => group.resourceTypes.some(type => type.id === typeId.value)).map(group => ({ id: group.operation.id, label: group.operation.displayName, description: group.operation.description }))
+    : category.value ? category.value.items.map(type => ({ id: type.id, label: type.displayName, description: type.extensions.join('、') }))
+        : categories.value.map(group => ({ id: group.id, label: group.label, description: group.items.map(type => type.displayName).join('、') })));
+const filteredChoices = computed(() => choices.value.filter(item => [item.id, item.label, item.description].join(' ').toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())));
 const full = computed(() => (config.value?.pipeline.length || 0) >= 64);
 const steps = computed(() => config.value && definition.value ? config.value.pipeline.map((step, index) => {
     const provider = providerOf(definition.value!, step);
@@ -43,7 +43,7 @@ const outputLabel = computed(() => {
     return value.backupEnabled ? `备份到 ${value.backupDir.trim() ? folderName(value.backupDir) : '（未选择）'}` : '不备份';
 });
 
-// 分两级选择，避免将格式与操作的组合全部平铺；搜索只影响选择器，不改变目录与配置。
+// 先分组、再格式、最后操作；只有最后一级才创建步骤。
 function outside(event: Event) {
     const target = event.target as Node;
     if (!menu.value?.contains(target) && !addButton.value?.contains(target)) close(false);
@@ -60,7 +60,7 @@ async function place() {
 }
 function open() {
     menuStyle.value = { left: '0px', top: '0px', maxHeight: '360px' };
-    operationId.value = '';
+    kindId.value = ''; typeId.value = '';
     query.value = '';
     adding.value = true;
     void nextTick(() => { void place(); search.value?.focus(); });
@@ -75,17 +75,22 @@ function close(refocus: boolean) {
 }
 function dismiss() { close(false); }
 function choose(resourceType: string, operation: string) { bench.addStep(resourceType, operation); close(true); }
-function selectOperation(id: string) {
-    operationId.value = id;
-    query.value = '';
-    void nextTick(() => search.value?.focus());
+function enter(id: string) {
+    if (resourceType.value) { choose(typeId.value, id); return; }
+    if (category.value) typeId.value = id; else kindId.value = id;
+    query.value = ''; void nextTick(() => search.value?.focus());
 }
+function back() {
+    if (typeId.value) typeId.value = ''; else kindId.value = '';
+    query.value = ''; void nextTick(() => search.value?.focus());
+}
+watch([kindId, typeId, query], () => { if (adding.value) void nextTick(place); });
 function focusOut(event: FocusEvent) {
     if (event.relatedTarget && event.relatedTarget !== addButton.value && !menu.value?.contains(event.relatedTarget as Node)) close(false);
 }
 function menuKey(event: KeyboardEvent) {
-    if (event.key === 'ArrowLeft' && selectedGroup.value && document.activeElement !== search.value) {
-        event.preventDefault(); selectOperation(''); return;
+    if (event.key === 'ArrowLeft' && category.value && document.activeElement !== search.value) {
+        event.preventDefault(); back(); return;
     }
     const arrow = event.key === 'ArrowDown' || event.key === 'ArrowUp';
     const edge = event.key === 'Home' || event.key === 'End';
@@ -189,35 +194,23 @@ onUnmounted(() => close(false));
         </button>
         <section v-if="adding" :id="menuId" ref="menu" class="step-picker" :style="menuStyle" role="dialog" aria-label="添加步骤" @focusout="focusOut" @keydown.esc.stop.prevent="close(true)" @keydown="menuKey">
           <div class="picker-heading">
-            <Tip v-if="selectedGroup" text="返回操作列表"><button type="button" class="button quiet small icon-only" aria-label="返回操作列表" @click="selectOperation('')"><Icon class="back" name="chevron" /></button></Tip>
-            <strong>{{ selectedGroup ? selectedGroup.operation.displayName : '选择操作' }}</strong>
-            <span>{{ selectedGroup ? '选择资源格式' : '再选资源格式' }}</span>
+            <button v-if="category" type="button" class="button quiet small icon-only" aria-label="返回上一级" @click="back"><Icon class="back" name="chevron" /></button>
+            <strong>{{ resourceType?.displayName || category?.label || '添加步骤' }}</strong>
+            <span>{{ resourceType ? '3 / 3' : category ? '2 / 3' : '1 / 3' }} · 选择{{ stage }}</span>
           </div>
+          <p v-if="category" class="picker-path">{{ ['资源分组', category.label, resourceType?.displayName].filter(Boolean).join(' / ') }}</p>
           <div class="picker-search">
-            <input ref="search" v-model="query" class="input" type="search" :aria-label="selectedGroup ? '搜索资源格式' : '搜索操作或格式'" :placeholder="selectedGroup ? '搜索类别或格式…' : '搜索操作、类别或格式…'" />
+            <input ref="search" v-model="query" class="input" type="search" :aria-label="'搜索' + stage" :placeholder="'搜索' + stage + '…'" />
           </div>
-          <ul class="choices" :aria-label="selectedGroup ? '资源格式' : '处理操作'">
-            <template v-if="!selectedGroup">
-              <li v-for="group in filteredGroups" :key="group.operation.id">
-                <button type="button" class="choice" :aria-label="group.operation.displayName" :title="group.operation.description" @click="selectOperation(group.operation.id)">
-                  <span class="choice-text"><span>{{ group.operation.displayName }}</span><small>{{ resourceGroups(group.resourceTypes).map(category => `${category.label} · ${category.items.map(type => type.displayName).join('、')}`).join(' / ') }}</small></span>
-                  <Icon name="chevron" :size="12" />
-                </button>
-              </li>
-            </template>
-            <template v-else>
-              <li v-for="group in typeGroups" :key="group.id" class="format-group">
-                <p class="category-title">{{ group.label }}<span>{{ group.items.length }} 种格式</span></p>
-                <ul :aria-label="group.label">
-                <li v-for="type in group.items" :key="type.id"><button type="button" class="choice" :aria-label="type.displayName" @click="choose(type.id, selectedGroup!.operation.id)">
-                  <span class="choice-text"><span>{{ type.displayName }}</span><small class="extensions">{{ type.extensions.join('、') }}</small></span>
-                  <Icon name="plus" :size="12" />
-                </button></li>
-                </ul>
-              </li>
-            </template>
+          <ul class="choices" :aria-label="stage">
+            <li v-for="item in filteredChoices" :key="item.id">
+              <button type="button" class="choice" :aria-label="item.label" @click="enter(item.id)">
+                <span class="choice-text"><span>{{ item.label }}</span><small>{{ item.description }}</small></span>
+                <Icon :name="resourceType ? 'plus' : 'chevron'" :size="12" />
+              </button>
+            </li>
           </ul>
-          <p v-if="!(selectedGroup ? filteredTypes.length : filteredGroups.length)" class="picker-empty" role="status">没有匹配项，试试其他关键词。</p>
+          <p v-if="!filteredChoices.length" class="picker-empty" role="status">没有匹配项，试试其他关键词。</p>
         </section>
       </li>
 
@@ -328,18 +321,15 @@ onUnmounted(() => close(false));
 .picker-heading { display: flex; flex-shrink: 0; align-items: center; gap: var(--s-2); min-height: var(--control-height); padding: 0 var(--s-2); }
 .picker-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .picker-heading > span { margin-left: auto; flex-shrink: 0; font-size: var(--t-small); color: var(--text-2); }
+.picker-path { padding: 0 var(--s-2) var(--s-1); color: var(--text-2); font-size: var(--t-small); }
 .back { transform: rotate(180deg); }
 .picker-search { flex-shrink: 0; padding: var(--s-1) var(--s-2) var(--s-2); }
 .picker-search input { width: 100%; }
 .choices { list-style: none; min-height: 0; margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; }
-.format-group > ul { list-style: none; margin: 0; padding: 0; }
-.category-title { display: flex; justify-content: space-between; gap: var(--s-2); padding: var(--s-1) var(--s-2); background: var(--pane); color: var(--text-2); font-size: var(--t-small); }
-.category-title > span { font-weight: 400; }
 .choice { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); width: 100%; min-height: 44px; padding: var(--s-1) var(--s-2); border: 0; border-radius: var(--r-control); background: none; text-align: left; }
 .choice-text { display: grid; min-width: 0; }
 .choice-text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .choice small { color: var(--text-2); font-size: var(--t-small); }
-.extensions { font-family: var(--font-mono); }
 .choice > .icon { flex-shrink: 0; color: var(--text-2); }
 .choice:hover, .choice:focus-visible { background: var(--hover); outline: none; }
 .choice:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }

@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils';
 import FilterEditor from '../src/components/FilterEditor.vue';
 import { definition, config as configuration } from './fixtures';
 import { createStep, processingRequest, resetStep, retargetStep } from '../src/core/model';
-import { choose, optionLabels, selectBox } from './select';
+import { choose, optionGroups, optionLabels, selectBox, selectBoxes } from './select';
 import type { ResourceFilter } from '../src/core/types';
 
 describe('共享属性过滤编辑器', () => {
@@ -16,6 +16,8 @@ describe('共享属性过滤编辑器', () => {
         };
         expect(wrapper.text()).toContain('未设置条件');
         await wrapper.get('.add-group').trigger('click'); await sync();
+        expect(optionGroups(selectBox(wrapper, 'property')).map(group => group.label)).toEqual(['通用文件属性', '图片属性']);
+        expect(optionGroups(selectBox(wrapper, '比较 1-1'))).toEqual([]);
         await choose(selectBox(wrapper, 'property'), 'image-width'); await sync();
         await wrapper.get('input[type=number]').setValue('1024');
         const value = await sync(); expect(value.any[0]!.all[0]).toEqual({ property: 'image-width', operator: 'gte', value: 1024 });
@@ -31,6 +33,7 @@ describe('共享属性过滤编辑器', () => {
         const next = wrapper.emitted('update:modelValue')![0]![0] as ResourceFilter;
         expect(next.any[0]!.all[0]!.version).toBeUndefined(); expect(initial.any[0]!.all[0]!.value).toBe(1);
         await wrapper.setProps({ disabled: true }); expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined();
+        expect(selectBoxes(wrapper).every(box => box.props('disabled'))).toBe(true);
         expect(wrapper.get('.add-group').attributes('disabled')).toBeDefined();
     });
     it('来源过滤随公共请求发送，变更不会被桌面吞掉', () => {

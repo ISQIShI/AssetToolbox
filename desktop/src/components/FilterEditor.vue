@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue';
 import type { FilterRule, ResourceFilter, ResourceProperty, ResourceType } from '../core/types';
-import { resourceGroups } from '../core/resource-groups';
+import { resourceGroups, groupByResourceKind, resourceKindLabel } from '../core/resource-groups';
 import SelectBox, { type SelectEntry } from './SelectBox.vue';
 const props = defineProps<{ modelValue?: ResourceFilter; properties: ResourceProperty[]; resourceTypes?: ResourceType[]; resourceType?: string; disabled?: boolean; title: string; hint: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: ResourceFilter] }>();
@@ -21,6 +21,10 @@ function catalogOptions(rule: FilterRule): SelectEntry[] {
     return [...unknown, ...categories.value.map(group => ({ label: group.label, items: group.items.map(type => ({ value: type.id, label: type.displayName })) }))];
 }
 const fieldLabel = (field: ResourceProperty) => field.id === 'resource-kind' ? '资源类别' : field.id === 'resource-type' ? '资源格式' : field.label;
+const propertyOptions = computed<SelectEntry[]>(() => groupByResourceKind(fields.value, field => field.group).sort((a, b) => Number(b.id === 'file') - Number(a.id === 'file')).map(group => ({
+    label: group.id === 'file' ? '通用文件属性' : group.id === 'image' ? '图片属性' : group.id === 'audio' ? '音频属性' : `${resourceKindLabel(group.id)} 属性`,
+    items: group.items.map(field => ({ value: field.id, label: fieldLabel(field) + (field.unit ? ` (${field.unit})` : '') })),
+})));
 function update(change: (next: ResourceFilter) => void) {
     const next = structuredClone(JSON.parse(JSON.stringify(filter.value))) as ResourceFilter;
     change(next); emit('update:modelValue', next);
@@ -46,12 +50,12 @@ function remove(group: number, index: number) {
       <legend>{{ gi ? '或：' : '' }}第 {{ gi + 1 }} 组 · 以下条件全部满足</legend>
       <div v-for="(rule, ri) in group.all" :key="ri" class="filter-rule">
         <label class="visually-hidden" :for="`${id}-${gi}-${ri}-property`">属性 {{ gi + 1 }}-{{ ri + 1 }}</label>
-        <SelectBox :id="`${id}-${gi}-${ri}-property`" class="property" :model-value="rule.property" :options="fields.map(field => ({ value: field.id, label: fieldLabel(field) + (field.unit ? ` (${field.unit})` : '') }))" @update:model-value="update(next => { next.any[gi]!.all[ri] = newRule($event); })" />
+        <SelectBox :id="`${id}-${gi}-${ri}-property`" class="property" :disabled="disabled" :model-value="rule.property" :options="propertyOptions" @update:model-value="update(next => { next.any[gi]!.all[ri] = newRule($event); })" />
         <label class="visually-hidden" :for="`${id}-${gi}-${ri}-operator`">比较 {{ gi + 1 }}-{{ ri + 1 }}</label>
-        <SelectBox :id="`${id}-${gi}-${ri}-operator`" :model-value="rule.operator" :options="(fieldOf(rule)?.operators || []).map(op => ({ value: op, label: labels[op] || op }))" @update:model-value="patch(gi, ri, { operator: $event })" />
+        <SelectBox :id="`${id}-${gi}-${ri}-operator`" :disabled="disabled" :model-value="rule.operator" :options="(fieldOf(rule)?.operators || []).map(op => ({ value: op, label: labels[op] || op }))" @update:model-value="patch(gi, ri, { operator: $event })" />
         <label class="visually-hidden" :for="`${id}-${gi}-${ri}-value`">值 {{ gi + 1 }}-{{ ri + 1 }}</label>
-        <SelectBox v-if="catalogValue(rule)" :id="`${id}-${gi}-${ri}-value`" :model-value="String(rule.value)" :options="catalogOptions(rule)" @update:model-value="patch(gi, ri, { value: $event })" />
-        <SelectBox v-else-if="fieldOf(rule)?.type === 'boolean'" :id="`${id}-${gi}-${ri}-value`" :model-value="String(rule.value)" :options="[{ value: 'true', label: '是' }, { value: 'false', label: '否' }]" @update:model-value="patch(gi, ri, { value: $event === 'true' })" />
+        <SelectBox v-if="catalogValue(rule)" :id="`${id}-${gi}-${ri}-value`" :disabled="disabled" :model-value="String(rule.value)" :options="catalogOptions(rule)" @update:model-value="patch(gi, ri, { value: $event })" />
+        <SelectBox v-else-if="fieldOf(rule)?.type === 'boolean'" :id="`${id}-${gi}-${ri}-value`" :disabled="disabled" :model-value="String(rule.value)" :options="[{ value: 'true', label: '是' }, { value: 'false', label: '否' }]" @update:model-value="patch(gi, ri, { value: $event === 'true' })" />
         <input v-else :id="`${id}-${gi}-${ri}-value`" class="input" :type="fieldOf(rule)?.type === 'number' ? 'number' : 'text'" step="any" maxlength="1024" :value="rule.value" @input="patch(gi, ri, { value: fieldOf(rule)?.type === 'number' ? Number(($event.target as HTMLInputElement).value) : ($event.target as HTMLInputElement).value })">
         <button type="button" class="button quiet small" :aria-label="`删除条件 ${gi + 1}-${ri + 1}`" @click="remove(gi, ri)">删除</button>
       </div>
@@ -68,7 +72,7 @@ function remove(group: number, index: number) {
 .filter-group { min-width: 0; margin: 0; padding: var(--s-2); border: 1px solid var(--border-soft); border-radius: var(--r-control); display: grid; gap: var(--s-2); }
 .filter-group legend { color: var(--text-2); font-size: var(--t-small); padding: 0 var(--s-1); }
 .filter-rule { display: grid; grid-template-columns: minmax(0, 1fr) minmax(80px, .7fr) minmax(60px, .6fr) auto; gap: var(--s-1); }
-.filter-rule .input, .filter-rule .select { width: 100%; min-width: 0; }
+.filter-rule .input, .filter-rule :deep(.select) { width: 100%; min-width: 0; }
 .filter-group > .button, .add-group { justify-self: start; }
-@container editor (max-width: 520px) { .filter-rule { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } .property { grid-column: 1 / -1; } }
+@container editor (max-width: 520px) { .filter-rule { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; } .filter-rule :deep(.property) { grid-column: 1 / -1; } }
 </style>

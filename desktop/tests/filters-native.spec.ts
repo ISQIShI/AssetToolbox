@@ -33,6 +33,32 @@ test('native source and step filters use real image properties and preserve excl
         browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`); page = browser.contexts()[0]!.pages()[0]!;
         const sourceEditor = page.getByRole('region', { name: '来源过滤', exact: true });
         await sourceEditor.getByRole('button', { name: '添加过滤条件', exact: true }).click();
+        const property = sourceEditor.getByLabel('属性 1-1', { exact: true });
+        const originalProperty = await property.textContent();
+        for (const [width, height, theme] of [[1220, 850, 'light'], [840, 620, 'dark']] as const) {
+            await page.setViewportSize({ width, height });
+            await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+            if (width === 840) {
+                const propertyRect = (await property.boundingBox())!;
+                const operatorRect = (await sourceEditor.getByLabel('比较 1-1', { exact: true }).boundingBox())!;
+                expect(propertyRect.y + propertyRect.height).toBeLessThanOrEqual(operatorRect.y);
+                expect(propertyRect.width).toBeGreaterThan(operatorRect.width);
+            }
+            await property.focus(); await property.press('Enter');
+            const branch = page.getByRole('menuitem', { name: '图片属性', exact: true });
+            await branch.focus(); await branch.press('ArrowRight');
+            await expect(page.locator('[data-value="image-width"]')).toBeVisible();
+            await expect(property).toHaveText(originalProperty!);
+            await page.screenshot({ path: info.outputPath(`filter-property-menu-${width}-${theme}.png`) });
+            for (const popup of await page.locator('.cascade-popup:visible').all()) {
+                const rect = (await popup.boundingBox())!;
+                expect(rect.x).toBeGreaterThanOrEqual(0); expect(rect.y).toBeGreaterThanOrEqual(0);
+                expect(rect.x + rect.width).toBeLessThanOrEqual(width); expect(rect.y + rect.height).toBeLessThanOrEqual(height);
+            }
+            await page.keyboard.press('ArrowLeft'); await expect(branch).toBeFocused();
+            await page.keyboard.press('Escape'); await expect(property).toBeFocused();
+            await expect(property).toHaveText(originalProperty!);
+        }
         await pickOption(page!, sourceEditor, '属性 1-1', 'resource-type');
         await pickOption(page!, sourceEditor, '值 1-1', 'jpg');
         await sourceEditor.getByRole('button', { name: '且：添加条件', exact: true }).click();

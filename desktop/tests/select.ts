@@ -3,7 +3,8 @@
 // 真实的点开、键盘和点击选项由原生 E2E 覆盖（见 native-select.ts）。
 import { nextTick } from 'vue';
 import type { VueWrapper } from '@vue/test-utils';
-import SelectBox, { type SelectEntry, type SelectOption } from '../src/components/SelectBox.vue';
+import SelectBox, { type SelectEntry } from '../src/components/SelectBox.vue';
+import { isSelectGroup } from '../src/core/select-options';
 
 type Box = VueWrapper<InstanceType<typeof SelectBox>>;
 
@@ -19,5 +20,6 @@ export function selectBox(wrapper: VueWrapper, match: string): Box {
 
 export async function choose(box: Box, value: string) { box.vm.$emit('update:modelValue', value); await nextTick(); }
 
-export const optionGroups = (box: Box) => (box.props('options') as SelectEntry[]).filter((entry): entry is { label: string; items: SelectOption[] } => 'items' in entry);
-export const optionLabels = (box: Box) => (box.props('options') as SelectEntry[]).flatMap(entry => 'items' in entry ? [entry.label, ...entry.items.map(item => item.label)] : [entry.label]);
+export const optionGroups = (box: Box) => (box.props('options') as SelectEntry[]).filter(isSelectGroup);
+const labels = (entries: SelectEntry[]): string[] => entries.flatMap(entry => isSelectGroup(entry) ? [entry.label, ...labels(entry.items)] : [entry.label]);
+export const optionLabels = (box: Box) => labels(box.props('options'));

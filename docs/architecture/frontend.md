@@ -22,11 +22,11 @@
 | `views/ToolsView.vue` | 工具页：处理工具可用性、获取渠道、识别类型 |
 | `components/TitleBar.vue` | 自绘标题栏：拖动区域与最小化、最大化、关闭；没有原生窗口时只显示标题 |
 | `components/Icon.vue` | 自绘的单色线条图标 |
-| `components/SelectBox.vue` | 下拉选择：封装 Reka UI 的 Select，接口为 `modelValue`、`options`（可分组）、`id`、`disabled`、`placeholder` |
+| `components/SelectBox.vue` | 下拉选择：平铺用 Reka Select，分组用递归 DropdownMenu；接口为 `modelValue`、`options`、`id`、`disabled`、`placeholder` |
 | `components/Tip.vue` | 提示：封装 Reka UI 的 Tooltip，接口为 `text`、`shortcut`、`side` |
 | `components/ConfirmDialog.vue` | 确认对话框：封装 Reka UI 的 AlertDialog，显示 `bench.confirmation`，在 `App.vue` 中挂载一次 |
 | `components/StepMenu.vue` | 处理线步骤的右键菜单：封装 Reka UI 的 ContextMenu，只发出 `select`、`move`、`toggle`、`remove` 事件 |
-| `components/PipelineRail.vue` | 处理线与“操作 → 资源类型”两级步骤选择器、搜索与键盘导航 |
+| `components/PipelineRail.vue` | 处理线与“资源分组 → 资源格式 → 操作”三级步骤选择器、搜索与键盘导航 |
 | `components/StepEditor.vue` | 单个步骤：启用、排序与删除命令、组合、两组参数 |
 | `components/ParameterFields.vue` | 按字段描述渲染参数控件 |
 | `components/PathField.vue` | 路径输入与原生选择 |
@@ -50,7 +50,7 @@
 | `job`、`submitting`、`closing` | 当前作业、submit 请求进行中、窗口正在安全关闭 |
 | `missingProviders`、`blockedSteps` | 缺依赖的工具；启用了缺依赖工具的步骤 |
 
-处理页命令栏根据当前配置实时显示写入策略，点击只切换到 `output` 站点，不保存配置或启动作业；缺依赖入口只切换到工具页。`stepGroups()` 按目录顺序收集有提供方支持的操作及资源类型，同一组合跨提供方去重，不硬编码内置功能或过滤缺依赖工具。`PipelineRail` 只维护选择器层级与搜索状态，选择资源类型后才调用 `bench.addStep()`；取消、搜索和返回不会修改配置。新步骤的参数默认值、提供方选择及保留原文件策略仍由既有模型和工作台决定。定位、焦点与关闭规则见[设计规范](../design/frontend-design.md#处理线站点)。容器查询负责步骤表单布局，不参与核心参数转换。
+处理页命令栏根据当前配置实时显示写入策略，点击只切换到 `output` 站点，不保存配置或启动作业；缺依赖入口只切换到工具页。`stepGroups()` 按目录顺序收集有提供方支持的操作及资源类型，同一组合跨提供方去重，不硬编码内置功能或过滤缺依赖工具。`PipelineRail` 从有效组合提取类别、该类格式及所选格式可用的操作，只维护层级与搜索状态，最后选择操作才调用 `bench.addStep()`；取消、搜索和返回不会修改配置。新步骤的参数默认值、提供方选择及保留原文件策略仍由既有模型和工作台决定。定位、焦点与关闭规则见[设计规范](../design/frontend-design.md#处理线站点)。容器查询负责步骤表单布局，不参与核心参数转换。
 
 ## 窗口外壳
 
@@ -106,7 +106,7 @@ stateDiagram-v2
 
 ## 步骤编辑
 
-- 添加步骤选择器按操作分组目录中受支持的资源类型（`stepGroups`），选定操作与类型后用默认工具和默认参数创建步骤并选中它。最多 64 步。
+- 添加步骤从目录的有效类型/操作组合（`stepGroups`）依次生成资源分组、资源格式与操作，最后用默认工具和默认参数创建步骤并选中它。最多 64 步。
 - 步骤编辑器从 `provider.adapters` 中按当前 operation 读取专属 fields，`providerOptions` 只含该操作的工具参数；公共字段仍由操作定义提供。
 - `retargetStep` 在操作 ID 相同时复制保留公共参数，专属参数使用目标适配器默认值；跨操作则重置两组。保留步骤 ID 和启用状态，清除旧版本快照，由核心重新校验并填充；切换回原工具不会恢复此前的专属参数。
 - “恢复默认参数”只重置当前步骤的参数（`resetStep`），不改变组合、顺序和启用状态。
@@ -119,10 +119,10 @@ stateDiagram-v2
 
 ## 下拉选择与提示的封装
 
-- 视图不直接引入 `reka-ui`。`SelectBox` 把分组或平铺的 `options` 渲染为 Reka 的 Select，自己计算并显示当前项文字，不依赖库去读取已挂载的选项；空字符串视为“未选择”，改用占位文字。触发按钮透传 `id`、`class`、`aria-label`，所以 `<label for>` 和按类名定位仍然有效。
+- 视图不直接引入 `reka-ui`。`SelectBox` 的平铺 `options` 用 Reka Select，含分组时用非模态 DropdownMenu，`SelectMenuItems` 递归渲染分支和 RadioItem 叶子。`core/select-options.ts` 定义递归条目并展平查询当前标签，未挂载的子菜单也能显示当前值。分组只展开，叶子才发 `update:modelValue`；禁用时关闭菜单；空字符串视为“未选择”，改用占位文字。触发按钮透传 `id`、`class`、`aria-label`，所以 `<label for>` 和按类名定位仍然有效。
 - 弹出列表和提示由 Reka 通过 Teleport 挂到 `body`，不在组件的 scoped 样式作用域内，样式统一写在 `styles/base.css`。父组件要调整触发按钮的布局时用 `:deep()` 或 `base.css` 中的共享规则。
 - `Tip` 自带 `TooltipProvider`，单独挂载的组件（包括组件测试）不需要额外的提供者。它用 `as-child` 把行为加到插槽里的控件上，不增加 DOM 层级，因此不影响已有的选择器。
-- 组件测试（jsdom）不模拟指针与浮层交互：用 `tests/select.ts` 的 `selectBox()`、`choose()`、`optionLabels()` 通过 `SelectBox` 的公开接口验证本项目的逻辑。原生 E2E 用 `tests/native-select.ts` 的 `pickOption(page, scope, 标签, 核心ID)` 真实点开并点选，选项通过 `role="option"` 与 `data-value` 定位。
+- 组件测试（jsdom）不模拟指针与浮层交互：用 `tests/select.ts` 的 `selectBox()`、`choose()`、`optionLabels()` 通过 `SelectBox` 的公开接口验证本项目的逻辑。原生 E2E 用 `tests/native-select.ts` 的 `pickOption(page, scope, 标签, 核心ID)` 逐级真实点选，叶子通过 `role="option"` 或 `role="menuitemradio"` 与 `data-value` 定位，分支的 `data-values` 仅供测试定位其后代 ID。过滤原生用例另外直接验证左右方向键、Esc 与焦点归还。
 
 ## 确认、右键菜单与步骤排序
 
@@ -137,7 +137,7 @@ stateDiagram-v2
 | 层级 | 文件 | 覆盖 |
 | --- | --- | --- |
 | 组件与模型 | `desktop/tests/ui.test.ts` | 动态参数及命名空间、组合切换、停用只读、缺依赖提示；恢复筛选与勾选、范围预选、取消后只读；工具页渠道与刷新；请求构造、体积格式、操作分组与去重、任务状态 |
-| 应用流程 | `desktop/tests/app.test.ts` | 扫描结果归位与过期、跨页取消、作业栏持久与关闭、预览错误、缺依赖拦截、两级步骤选择/搜索/返回/焦点/关闭、排序与删除步骤、续跑与重试请求、任务恢复与独立备份请求、快捷键与状态栏、外观切换 |
+| 应用流程 | `desktop/tests/app.test.ts` | 扫描结果归位与过期、跨页取消、作业栏持久与关闭、预览错误、缺依赖拦截、三级步骤选择/搜索/返回/焦点/关闭、排序与删除步骤、续跑与重试请求、任务恢复与独立备份请求、快捷键与状态栏、外观切换 |
 | 原生 | `desktop/tests/native.spec.ts` | 构建后的 EXE：工具缺失与恢复、动态扩展参数、选择器在 1220×850/840×620 和浅色/深色下的边界及截图、键盘添加、扫描、另存、覆盖备份、跨页取消、续跑、重试、选择性恢复、真实图片缩放、配置重启、运行中关闭 |
 
 测试只依赖语义选择器、`data-station`、`data-step-id`、`data-provider-id`、作业栏的 `data-job-id`、`data-state`，以及少量结构类名（`nav.tabs`、`.rail`、`.adder`、`.choice`、`.editor`、`.runbar`、`.summary-link`、`.dock`、`.statusbar`、`.restore-table .foot`、工具行的 `.state`）。调整样式类名时保持这些钩子。原生窗口的拖动、缩放与窗口按钮无法由 CDP 测试覆盖，改动标题栏后需要人工核对。截图保存在 `desktop/test-results/`，不提交。
@@ -161,6 +161,8 @@ JobDock 中 AudioResults 展示前 100 条步骤测量、请求/实际增益、�
 ## 属性过滤编辑
 
 分类由 `core/resource-groups.ts` 根据核心 `resourceTypes[].kind` 生成，统一用于工具、来源、扫描和步骤选择。图片/音频排序固定，格式保留目录顺序，未知 kind 保留可见；扫描的未知格式放“其他”组。类别只负责界面组织，一个步骤仍对应一个明确格式，未增加跨格式步骤或改变任务/适配器契约。过滤器的类别和格式选项显示中文，值仍发送 image/audio/jpg/png 等核心 ID。
+
+属性菜单按代码目录的 group 分层为通用文件属性、图片属性等，通用组优先；格式值与步骤格式统一使用“类别 → 格式”子菜单。比较符、布尔值、操作和提供方等短列表保持单层。
 
 来源页与 StepEditor 共用 `FilterEditor.vue`：目录提供属性类型、适用资源、单位及运算符，界面只构造 sourceFilter/step.filter。支持组内“且”、组间“或”、删除和清除，运行期间禁用。同类型切换工具保留规则，切换资源类型清空，重置操作参数不清空条件。扫描显示发现/来源排除数量，启用步骤仅表示配置范围；实际逐步 filtered 状态保存在公共 results/报告。完整语义见[属性与过滤器](properties-and-filters.md)。
 

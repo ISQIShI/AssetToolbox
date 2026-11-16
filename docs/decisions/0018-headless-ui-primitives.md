@@ -37,6 +37,10 @@ ADR 0006 之后界面的外观全部由项目自己的令牌和样式决定，�
 
 代价：前端 JS 约增加 100 KB（未压缩）；jsdom 不模拟指针与浮层交互，组件测试改为通过 `SelectBox` 的公开接口验证本项目逻辑，真实的点开与点选由原生 E2E 覆盖；E2E 不能再用 `selectOption`，改用 `tests/native-select.ts` 的 `pickOption`。
 
+## 多级选择的后续应用
+
+分组选项改用同一 Reka 包的 DropdownMenu/Sub/RadioItem，经 `SelectBox` 与递归 `SelectMenuItems` 封装。分支只展开、叶子选择后关闭，复用方向键、焦点和边界定位；平铺选项继续使用 Select。过滤属性、格式值与步骤格式共用该路径，比较符等短列表不额外分层。添加步骤保留带搜索的专用选择器，顺序调整为“资源分组 → 格式 → 操作”，显示路径并逐级返回。没有新增依赖或改动配置契约。验证见[三级步骤与多级菜单](../verification/2026-11-15-hierarchical-menus.md)。
+
 ## 影响与验证
 
 - 新增运行依赖 `reka-ui` 及其传递依赖（`@floating-ui/*`、`@vueuse/*`、`@tanstack/vue-virtual`、`aria-hidden`、`defu`、`ohash` 为 MIT；`@internationalized/date`、`@internationalized/number`、`@swc/helpers` 为 Apache-2.0；`tslib` 为 0BSD），登记在第三方声明。安装时未执行安装脚本，`npm audit` 为 0 项漏洞。

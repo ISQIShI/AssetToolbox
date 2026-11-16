@@ -115,9 +115,10 @@ it('blocks processing while an enabled step lacks its tool, and unblocks when th
 it('adds a step from the catalog menu, selects it, and removes it again', async () => {
     await mountApp();
     await wrapper.find('.adder .station-button').trigger('click');
-    expect(wrapper.findAll('.choice').map(item => item.attributes('aria-label'))).toEqual(['压缩', '图片缩放']);
-    await wrapper.find('.choice[aria-label="图片缩放"]').trigger('click');
+    expect(wrapper.findAll('.choice').map(item => item.attributes('aria-label'))).toEqual(['图片']);
+    await wrapper.find('.choice[aria-label="图片"]').trigger('click');
     await wrapper.find('.choice[aria-label="PNG"]').trigger('click');
+    await wrapper.find('.choice[aria-label="图片缩放"]').trigger('click');
     expect(wrapper.find('.step-picker').exists()).toBe(false);
     expect(wrapper.findAll('.rail [data-step-id]')).toHaveLength(2);
     expect(wrapper.find('.editor h2').text()).toBe('PNG 图片缩放');
@@ -171,41 +172,34 @@ it('returns keyboard focus to the add-step button when Escape dismisses its choi
     expect(add.attributes('aria-expanded')).toBe('false');
 });
 
-it('searches operations and formats, supports back navigation and keeps a cancelled selection out of the pipeline', async () => {
+it('chooses category then format then operation, supports search and back without creating partial steps', async () => {
     await mountApp();
     const add = wrapper.find('.adder .station-button');
     await add.trigger('click');
-    const search = wrapper.find('input[aria-label="搜索操作或格式"]');
+    const search = wrapper.find('input[aria-label="搜索资源分组"]');
     expect(document.activeElement).toBe(search.element);
-    await search.setValue('图片');
-    expect(wrapper.findAll('.choice')).toHaveLength(2);
-    await search.setValue(' .PNG ');
-    expect(wrapper.findAll('.choice')).toHaveLength(2);
-    await search.setValue('缩放');
-    expect(wrapper.findAll('.choice')).toHaveLength(1);
+    await search.setValue('图片'); expect(wrapper.findAll('.choice')).toHaveLength(1);
     await search.trigger('keydown', { key: 'ArrowDown' });
     expect(document.activeElement).toBe(wrapper.find('.choice').element);
     await wrapper.find('.choice').trigger('click');
     const formats = wrapper.find('input[aria-label="搜索资源格式"]');
     expect(document.activeElement).toBe(formats.element);
-    await formats.setValue('图片');
-    expect(wrapper.findAll('.choice')).toHaveLength(1);
-    expect(wrapper.get('.category-title').text()).toContain('图片');
-    await formats.setValue('jpg');
-    expect(wrapper.findAll('.choice')).toHaveLength(0);
+    await formats.setValue('jpg'); expect(wrapper.findAll('.choice')).toHaveLength(0);
     expect(wrapper.find('[role="status"]').text()).toContain('没有匹配项');
-    await formats.setValue('png');
-    await formats.trigger('keydown', { key: 'ArrowUp' });
+    await formats.setValue('.png'); await wrapper.find('.choice').trigger('click');
+    expect(wrapper.find('.picker-path').text()).toBe('资源分组 / 图片 / PNG');
+    expect(wrapper.findAll('.choice').map(item => item.text())).toEqual(expect.arrayContaining([expect.stringContaining('压缩'), expect.stringContaining('图片缩放')]));
+    expect(wrapper.findAll('.rail [data-step-id]')).toHaveLength(1);
+    await wrapper.find('input[aria-label="搜索操作"]').setValue('缩放'); expect(wrapper.findAll('.choice')).toHaveLength(1);
+    (wrapper.find('.choice').element as HTMLButtonElement).focus();
     await wrapper.find('.choice').trigger('keydown', { key: 'ArrowLeft' });
-    expect(wrapper.find('input[aria-label="搜索操作或格式"]').exists()).toBe(true);
-    await wrapper.find('.choice').trigger('click');
-    await wrapper.find('[aria-label="返回操作列表"]').trigger('click');
-    expect(wrapper.findAll('.choice')).toHaveLength(2);
+    expect(wrapper.find('input[aria-label="搜索资源格式"]').exists()).toBe(true);
+    await wrapper.find('[aria-label="返回上一级"]').trigger('click');
+    expect(wrapper.find('input[aria-label="搜索资源分组"]').exists()).toBe(true);
     await wrapper.find('.step-picker').trigger('keydown', { key: 'Escape' });
     expect(document.activeElement).toBe(add.element);
     expect(wrapper.findAll('.rail [data-step-id]')).toHaveLength(1);
-    await add.trigger('click');
-    expect(wrapper.find('input[aria-label="搜索操作或格式"]').element).toHaveProperty('value', '');
+    await add.trigger('click'); expect(wrapper.find('input[aria-label="搜索资源分组"]').element).toHaveProperty('value', '');
 });
 
 it('dismisses the picker when focus leaves, the user clicks outside, the window resizes or a job starts', async () => {
@@ -231,8 +225,9 @@ it('allows configuring a missing tool while preserving the execution guard', asy
     catalog.providers = [missingProvider()];
     await mountApp();
     await wrapper.find('.adder .station-button').trigger('click');
-    await wrapper.find('.choice[aria-label="图片缩放"]').trigger('click');
+    await wrapper.find('.choice[aria-label="图片"]').trigger('click');
     await wrapper.find('.choice[aria-label="PNG"]').trigger('click');
+    await wrapper.find('.choice[aria-label="图片缩放"]').trigger('click');
     expect(wrapper.findAll('.rail [data-step-id]')).toHaveLength(2);
     expect(wrapper.find('.editor').text()).toContain('缺少依赖');
     expect(button('开始处理').attributes('disabled')).toBeDefined();
@@ -339,8 +334,9 @@ it('asks before overwriting without backup and starts only after confirmation', 
 it('reorders steps from the keyboard and by position, and toggles a step without selecting another', async () => {
     await mountApp();
     await wrapper.find('.adder .station-button').trigger('click');
-    await wrapper.find('.choice[aria-label="图片缩放"]').trigger('click');
+    await wrapper.find('.choice[aria-label="图片"]').trigger('click');
     await wrapper.find('.choice[aria-label="PNG"]').trigger('click');
+    await wrapper.find('.choice[aria-label="图片缩放"]').trigger('click');
     const order = () => wrapper.findAll('.rail [data-step-id]').map(item => item.text().includes('图片缩放') ? 'resize' : 'compress');
     expect(order()).toEqual(['compress', 'resize']);
     const second = wrapper.findAll('.rail [data-step-id] .station-button')[1]!;
