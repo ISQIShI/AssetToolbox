@@ -68,12 +68,14 @@ let config: Configuration = {
 const task = (id: string, source: string, completed: number, pending: number, failed: number, extra: Partial<Task> = {}): Task => ({
     id, createdAt: '2026-11-07T14:32:00Z', source, total: completed + pending + failed, completed, pending, failed,
     backupCount: completed, restored: 0, restoreFailed: 0, restoreStarted: false, canResume: pending > 0, canRetry: failed > 0, canRestore: completed > 0, canContinueRestore: false, canRetryRestore: false,
-    backupSession: completed ? 'D:\\Projects\\StarHarbor\\Backups\\20261107-143200' : undefined, ...extra,
+    backupSession: completed ? 'D:\\Projects\\StarHarbor\\Backups\\20261107-143200' : undefined,
+    // 模拟体积：每个文件约 560 KB，已完成的平均压掉三成。
+    totalBytes: (completed + pending + failed) * 573_440, originalBytes: completed * 573_440, outputBytes: Math.round(completed * 573_440 * 0.69), savedBytes: Math.round(completed * 573_440 * 0.31), ...extra,
 });
 const tasks: Task[] = params.has('empty') ? [] : [
     task('20261108-091500-ui', 'D:\\Projects\\StarHarbor\\Assets\\UI', 412, 0, 0),
     task('20261107-143200-audio', 'D:\\Projects\\StarHarbor\\Assets\\Audio\\Ambience', 86, 41, 3),
-    task('20261102-180000-tiles', 'D:\\Projects\\StarHarbor\\Assets\\Tiles', 0, 0, 0, { outputDir: 'D:\\Exports\\Tiles', backupSession: undefined, backupCount: 0, total: 1280, completed: 1280 }),
+    task('20261102-180000-tiles', 'D:\\Projects\\StarHarbor\\Assets\\Tiles', 0, 0, 0, { outputDir: 'D:\\Exports\\Tiles', backupSession: undefined, backupCount: 0, total: 1280, completed: 1280, totalBytes: 1280 * 98_304, originalBytes: 1280 * 98_304, outputBytes: 1280 * 61_440, savedBytes: 1280 * 36_864 }),
 ];
 const scan: ScanPreview = { total: 538, checked: 538, totalBytes: 312_400_000, enabledFiles: 497, conflicts: 0, issues: [], cancelled: false,
     resources: [{ id: 'png', name: 'PNG', enabled: true, count: 412, bytes: 201_000_000 }, { id: 'jpg', name: 'JPEG', enabled: false, count: 41, bytes: 38_000_000 }, { id: 'mp3', name: 'MP3', enabled: true, count: 85, bytes: 73_400_000 }] };

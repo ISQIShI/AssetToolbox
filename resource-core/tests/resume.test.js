@@ -51,10 +51,16 @@ function report(state) { return JSON.parse(fs.readFileSync(path.join(state.repor
 test('cancel, restart, resume, and resume again never re-encode completed files or newly added resources', t => {
     const f = fixture(t), first = f.run({ mode: 'process', folder: f.source }, 1);
     assert.equal(first.exitCode, 2); assert.equal(first.task.pending, 2); assert.equal(first.task.completed, 1);
+    // 体积统计：清单总量固定为三个 106 字节的文件；只有已完成的一个文件计入处理前后体积。
+    assert.deepEqual([first.task.totalBytes, first.task.originalBytes, first.task.outputBytes, first.task.savedBytes], [318, 106, 105, 1]);
     const firstFile = path.join(f.source, '子目录/a.pack'), processed = fs.readFileSync(firstFile);
     fs.writeFileSync(path.join(f.source, 'new.pack'), 'PACK:new');
     const second = f.run(resume(first.task.taskFile));
     assert.equal(second.summary.processed, 2); assert.equal(second.task.pending, 0); assert.equal(second.task.completed, 3);
+    // 续跑后累计三个文件；清单外新增的文件不改变总量。重新加载任务文件得到同样的数字。
+    assert.deepEqual([second.task.totalBytes, second.task.originalBytes, second.task.outputBytes, second.task.savedBytes], [318, 318, 315, 3]);
+    const reloaded = f.tasks.loadTask(first.task.taskFile).info();
+    assert.deepEqual([reloaded.totalBytes, reloaded.originalBytes, reloaded.outputBytes, reloaded.savedBytes], [318, 318, 315, 3]);
     assert.deepEqual(fs.readFileSync(firstFile), processed); assert.equal(f.calls().length, 3);
     assert.equal(fs.readFileSync(path.join(f.source, 'new.pack'), 'utf8'), 'PACK:new');
     const third = f.run(resume(first.task.taskFile));

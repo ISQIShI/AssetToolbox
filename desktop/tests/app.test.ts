@@ -3,11 +3,11 @@ import { config, definition, missingProvider, task } from './fixtures';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import App from '../src/App.vue';
-import { call, isDirectory } from '../src/core/api';
+import { call, isDirectory, openFolder } from '../src/core/api';
 import type { Definition, JobState, RestorePreview, ScanPreview } from '../src/core/types';
 
 let dropHandler: ((event: { type: 'over' | 'leave' | 'drop'; paths: string[] }) => void) | undefined;
-vi.mock('../src/core/api', () => ({ call: vi.fn(), chooseFolder: vi.fn(), openReport: vi.fn(), openProviderSource: vi.fn(), isDirectory: vi.fn(), onFolderDrop: vi.fn(async handler => { dropHandler = handler; return () => { dropHandler = undefined; }; }) }));
+vi.mock('../src/core/api', () => ({ call: vi.fn(), chooseFolder: vi.fn(), openReport: vi.fn(), openProviderSource: vi.fn(), openFolder: vi.fn(), isDirectory: vi.fn(), onFolderDrop: vi.fn(async handler => { dropHandler = handler; return () => { dropHandler = undefined; }; }) }));
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => ({ onCloseRequested: async () => () => {}, close: vi.fn() }) }));
 
 const scan: ScanPreview = { total: 35, checked: 35, totalBytes: 7000, enabledFiles: 35, conflicts: 0, issues: [], resources: [{ id: 'png', name: 'PNG', enabled: true, count: 35, bytes: 7000 }], cancelled: false };
@@ -421,4 +421,31 @@ it('checks a task backup as soon as it is chosen on the restore page, without su
     await finish({ preview: restorePreview });
     expect(wrapper.find('.restore-table').exists()).toBe(true);
     expect(submits()).toHaveLength(1);
+});
+
+it('shows size totals for finished files and opens task folders, hiding sizes the core did not report', async () => {
+    const sized = { ...task, backupSession: 'D:\\备份\\backup-t1', totalBytes: 10240, originalBytes: 6144, outputBytes: 4096, savedBytes: 2048 };
+    vi.mocked(call).mockImplementation(async action => {
+        if (action === 'bootstrap') return { config: structuredClone(config), definition: catalog, warnings: [] } as any;
+        if (action === 'tasks') return { items: [sized, { ...task, id: 't2', source: 'D:\\另存 素材', outputDir: 'D:\\输出', backupCount: 0 }], total: 2, nextOffset: null } as any;
+        return {} as any;
+    });
+    await mountApp(); await go('活动');
+    const sizes = wrapper.find('section[aria-label="体积"]');
+    expect(sizes.findAll('dd').map(item => item.text())).toEqual(['6.0 KB', '4.0 KB', '−2.0 KB−33%']);
+    expect(sizes.text()).toContain('只统计已完成的 6 个文件；任务清单共 10.0 KB');
+    // 覆盖原文件的任务：“写入”打开的就是来源文件夹。
+    await button('打开来源文件夹').trigger('click'); await button('打开写入文件夹').trigger('click'); await button('打开备份文件夹').trigger('click');
+    expect(vi.mocked(openFolder).mock.calls.map(([path]) => path)).toEqual(['D:\\中文 素材', 'D:\\中文 素材', 'D:\\备份\\backup-t1']);
+    // 打不开时把原因显示出来。
+    vi.mocked(openFolder).mockRejectedValueOnce(new Error('文件夹不存在或已被移动：D:\\中文 素材'));
+    await button('打开来源文件夹').trigger('click'); await flushPromises();
+    expect(wrapper.find('[role="alert"]').text()).toContain('文件夹不存在或已被移动');
+    // 没有体积字段、没有备份的任务：不显示体积，也没有备份文件夹按钮；写入打开输出文件夹。
+    await wrapper.findAll('.tasks .row')[1]!.trigger('click');
+    expect(wrapper.find('section[aria-label="体积"]').exists()).toBe(false);
+    expect(button('打开备份文件夹')).toBeUndefined();
+    vi.mocked(openFolder).mockClear();
+    await button('打开写入文件夹').trigger('click');
+    expect(openFolder).toHaveBeenCalledWith('D:\\输出');
 });

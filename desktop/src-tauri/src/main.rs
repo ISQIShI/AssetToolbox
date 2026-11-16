@@ -73,6 +73,15 @@ async fn open_provider_source(host: tauri::State<'_, Host>, id: String) -> Resul
     hidden(&mut Command::new("rundll32.exe")).args(["url.dll,FileProtocolHandler", url]).spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
+/// 在资源管理器中打开文件夹。只接受绝对路径且必须是现有文件夹：把文件交给 explorer 会按关联程序打开它。
+#[tauri::command]
+fn open_folder(path: String) -> Result<(), String> {
+    let target = std::path::Path::new(&path);
+    if !target.is_absolute() || path.chars().any(|c| c.is_control()) { return Err("文件夹路径无效".into()); }
+    if !target.is_dir() { return Err(format!("文件夹不存在或已被移动：{path}")); }
+    hidden(&mut Command::new("explorer.exe")).arg(target).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
 /// 拖入窗口的路径是否为现有文件夹；只读判断，不访问内容。
 #[tauri::command]
 fn is_directory(path: String) -> bool { std::path::Path::new(&path).is_dir() }
@@ -91,7 +100,7 @@ fn main() {
     let exit_ready = Arc::new(AtomicBool::new(false));
     tauri::Builder::default().plugin(tauri_plugin_dialog::init())
         .manage(Host { bridge: bridge.clone(), closing: closing.clone() })
-        .invoke_handler(tauri::generate_handler![core_call, open_report, open_provider_source, is_directory])
+        .invoke_handler(tauri::generate_handler![core_call, open_report, open_provider_source, is_directory, open_folder])
         .build(context).expect("无法启动资源工具箱窗口")
         .run(move |app, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = event {

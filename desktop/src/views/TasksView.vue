@@ -2,7 +2,7 @@
 // 任务页：左侧任务列表，右侧所选任务的进度、路径和后续操作。
 import { computed, ref } from 'vue';
 import { useWorkbench } from '../core/workbench';
-import { date, folderName, taskStatus } from '../core/model';
+import { bytes, date, folderName, sizeChange, taskStatus } from '../core/model';
 import type { Task } from '../core/types';
 import Icon from '../components/Icon.vue';
 import Tip from '../components/Tip.vue';
@@ -18,6 +18,21 @@ const rows = computed(() => {
 const task = computed(() => tasks.value.find(item => item.id === selectedTaskId.value) || rows.value[0]);
 const name = (item: Task) => item.source ? folderName(item.source) : item.id;
 const share = (item: Task, value: number) => item.total ? `${(value / item.total) * 100}%` : '0%';
+// 体积统计只覆盖已完成的文件；旧核心或读取失败的任务没有这些字段，此时整块不显示。
+const sizes = computed(() => {
+    const value = task.value;
+    if (!value || value.originalBytes === undefined || value.outputBytes === undefined) return undefined;
+    const saved = value.savedBytes ?? value.originalBytes - value.outputBytes;
+    const percent = value.originalBytes ? Math.abs(saved) / value.originalBytes * 100 : 0;
+    return { original: value.originalBytes, output: value.outputBytes, saved, total: value.totalBytes,
+        ratio: saved && value.originalBytes ? `${saved > 0 ? '−' : '+'}${percent >= 10 ? percent.toFixed(0) : percent.toFixed(1)}%` : '', tone: saved > 0 ? 'ok' : saved < 0 ? 'warn' : '' };
+});
+// 详情里的三个位置；覆盖原文件时“写入”就是来源文件夹。
+const places = computed(() => task.value ? [
+    { label: '来源', path: task.value.source, text: task.value.source || '—' },
+    { label: '写入', path: task.value.outputDir || task.value.source, text: task.value.outputDir || '覆盖原文件', plain: !task.value.outputDir },
+    { label: '备份', path: task.value.backupSession, text: task.value.backupSession || '未备份', plain: !task.value.backupSession },
+] : []);
 </script>
 
 <template>
@@ -64,12 +79,26 @@ const share = (item: Task, value: number) => item.total ? `${(value / item.total
           <p class="muted small">继续和重试使用创建任务时的步骤和参数，已成功的文件会自动跳过。</p>
         </section>
 
+        <section v-if="sizes" class="group" aria-label="体积">
+          <h3>体积</h3>
+          <dl class="legend sizes">
+            <div><dt>处理前</dt><dd>{{ bytes(sizes.original) }}</dd></div>
+            <div><dt>处理后</dt><dd>{{ bytes(sizes.output) }}</dd></div>
+            <div><dt>体积变化</dt><dd :class="sizes.tone ? `tone ${sizes.tone}` : ''">{{ sizeChange(sizes.saved) }}<small v-if="sizes.ratio">{{ sizes.ratio }}</small></dd></div>
+          </dl>
+          <p class="muted small">只统计已完成的 {{ task.completed }} 个文件{{ sizes.total !== undefined ? `；任务清单共 ${bytes(sizes.total)}（扫描时）` : '' }}。之后恢复原文件不会改变这里的数字。</p>
+        </section>
+
         <section class="group">
           <h3>详情</h3>
           <dl class="facts">
-            <dt>来源</dt><dd class="path">{{ task.source || '—' }}</dd>
-            <dt>写入</dt><dd :class="{ path: task.outputDir }">{{ task.outputDir || '覆盖原文件' }}</dd>
-            <dt>备份</dt><dd :class="{ path: task.backupSession }">{{ task.backupSession || '未备份' }}</dd>
+            <template v-for="place in places" :key="place.label">
+              <dt>{{ place.label }}</dt>
+              <dd class="place">
+                <span :class="{ path: !place.plain }">{{ place.text }}</span>
+                <Tip v-if="place.path" text="在资源管理器中打开"><button type="button" class="button quiet small icon-only" :aria-label="`打开${place.label}文件夹`" @click="bench.revealFolder(place.path)"><Icon name="folder" :size="14" /></button></Tip>
+              </dd>
+            </template>
             <dt>创建时间</dt><dd>{{ date(task.createdAt) }}</dd>
             <dt>任务编号</dt><dd class="path">{{ task.id }}</dd>
           </dl>
@@ -123,6 +152,11 @@ h2 { overflow-wrap: anywhere; }
 .legend dt { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-size: var(--t-small); }
 .legend dd { margin: 0; font-size: var(--t-figure); font-weight: 600; line-height: 1.3; }
 .key { width: 8px; height: 8px; border-radius: 2px; }
+.sizes dd small { margin-left: var(--s-2); font-size: var(--t-small); font-weight: 400; }
+.place { display: flex; align-items: center; gap: var(--s-1); min-width: 0; min-height: var(--control-small); }
+.place > span { min-width: 0; }
+.place .button { flex: none; margin: -2px 0; color: var(--text-2); }
+.facts { align-items: center; }
 .actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .empty-detail { align-content: start; gap: var(--s-1); }
 </style>

@@ -168,11 +168,19 @@ function loadTask(taskFile) {
             const scope = restoreSelection === null ? backups : restoreSelection.map(file => entries.get(file.path));
             const selectedPending = scope.filter(file => !file.restoreRecord).length;
             const selectedFailed = scope.filter(file => file.restoreRecord?.status === 'failed').length;
+            // 体积统计：totalBytes 取固定清单里扫描时的大小；其余三项只统计已完成（已处理或保持原样）的文件，
+            // 来自各自的结果记录。失败与待处理的文件不计入，恢复不改变这些处理时的数字。
+            const bytes = value => Number.isFinite(value) && value >= 0 ? value : 0;
+            const done = values.filter(file => ['processed', 'skipped'].includes(file.status));
+            const totalBytes = values.reduce((sum, file) => sum + bytes(file.snapshot?.size), 0);
+            const originalBytes = done.reduce((sum, file) => sum + bytes(file.record?.originalBytes), 0);
+            const outputBytes = done.reduce((sum, file) => sum + bytes(file.record?.outputBytes), 0);
+            const savedBytes = values.filter(file => file.status === 'processed').reduce((sum, file) => sum + (Number.isFinite(file.record?.savedBytes) ? file.record.savedBytes : 0), 0);
             return { taskFile, id: header.id, createdAt: header.createdAt, source: header.source, outputDir: header.outputDir, backupDir: header.backupDir,
                 backupSession: header.backupSession, backupCount: backups.length, restored, restoreFailed, restorePending, restoreStarted,
                 restoreSelectedTotal: scope.length, restoreSelectedPending: selectedPending, restoreSelectedFailed: selectedFailed,
                 canRestore: backups.length > restored, canContinueRestore: selectedPending > 0, canRetryRestore: selectedFailed > 0,
-                total: values.length, completed, failed, pending, scanComplete,
+                total: values.length, completed, failed, pending, scanComplete, totalBytes, originalBytes, outputBytes, savedBytes,
                 canResume: !restoreStarted && (!scanComplete || pending > 0), canRetry: !restoreStarted && failed > 0 };
         },
     };

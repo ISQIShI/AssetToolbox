@@ -33,6 +33,12 @@ export async function onFolderDrop(handler: (event: FolderDropEvent) => void): P
     });
 }
 
+/** 在资源管理器中打开一个现有文件夹。 */
+export async function openFolder(path: string): Promise<void> {
+    if (browserPreview) return;
+    return invoke('open_folder', { path });
+}
+
 export async function openReport(id: string): Promise<void> {
     if (browserPreview) return;
     return invoke('open_report', { id });

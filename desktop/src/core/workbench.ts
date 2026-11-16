@@ -2,7 +2,7 @@
 // 所有对核心的调用、作业生命周期（启动、轮询、取消、安全退出）都集中在这里。
 import { computed, inject, ref, type InjectionKey } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { call, chooseFolder, isDirectory, openProviderSource, openReport } from './api';
+import { call, chooseFolder, isDirectory, openFolder, openProviderSource, openReport } from './api';
 import { bytes, createStep, isMissing, processingRequest, providerOf, stepTitle } from './model';
 import type { StoragePreview, StorageResult, StorageSelection } from './types';
 import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, ResultPage, RestoreFile, AudioResult, RestorePreview, RestoreScope, ScanPreview, Selection, Step, Task } from './types';
@@ -300,6 +300,8 @@ export function createWorkbench() {
         await launch(request, 'restore', '恢复所选文件', () => { restorePreview.value = undefined; notice.value = '恢复已结束。重新检查可查看文件的最新状态。'; });
     }
 
+    /** 在资源管理器中打开任务的来源、输出或备份文件夹；文件夹已不存在时给出错误。 */
+    async function revealFolder(path?: string | null) { if (path) try { error.value = ''; await openFolder(path); } catch (cause) { fail(cause); } }
     async function openSource(id: string) { try { await openProviderSource(id); } catch (cause) { fail(cause); } }
     async function installDependency(provider: Provider) {
         if (!provider.dependency?.automatic || busy.value) return;
@@ -316,7 +318,7 @@ export function createWorkbench() {
         launch, cancelJob, dismissJob, openJobReport, requestClose, stop: () => clearTimeout(timer),
         runPipeline, useDroppedSource, addStep, moveStep, moveStepTo, toggleStep, removeStep, updateStep,
         confirmation, confirm, answerConfirmation, requestRemoveStep, requestProcess,
-        continueTask, showTask, checkRestore, recheckRestore, restoreSelected, openSource,
+        continueTask, showTask, revealFolder, checkRestore, recheckRestore, restoreSelected, openSource,
     };
 }
 
