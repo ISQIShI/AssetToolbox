@@ -41,4 +41,6 @@ Windows x64；开发 Node 26.13.0、便携 Node 24.19.0、Rust 1.99.1。测试�
 
 EXE SHA-256：`0bd21b435c4d60233f5c69875084953d6d835ccc2e79bd79d314b858ea6338e4`，只留本地。原始证据在忽略目录 `.local/maintenance/mcp-status-before-*`、`mcp-publication-*`、`mcp-fix-*`。
 
-本轮未重跑联网安装 E2E：安装清单与下载实现未变。远端源码 CI 结果在推送后补充；已有 v1.0.0 Release 不包含此次修复。
+本轮未重跑联网安装 E2E：安装清单与下载实现未变；已有 v1.0.0 Release 不包含此次修复。
+
+修复提交 `39c54197b2ee4d99e720ccd400810962180ab3ae` 已推送 main；[GitHub 源码 CI #43820735233](https://github.com/ISQIShI/AssetToolbox/actions/runs/43820735233) 全部通过，覆盖核心 source、版本/发布工具、MCP 双传输、前端、类型/构建和文档/源码边界。此记录的远端结果补充单独提交，不改动已发布标签。
