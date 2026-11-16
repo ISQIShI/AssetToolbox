@@ -2,7 +2,7 @@
 // 所有对核心的调用、作业生命周期（启动、轮询、取消、安全退出）都集中在这里。
 import { computed, inject, ref, type InjectionKey } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { call, chooseFolder, openProviderSource, openReport } from './api';
+import { call, chooseFolder, isDirectory, openProviderSource, openReport } from './api';
 import { bytes, createStep, isMissing, processingRequest, providerOf, stepTitle } from './model';
 import type { StoragePreview, StorageResult, StorageSelection } from './types';
 import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, ResultPage, RestoreFile, AudioResult, RestorePreview, RestoreScope, ScanPreview, Selection, Step, Task } from './types';
@@ -27,7 +27,7 @@ export function createWorkbench() {
     const maintenanceBusy = ref(false);
     const storagePreview = ref<StoragePreview>();
 
-    // 处理页：当前选中的处理线站点（source / output / scan / step:<步骤 ID>）与最近一次扫描。
+    // 处理页：当前选中的处理线站点（source / output / step:<步骤 ID>）与最近一次扫描；扫描结果显示在概览栏。
     const station = ref('source');
     const scan = ref<ScanPreview>();
     const scanRequest = ref('');
@@ -188,8 +188,18 @@ export function createWorkbench() {
             const snapshot = JSON.stringify(processingRequest(config.value, 'preview', definition.value));
             await launch(request, 'preview', '扫描预览', state => {
                 if (!state.preview) return;
-                scan.value = state.preview as ScanPreview; scanRequest.value = snapshot; station.value = 'scan';
+                scan.value = state.preview as ScanPreview; scanRequest.value = snapshot;
             });
+        } catch (cause) { fail(cause); }
+    }
+
+    /** 把拖入窗口的文件夹设为来源；拖入的若不是文件夹则拒绝并说明。 */
+    async function useDroppedSource(paths: string[]) {
+        const folder = paths[0];
+        if (!config.value || busy.value || !folder) return;
+        try {
+            if (!(await isDirectory(folder))) { fail('请拖入文件夹；单个文件不能作为来源。'); return; }
+            error.value = ''; config.value.sourceDir = folder; station.value = 'source';
         } catch (cause) { fail(cause); }
     }
 
@@ -304,7 +314,7 @@ export function createWorkbench() {
         job, submitting, closing, definition, busy, missingProviders, blockedSteps,
         fail, initialize, refreshTasks, refreshProviders, browse, saveConfig, installDependency,
         launch, cancelJob, dismissJob, openJobReport, requestClose, stop: () => clearTimeout(timer),
-        runPipeline, addStep, moveStep, moveStepTo, toggleStep, removeStep, updateStep,
+        runPipeline, useDroppedSource, addStep, moveStep, moveStepTo, toggleStep, removeStep, updateStep,
         confirmation, confirm, answerConfirmation, requestRemoveStep, requestProcess,
         continueTask, showTask, checkRestore, recheckRestore, restoreSelected, openSource,
     };

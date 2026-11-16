@@ -21,7 +21,7 @@ body {
 
 h1, h2, h3, h4, p { margin: 0; }
 h1, h2, h3 { font-weight: 600; line-height: 1.35; }
-h2 { font-size: var(--t-title); }
+h2 { font-size: var(--t-heading); letter-spacing: -0.01em; }
 h3 { font-size: var(--t-body); }
 
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -49,6 +49,7 @@ input.path { cursor: text; }
   color: var(--text);
   white-space: nowrap;
   flex: none;
+  transition: border-color 0.12s ease;
 }
 .button:hover:not(:disabled) { background-image: linear-gradient(var(--hover), var(--hover)); }
 .button:active:not(:disabled) { background-image: linear-gradient(var(--pressed), var(--pressed)); }
@@ -72,21 +73,17 @@ input.path { cursor: text; }
   border: 1px solid var(--border);
   border-radius: var(--r-control);
   background-color: var(--control);
+  transition: border-color 0.12s ease;
 }
 .input:hover:not(:disabled), .select:hover:not(:disabled) { border-color: var(--text-3); }
 .input:focus-visible, .select:focus-visible { outline-offset: -1px; border-color: var(--accent); }
 .input:disabled, .select:disabled { background-color: transparent; color: var(--text-3); border-color: var(--border-soft); }
 .input::placeholder { color: var(--text-3); }
 .input.path { font-family: var(--font-mono); font-size: 12px; }
-.select {
-  appearance: none;
-  padding-right: 26px;
-  /* 下拉箭头：两条斜线拼成的折角，颜色跟随文字 */
-  background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
-  background-position: right 13px center, right 8px center;
-  background-size: 5px 5px;
-  background-repeat: no-repeat;
-}
+.select { appearance: none; position: relative; padding-right: 28px; }
+/* 下拉箭头：细线折角，颜色跟随次要文字 */
+.select::after { content: ''; position: absolute; right: 11px; top: 50%; width: 6px; height: 6px; margin-top: -5px; border: solid var(--text-2); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); pointer-events: none; }
+.select:disabled::after { border-color: var(--text-3); }
 input[type='search']::-webkit-search-cancel-button { display: none; }
 
 /* 下拉选择（SelectBox）：触发按钮沿用 .select 的外观，弹出列表由 Reka UI 挂到 body 上 */
@@ -208,8 +205,15 @@ input[type='checkbox'].toggle:checked::after { left: 16px; background: var(--on-
 .field.stacked > .label { min-height: 0; font-size: var(--t-small); }
 .field.stacked > :not(.label) { grid-column: 1; }
 
-/* 分组面板：把一组相关设置圈在一起，标题在面板内顶部 */
-.group { display: grid; gap: var(--s-3); padding: var(--s-4); border: 1px solid var(--border-soft); border-radius: var(--r-panel); background: var(--control); }
+/* 分组面板：把一组相关设置圈在一起，标题在面板内顶部。靠底色与极浅投影从内容面上分出来，不描边 */
+.group { display: grid; gap: var(--s-3); padding: var(--s-4); border-radius: var(--r-panel); background: var(--control); box-shadow: var(--shadow-card); }
+/* 数据表格的外框：与分组面板同一套外观 */
+.frame { border-radius: var(--r-panel); background: var(--control); box-shadow: var(--shadow-card); overflow: hidden; }
+.frame .table tr:last-child td { border-bottom: 0; }
+
+/* 内容出现：站点切换、结果返回时轻微上浮淡入 */
+@keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+.rise { animation: rise 0.16s ease-out; }
 .group > h3 { color: var(--text); }
 
 /* 分段选择：互斥的两三个选项 */
@@ -252,16 +256,17 @@ input[type='checkbox'].toggle:checked::after { left: 16px; background: var(--on-
   flex-wrap: wrap;
   gap: var(--s-2) var(--s-3);
   padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--border-soft);
+  border: 1px solid transparent;
   border-radius: var(--r-panel);
   background: var(--control);
+  box-shadow: var(--shadow-card);
   overflow-wrap: anywhere;
 }
 .callout > p, .callout > span:not(.missing-swatch) { flex: 1; min-width: 0; }
-.callout.danger { border-color: transparent; background: var(--danger-wash); }
-.callout.warn { border-color: transparent; background: var(--warn-wash); }
-.callout.ok { border-color: transparent; background: var(--ok-wash); }
-.callout.missing { border-color: transparent; background: var(--missing-wash); }
+.callout.danger { background: var(--danger-wash); box-shadow: none; }
+.callout.warn { background: var(--warn-wash); box-shadow: none; }
+.callout.ok { background: var(--ok-wash); box-shadow: none; }
+.callout.missing { background: var(--missing-wash); box-shadow: none; }
 
 .muted { color: var(--text-2); }
 .small { font-size: var(--t-small); }
@@ -284,8 +289,8 @@ details[open] > .tool-panel-heading > .icon { transform: rotate(90deg); }
 .table .resource-group th { position: static; color: var(--text); font-weight: 600; height: 30px; }
 .resource-group small { margin-left: var(--s-2); font-weight: 400; color: var(--text-2); }
 .table { width: 100%; border-collapse: collapse; }
-.table th { position: sticky; top: 0; z-index: 1; height: 28px; padding: 0 var(--s-3); background: var(--pane); color: var(--text-2); font-size: var(--t-small); font-weight: 400; text-align: left; box-shadow: inset 0 -1px 0 var(--border-soft); white-space: nowrap; }
-.table td { padding: 5px var(--s-3); border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
+.table th { position: sticky; top: 0; z-index: 1; height: 30px; padding: 0 var(--s-3); background: var(--pane); color: var(--text-2); font-size: var(--t-small); font-weight: 400; text-align: left; box-shadow: inset 0 -1px 0 var(--border-soft); white-space: nowrap; }
+.table td { padding: 6px var(--s-3); border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
 .table tbody tr:hover td { background-image: linear-gradient(var(--hover), var(--hover)); }
 .table .number { text-align: right; white-space: nowrap; }
 

@@ -6,6 +6,7 @@ import { isMissing, resetStep, retargetStep, stepTitle } from '../core/model';
 import ParameterFields from './ParameterFields.vue';
 import Icon from './Icon.vue';
 import SelectBox from './SelectBox.vue';
+import Tip from './Tip.vue';
 import FilterEditor from './FilterEditor.vue';
 import { resourceGroups } from '../core/resource-groups';
 
@@ -39,18 +40,18 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
         <h2>{{ stepTitle(definition, step) }}</h2>
         <p class="order">第 {{ index + 1 }} 步，共 {{ count }} 步</p>
       </div>
-      <label class="check switch">
-        启用此步骤
-        <input type="checkbox" class="toggle" :checked="step.enabled" :disabled="disabled" @change="patch({ enabled: ($event.target as HTMLInputElement).checked })">
-      </label>
+      <div class="commands" role="toolbar" aria-label="步骤命令">
+        <Tip text="上移" shortcut="Alt+↑"><button type="button" class="button quiet icon-only" aria-label="上移" :disabled="disabled || index === 0" @click="emit('move', -1)"><Icon name="up" /></button></Tip>
+        <Tip text="下移" shortcut="Alt+↓"><button type="button" class="button quiet icon-only" aria-label="下移" :disabled="disabled || index === count - 1" @click="emit('move', 1)"><Icon name="down" /></button></Tip>
+        <Tip text="恢复默认参数"><button type="button" class="button quiet icon-only" aria-label="恢复默认参数" :disabled="disabled" @click="emit('update:modelValue', resetStep(definition, step))"><Icon name="restore" /></button></Tip>
+        <Tip text="删除步骤…"><button type="button" class="button quiet icon-only danger" aria-label="删除步骤" :disabled="disabled" @click="emit('remove')"><Icon name="trash" /></button></Tip>
+        <span class="divider" aria-hidden="true"></span>
+        <label class="check switch">
+          启用
+          <input type="checkbox" class="toggle" aria-label="启用此步骤" :checked="step.enabled" :disabled="disabled" @change="patch({ enabled: ($event.target as HTMLInputElement).checked })">
+        </label>
+      </div>
     </header>
-
-    <div class="commands" role="toolbar" aria-label="步骤命令">
-      <button type="button" class="button small" :disabled="disabled || index === 0" @click="emit('move', -1)"><Icon name="up" :size="14" />上移</button>
-      <button type="button" class="button small" :disabled="disabled || index === count - 1" @click="emit('move', 1)"><Icon name="down" :size="14" />下移</button>
-      <button type="button" class="button small" :disabled="disabled" @click="emit('update:modelValue', resetStep(definition, step))"><Icon name="restore" :size="14" />恢复默认参数</button>
-      <button type="button" class="button small danger end" :disabled="disabled" @click="emit('remove')"><Icon name="trash" :size="14" />删除步骤</button>
-    </div>
 
     <div v-if="isMissing(provider)" class="callout missing" role="status">
       <span class="missing-swatch" aria-hidden="true"></span>
@@ -93,7 +94,7 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
 .head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-4); }
 .heading { display: grid; gap: 2px; min-width: 0; }
 .order { color: var(--text-2); font-size: var(--t-small); }
-.switch { flex: none; height: var(--control-small); color: var(--text-2); }
-.commands { display: flex; flex-wrap: wrap; gap: var(--s-1); }
-.end { margin-left: auto; }
+.commands { flex: none; display: flex; align-items: center; gap: 2px; }
+.divider { width: 1px; height: 16px; margin: 0 var(--s-2); background: var(--border); }
+.switch { flex: none; color: var(--text-2); }
 </style>

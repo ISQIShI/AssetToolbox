@@ -81,7 +81,7 @@ test('native source and step filters use real image properties and preserve excl
         await page.screenshot({ path: info.outputPath('step-filters-840-dark.png') });
         await page.getByRole('button', { name: '扫描预览', exact: true }).click();
         await expect(page.getByRole('heading', { name: '扫描结果', exact: true })).toBeVisible();
-        await expect(page.locator('.scan')).toContainText('来源条件排除 2 个');
+        await expect(page.getByRole('complementary', { name: '概览' })).toContainText('来源条件排除 2 个');
         await page.getByRole('button', { name: '开始处理', exact: true }).click();
         await expect(page.locator('.dock')).toHaveAttribute('data-state', 'done');
         await expect(page.locator('.dock')).toContainText('已完成');

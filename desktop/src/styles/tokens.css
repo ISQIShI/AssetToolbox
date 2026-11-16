@@ -7,9 +7,9 @@
   color-scheme: light;
 
   /* 层级：窗口框架 → 侧栏 → 内容面 → 控件。越靠内越亮 */
-  --chrome: #e7e9ee;        /* 标题栏、活动栏、状态栏 */
-  --pane: #f1f2f5;          /* 处理线、任务列表等侧栏，命令栏 */
-  --surface: #fafbfc;       /* 内容区 */
+  --chrome: #e3e6ec;        /* 标题栏、活动栏、状态栏 */
+  --pane: #eceef3;          /* 处理线、任务列表等侧栏，命令栏 */
+  --surface: #f4f5f8;       /* 内容区 */
   --control: #ffffff;       /* 输入框、按钮、分组面板、浮层 */
   --hover: rgb(24 32 52 / 0.06);    /* 悬停：叠加在任意层级上 */
   --pressed: rgb(24 32 52 / 0.1);   /* 按下、选中的中性项 */
@@ -17,8 +17,8 @@
   --text: #1c2230;          /* 正文 */
   --text-2: #535c6d;        /* 次要文字、说明 */
   --text-3: #7f8797;        /* 占位、停用、装饰线 */
-  --border: #cdd2da;        /* 控件边框 */
-  --border-soft: #dfe2e8;   /* 分区线、表格行线 */
+  --border: #c9ced8;        /* 控件边框 */
+  --border-soft: #e1e4ea;   /* 分区线、表格行线 */
 
   /* 强调色：选中项、主按钮、焦点。只此一种 */
   --accent: #2f55d4;
@@ -40,6 +40,7 @@
   --on-missing: #ffffff;    /* 品红实心块上的文字 */
   --brand: #256b4d;         /* 仅用于标题栏的应用图标，与程序图标一致 */
 
+  --shadow-card: 0 0 0 1px rgb(20 28 48 / 0.05), 0 1px 2px rgb(20 28 48 / 0.06);   /* 面板：用极浅的投影代替描边 */
   --shadow-float: 0 8px 24px rgb(20 28 48 / 0.16), 0 1px 3px rgb(20 28 48 / 0.12);
   --scrim: rgb(20 28 48 / 0.32);   /* 对话框遮罩 */
 
@@ -51,6 +52,7 @@
   --t-small: 12px;
   --t-body: 13px;
   --t-title: 15px;
+  --t-heading: 18px;        /* 页面与站点标题 */
   --t-figure: 20px;
 
   /* 间距：4 的倍数 */
@@ -62,15 +64,16 @@
   --s-6: 24px;
   --s-7: 32px;
 
-  /* 圆角按层级：控件 4，面板 6，浮层 8 */
-  --r-control: 4px;
-  --r-panel: 6px;
-  --r-float: 8px;
+  /* 圆角按层级：控件 6，面板 8，浮层 10 */
+  --r-control: 6px;
+  --r-panel: 8px;
+  --r-float: 10px;
 
   --titlebar-height: 36px;
   --activity-width: 64px;
   --rail-width: 264px;
   --list-width: 288px;
+  --inspector-width: 304px;  /* 处理页右侧的概览栏 */
   --command-height: 44px;
   --status-height: 24px;
   --control-height: 30px;
@@ -114,10 +117,14 @@
   --on-missing: #2a0825;
   --brand: #2f8660;
 
+  --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow-float: 0 8px 24px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.4);
   --scrim: rgb(0 0 0 / 0.5);
 }
 
-@media (max-width: 1000px) {
-  :root { --rail-width: 236px; --list-width: 252px; --pane-padding: 16px; --label-width: 108px; }
+/* Windows 11：窗口框架透出系统 Mica 材质（见 core/material.ts）。工作区仍是不透明的内容面 */
+:root[data-material='mica'] { --chrome: transparent; }
+
+@media (max-width: 1160px) {
+  :root { --rail-width: 228px; --list-width: 252px; --inspector-width: 272px; --pane-padding: 16px; --label-width: 108px; }
 }

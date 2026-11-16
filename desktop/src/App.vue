@@ -25,7 +25,7 @@ const tabs = computed<{ id: Page; label: string; icon: IconName; missing?: numbe
     { id: 'tasks', label: '任务', icon: 'tasks' },
     { id: 'restore', label: '恢复', icon: 'restore' },
     { id: 'tools', label: '工具', icon: 'tools', missing: missingProviders.value.length },
-    { id: 'jobs', label: '作业', icon: 'tasks' },
+    { id: 'jobs', label: '作业', icon: 'jobs' },
 ]);
 const context = computed(() => config.value?.sourceDir.trim() ? folderName(config.value.sourceDir) : '');
 const resumable = computed(() => tasks.value.filter(task => task.canResume).length);
@@ -101,7 +101,8 @@ onUnmounted(() => { window.removeEventListener('keydown', shortcut); bench.stop(
           <ToolsView v-else />
         </main>
 
-        <JobDock v-if="job" />
+        <!-- 处理页把作业放在右侧概览栏里，其他页面停靠在底部 -->
+        <JobDock v-if="job && !(page === 'process' && config && definition && !loading)" />
         <ConfirmDialog />
       </div>
     </div>
@@ -149,7 +150,9 @@ onUnmounted(() => { window.removeEventListener('keydown', shortcut); bench.stop(
 .workspace { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border-soft); border-right: 0; border-bottom: 0; border-top-left-radius: var(--r-float); overflow: hidden; }
 .messages { flex: none; display: grid; gap: var(--s-1); padding: var(--s-2) var(--s-3); background: var(--pane); border-bottom: 1px solid var(--border-soft); max-height: 30vh; overflow-y: auto; }
 .stage { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.stage > :deep(*) { flex: 1; min-height: 0; }
+/* 页面切换：新页面短促淡入。旧页面立即移除，不做离场动画，避免两个页面的作业栏同时存在 */
+.stage > :deep(*) { flex: 1; min-height: 0; animation: page-in 0.12s ease-out; }
+@keyframes page-in { from { opacity: 0; } }
 .loading { padding: var(--s-6); color: var(--text-2); }
 
 .statusbar { flex: none; display: flex; align-items: center; gap: var(--s-1); height: var(--status-height); padding: 0 var(--s-2); border-top: 1px solid var(--border-soft); color: var(--text-2); font-size: var(--t-small); }

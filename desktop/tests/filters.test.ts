@@ -14,7 +14,8 @@ describe('共享属性过滤编辑器', () => {
             const next = events[events.length - 1]![0] as ResourceFilter;
             await wrapper.setProps({ modelValue: next }); return next;
         };
-        expect(wrapper.text()).toContain('未设置条件');
+        expect(wrapper.text()).toContain('未设置，全部通过');
+        expect(wrapper.get('button.info').attributes('aria-label')).toBe('来源过滤说明');
         await wrapper.get('.add-group').trigger('click'); await sync();
         expect(optionGroups(selectBox(wrapper, 'property')).map(group => group.label)).toEqual(['通用文件属性', '图片属性']);
         expect(optionGroups(selectBox(wrapper, '比较 1-1'))).toEqual([]);
@@ -23,7 +24,7 @@ describe('共享属性过滤编辑器', () => {
         const value = await sync(); expect(value.any[0]!.all[0]).toEqual({ property: 'image-width', operator: 'gte', value: 1024 });
         await wrapper.get('.filter-group > button').trigger('click'); expect((await sync()).any[0]!.all).toHaveLength(2);
         await wrapper.get('.add-group').trigger('click'); expect((await sync()).any).toHaveLength(2);
-        await wrapper.get('.filter-heading button').trigger('click'); expect((await sync()).any).toEqual([]);
+        await wrapper.get('.filter-heading .button').trigger('click'); expect((await sync()).any).toEqual([]);
     });
     it('步骤只列出适用属性，修改值移除旧版本，忙碌禁止编辑', async () => {
         const initial: ResourceFilter = { schema: 'asset-toolbox.filter/1', any: [{ all: [{ property: 'file-size', operator: 'gt', value: 1, version: '1.0.0' }] }] };

@@ -51,7 +51,8 @@ const close = () => getCurrentWindow().close().catch(() => {});
 }
 .app-icon { flex: none; margin-right: var(--s-2); }
 .app-name { flex: none; font-size: var(--t-small); font-weight: 400; }
-.context { flex: 1; min-width: 0; margin: 0 var(--s-4); color: var(--text-2); font-size: var(--t-small); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 当前来源文件夹：跟在应用名后面，用一条短竖线隔开 */
+.context { flex: 0 1 auto; min-width: 0; margin: 0 var(--s-4) 0 var(--s-3); padding-left: var(--s-3); border-left: 1px solid var(--border); color: var(--text-2); font-size: var(--t-small); line-height: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .window-controls { display: flex; align-self: stretch; margin-left: auto; }
 .window-button { display: grid; place-items: center; width: 46px; border: 0; background: none; color: var(--text); }
 .window-button:hover { background: var(--hover); }

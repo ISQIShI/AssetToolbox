@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 作业栏：停靠在工作区底部，在任何页面都能看到进度并取消。完成后保留结果，直到用户关闭。
+// 作业栏：默认停靠在工作区底部，在任何页面都能看到进度并取消。完成后保留结果，直到用户关闭。
+// 处理页把它以 panel 变体放进右侧概览栏：同一份状态与命令，纵向排布并放大进度和结果数字。
 import { computed } from 'vue';
 import { useWorkbench } from '../core/workbench';
 import { bytes, elapsed, sizeChange } from '../core/model';
@@ -7,6 +8,8 @@ import Icon from './Icon.vue';
 import Tip from './Tip.vue';
 import AudioResults from './AudioResults.vue';
 
+const props = defineProps<{ variant?: 'bar' | 'panel' }>();
+const panel = computed(() => props.variant === 'panel');
 const bench = useWorkbench();
 const { job, closing } = bench;
 
@@ -41,7 +44,7 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
 </script>
 
 <template>
-  <section v-if="job" class="dock" :class="{ running }" :data-job-id="job.id" :data-state="running ? 'running' : 'done'" role="status" aria-live="polite" :aria-label="`${job.title}：${status.label}`">
+  <section v-if="job" class="dock" :class="{ running, panel }" :data-job-id="job.id" :data-state="running ? 'running' : 'done'" role="status" aria-live="polite" :aria-label="`${job.title}：${status.label}`">
     <div class="row">
       <div class="title">
         <Icon v-if="!running" :name="status.tone === 'ok' ? 'ok' : 'alert'" class="tone" :class="status.tone" />
@@ -50,6 +53,7 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
       </div>
 
       <div v-if="running" class="progress">
+        <span v-if="panel" class="percent">{{ state.total ? `${percent}%` : '…' }}</span>
         <div class="meter" :class="{ indeterminate: !state.total }" aria-hidden="true"><span :style="{ width: `${percent}%` }"></span></div>
         <span class="count">{{ state.processed }} / {{ state.total || '…' }}</span>
         <span class="muted elapsed">{{ elapsed(state.elapsedSeconds) }}</span>
@@ -111,4 +115,24 @@ h2 { font-size: var(--t-body); white-space: nowrap; }
 .actions { display: flex; gap: var(--s-1); margin-left: auto; }
 .current { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
 .details { display: grid; gap: 2px; padding-bottom: var(--s-1); }
+
+/* panel 变体：处理页右侧概览栏中的作业卡片。窄窗口里概览栏移到下方，沿用上面的横向布局 */
+.dock.panel { border-top: 0; background: none; padding-left: 0; padding-right: 0; }
+@media (min-width: 1041px) {
+  .dock.panel { max-height: none; overflow: visible; gap: var(--s-2); padding: var(--s-4); border-top: 0; border-radius: var(--r-panel); background: var(--control); box-shadow: var(--shadow-card); animation: rise 0.16s ease-out; }
+  .dock.panel.running { box-shadow: 0 0 0 1px var(--accent), var(--shadow-card); }
+  .panel .row { display: grid; gap: var(--s-3); }
+  .panel .title { flex-wrap: wrap; gap: 2px var(--s-2); }
+  .panel h2 { font-size: var(--t-title); letter-spacing: 0; }
+  .panel .progress { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: var(--s-1) var(--s-3); }
+  .panel .percent { grid-column: 1 / -1; font-size: 28px; font-weight: 600; line-height: 1.1; }
+  .panel .progress .meter { grid-column: 1 / -1; height: 6px; border-radius: 3px; }
+  .panel .figures { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3) var(--s-4); }
+  .panel .figures > div { display: grid; gap: 0; }
+  .panel .figures dd { font-size: var(--t-title); }
+  /* 前两项（已处理 / 体积变化）是结果的重点，放大显示 */
+  .panel .figures > div:nth-child(-n + 2) dd { font-size: var(--t-figure); line-height: 1.3; }
+  .panel .actions { margin-left: 0; flex-wrap: wrap; }
+  .panel .actions .icon-only { margin-left: auto; }
+}
 </style>

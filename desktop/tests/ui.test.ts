@@ -1,6 +1,7 @@
 // 组件与纯函数：动态参数、步骤组合、恢复勾选、工具获取渠道、请求构造。
 import { describe, it, expect, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
+import ParameterFields from '../src/components/ParameterFields.vue';
 import StepEditor from '../src/components/StepEditor.vue';
 import RestoreTable from '../src/components/RestoreTable.vue';
 import ToolsView from '../src/views/ToolsView.vue';
@@ -49,7 +50,7 @@ describe('步骤编辑器', () => {
 
     it('offers move/remove only where valid and points missing tools to the tools page', async () => {
         const wrapper = mount(StepEditor, { props: { definition: { ...definition, providers: [missingProvider()] }, modelValue: config.pipeline[0]!, index: 0, count: 1 } });
-        const button = (text: string) => wrapper.findAll('button').find(item => item.text() === text)!;
+        const button = (text: string) => wrapper.findAll('button').find(item => item.text() === text || item.attributes('aria-label') === text)!;
         expect(button('上移').attributes('disabled')).toBeDefined();
         expect(button('下移').attributes('disabled')).toBeDefined();
         expect(wrapper.find('.callout.missing').text()).toContain('缺少文件：tool.exe');
@@ -210,4 +211,27 @@ describe('步骤排序与启停', () => {
         expect(bench.config.value!.pipeline.map(item => item.enabled)).toEqual([true, false, true]);
         expect(ids()).toEqual(['a', 'b', 'c']);
     });
+});
+
+it('shows a range only when the value is out of bounds, keeping the field hint otherwise', async () => {
+    const fields = [{ key: 'width', type: 'integer' as const, label: '目标宽度', min: 1, max: 4096, default: 512, hint: '按像素计' }];
+    const wrapper = mount(ParameterFields, { props: { fields, modelValue: { width: 512 }, idPrefix: 'p' } });
+    expect(wrapper.text()).not.toContain('4096'); expect(wrapper.find('.hint').text()).toBe('按像素计');
+    for (const width of [0, 5000, '']) {
+        await wrapper.setProps({ modelValue: { width } });
+        expect(wrapper.find('[role="alert"]').text()).toBe('请输入 1–4096 之间的值');
+        expect(wrapper.find('input').attributes('aria-invalid')).toBe('true');
+    }
+    await wrapper.setProps({ modelValue: { width: 4096 } });
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    wrapper.unmount();
+});
+
+it('enables the window material only on Windows 11 and later', async () => {
+    const { supportsMica } = await import('../src/core/material');
+    expect(supportsMica('Windows', '19.0.0')).toBe(true);
+    expect(supportsMica('Windows', '13.0.0')).toBe(true);
+    expect(supportsMica('Windows', '10.0.0')).toBe(false);
+    expect(supportsMica('macOS', '15.0.0')).toBe(false);
+    expect(supportsMica('Windows', undefined)).toBe(false);
 });

@@ -1,19 +1,21 @@
-// App 级交互：作业栏、跨页取消、扫描结果归位、缺依赖拦截、任务与恢复请求、快捷键与外观。
+// App 级交互：作业栏与概览栏、跨页取消、扫描结果归位、拖入来源、缺依赖拦截、任务与恢复请求、快捷键与外观。
 import { config, definition, missingProvider, task } from './fixtures';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import App from '../src/App.vue';
-import { call } from '../src/core/api';
+import { call, isDirectory } from '../src/core/api';
 import type { Definition, JobState, RestorePreview, ScanPreview } from '../src/core/types';
 
-vi.mock('../src/core/api', () => ({ call: vi.fn(), chooseFolder: vi.fn(), openReport: vi.fn(), openProviderSource: vi.fn() }));
+let dropHandler: ((event: { type: 'over' | 'leave' | 'drop'; paths: string[] }) => void) | undefined;
+vi.mock('../src/core/api', () => ({ call: vi.fn(), chooseFolder: vi.fn(), openReport: vi.fn(), openProviderSource: vi.fn(), isDirectory: vi.fn(), onFolderDrop: vi.fn(async handler => { dropHandler = handler; return () => { dropHandler = undefined; }; }) }));
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => ({ onCloseRequested: async () => () => {}, close: vi.fn() }) }));
 
 const scan: ScanPreview = { total: 35, checked: 35, totalBytes: 7000, enabledFiles: 35, conflicts: 0, issues: [], resources: [{ id: 'png', name: 'PNG', enabled: true, count: 35, bytes: 7000 }], cancelled: false };
 const restorePreview: RestorePreview = { source: 'D:\\备份', destination: 'D:\\中文 素材', total: 2, checked: 2, recoverable: 2, restored: 0, conflict: 0, cancelled: false, files: ['a.png', 'b.png'].map(path => ({ path, state: 'recoverable', selectable: true, queue: 'completed', inLastSelection: false, backupBytes: 10, currentBytes: 5, backupHash: 'a'.repeat(64), targetHash: 'b'.repeat(64), reason: '目标仍是处理结果' })) };
 let wrapper: VueWrapper, state: JobState, catalog: Definition;
 
-const button = (text: string) => wrapper.findAll('button').find(item => item.text().trim() === text)!;
+// 按可见文字找按钮；只有图标的按钮按 aria-label 找。
+const button = (text: string) => wrapper.findAll('button').find(item => item.text().trim() === text || item.attributes('aria-label') === text)!;
 const tab = (label: string) => wrapper.findAll('nav.tabs button').find(item => item.text().startsWith(label))!;
 async function go(label: string) { await tab(label).trigger('click'); await flushPromises(); }
 async function finish(value: Partial<JobState>) {
@@ -45,20 +47,29 @@ beforeEach(() => {
 });
 afterEach(() => { wrapper?.unmount(); vi.useRealTimers(); });
 
-it('shows scan progress in the dock, then files the result under the pipeline instead of the dock', async () => {
+it('shows scan progress in the inspector, then keeps the result there instead of a job card', async () => {
     await mountApp();
+    expect(wrapper.find('.inspector h2').text()).toBe('概览');
+    expect(wrapper.find('.inspector .figures').exists()).toBe(false);
     await button('扫描预览').trigger('click'); await flushPromises();
-    expect(wrapper.find('.dock').attributes('data-state')).toBe('running');
+    // 处理页的作业显示在概览栏里，不再占用底部作业栏。
+    expect(wrapper.find('.inspector .dock.panel').attributes('data-state')).toBe('running');
+    expect(wrapper.findAll('.dock')).toHaveLength(1);
     expect(call).toHaveBeenCalledWith('submit', { request: expect.objectContaining({ mode: 'preview', folder: config.sourceDir, backupDir: config.backupDir }), idempotencyKey: expect.any(String) });
     await finish({ processed: 35, preview: scan });
     expect(wrapper.find('.dock').exists()).toBe(false);
-    expect(wrapper.find('h2').text()).toBe('扫描结果');
+    expect(wrapper.find('.inspector h2').text()).toBe('扫描结果');
+    expect(wrapper.findAll('.inspector .figures dd').map(item => item.text())).toEqual(['35', '6.8 KB', '35', '0']);
+    // 选中的站点不因扫描而改变；格式表补上文件数与体积。
+    expect(wrapper.find('.station-button[aria-current]').attributes('data-station')).toBe('source');
+    expect(wrapper.find('.inspector tbody[aria-label="图片"]').text()).toContain('6.8 KB');
     await go('任务'); expect(wrapper.text()).not.toContain('扫描结果');
     await go('处理'); expect(wrapper.text()).toContain('扫描结果');
     // 扫描后修改配置，结果标为过期。
     await wrapper.findAll('.station-button')[0]!.trigger('click');
     await wrapper.find('input.path').setValue('D:\\别的文件夹');
-    expect(wrapper.find('.rail').text()).toContain('配置已更改');
+    expect(wrapper.find('.inspector').text()).toContain('配置已更改');
+    expect(wrapper.find('.rail').text()).not.toContain('扫描结果');
 });
 
 it('keeps a running job cancellable from any page and reports a cancelled scan where it belongs', async () => {
@@ -347,4 +358,36 @@ it('reorders steps from the keyboard and by position, and toggles a step without
     await wrapper.findAll('.rail [data-step-id] .station-button')[0]!.trigger('keydown', { key: 'ArrowDown' });
     expect(order()).toEqual(['resize', 'compress']);
     expect(wrapper.find('.editor h2').text()).toBe('PNG 图片缩放');
+});
+
+it('sets a dropped folder as the source and rejects anything that is not a folder', async () => {
+    await mountApp();
+    await wrapper.find('[data-station="output"]').trigger('click');
+    vi.mocked(isDirectory).mockResolvedValueOnce(true);
+    dropHandler!({ type: 'over', paths: [] }); await flushPromises();
+    expect(wrapper.find('.drop-hint').text()).toContain('松开后设为来源文件夹');
+    dropHandler!({ type: 'drop', paths: ['D:\\新素材', 'D:\\忽略'] }); await flushPromises();
+    expect(wrapper.find('.drop-hint').exists()).toBe(false);
+    expect(wrapper.find('.station-button[aria-current]').attributes('data-station')).toBe('source');
+    expect((wrapper.find('input.path').element as HTMLInputElement).value).toBe('D:\\新素材');
+    vi.mocked(isDirectory).mockResolvedValueOnce(false);
+    dropHandler!({ type: 'drop', paths: ['D:\\新素材\\a.png'] }); await flushPromises();
+    expect((wrapper.find('input.path').element as HTMLInputElement).value).toBe('D:\\新素材');
+    expect(wrapper.find('[role="alert"]').text()).toContain('请拖入文件夹');
+});
+
+it('offers a landing zone while no source is chosen and keeps finished results in the inspector', async () => {
+    await mountApp();
+    expect(wrapper.find('.dropzone').exists()).toBe(false);
+    await wrapper.find('input.path').setValue('  ');
+    expect(wrapper.find('.dropzone').text()).toContain('选择要处理的文件夹');
+    await wrapper.find('input.path').setValue('D:\\素材');
+    await button('开始处理').trigger('click'); await flushPromises();
+    await finish({ processed: 35, summary: { total: 35, processed: 30, skipped: 4, failed: 1, savedBytes: 2048 }, task, hasReport: true });
+    const card = wrapper.find('.inspector .dock.panel');
+    expect(card.attributes('data-state')).toBe('done'); expect(card.text()).toContain('−2.0 KB');
+    // 离开处理页后同一个结果回到底部作业栏。
+    await go('任务');
+    expect(wrapper.find('.inspector').exists()).toBe(false);
+    expect(wrapper.find('.dock').classes()).not.toContain('panel');
 });

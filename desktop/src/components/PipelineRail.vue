@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 处理线：来源 → 各步骤 → 写入 →（扫描结果）。文件沿竖线自上而下经过每个站点，编号即执行顺序。
+// 处理线：来源 → 各步骤 → 写入。文件沿竖线自上而下经过每个站点，编号即执行顺序。
 import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue';
 import { useWorkbench } from '../core/workbench';
 import { folderName, isMissing, providerOf, stepGroups, stepTitle } from '../core/model';
@@ -10,7 +10,7 @@ import StepMenu from './StepMenu.vue';
 import { computePosition, flip, offset, shift, size } from '@floating-ui/dom';
 
 const bench = useWorkbench();
-const { config, definition, station, scan, scanStale, busy } = bench;
+const { config, definition, station, busy } = bench;
 const adding = ref(false);
 const addButton = ref<HTMLButtonElement>();
 const menu = ref<HTMLElement>();
@@ -221,12 +221,6 @@ onUnmounted(() => close(false));
         </button>
       </li>
 
-      <li v-if="scan" class="station result">
-        <button type="button" class="station-button" data-station="scan" :aria-current="station === 'scan' ? 'true' : undefined" @click="station = 'scan'">
-          <span class="node" aria-hidden="true"></span>
-          <span class="text"><span class="title">扫描结果</span><span class="sub" :class="{ 'tone warn': scanStale || scan.cancelled }">{{ scan.cancelled ? '扫描未完成' : scanStale ? '配置已更改' : `${scan.total} 个文件` }}</span></span>
-        </button>
-      </li>
     </ol>
   </nav>
 </template>
@@ -245,10 +239,10 @@ onUnmounted(() => close(false));
   position: absolute;
   z-index: 1;
   pointer-events: none;
-  left: 25px;
+  left: 25.25px;
   top: 0;
   bottom: 0;
-  width: 2px;
+  width: 1.5px;
   background: var(--border);
 }
 .station:first-child::before { top: 20px; }
@@ -272,6 +266,7 @@ onUnmounted(() => close(false));
 .station-button:hover:not(:disabled) { background: var(--hover); }
 .station-button { --ring: var(--pane); }
 .station-button[aria-current='true'] { --ring: var(--accent-wash); background: var(--accent-wash); }
+.station-button[aria-current='true'] .title { font-weight: 600; }
 .station-button:disabled { color: var(--text-3); }
 .station-button:focus-visible { outline-offset: -2px; }
 /* 拖拽中的步骤：抬起并标出强调色边框；其余步骤实时让位 */
@@ -286,8 +281,8 @@ onUnmounted(() => close(false));
   width: 10px;
   height: 10px;
   margin-top: 5px;
-  border-radius: 2px;
-  background: var(--text);
+  border-radius: 3px;
+  background: var(--text-2);
   box-shadow: 0 0 0 3px var(--ring);
 }
 .node.numbered {
@@ -297,17 +292,19 @@ onUnmounted(() => close(false));
   height: 20px;
   margin-top: 0;
   border-radius: 50%;
-  color: var(--ring);
+  background: var(--control);
+  color: var(--text);
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
-  box-shadow: 0 0 0 2px var(--ring);
+  box-shadow: inset 0 0 0 1.5px var(--text-3), 0 0 0 2px var(--ring);
 }
-.off .node.numbered { background: var(--ring); color: var(--text-3); box-shadow: inset 0 0 0 1.5px var(--text-3), 0 0 0 2px var(--ring); }
+/* 选中的步骤：编号填成强调色 */
+[aria-current='true'] > .node.numbered { background: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 2px var(--ring); }
+.off .node.numbered { background: var(--ring); color: var(--text-3); box-shadow: inset 0 0 0 1.5px var(--border), 0 0 0 2px var(--ring); }
 .missing .node.numbered { background: var(--missing); color: var(--on-missing); }
 .off.missing .node.numbered { background: var(--ring); color: var(--missing); box-shadow: inset 0 0 0 1.5px var(--missing), 0 0 0 2px var(--ring); }
 .node.plus { display: grid; place-items: center; width: 20px; height: 20px; margin-top: 0; border-radius: 50%; background: var(--ring); color: var(--text-2); box-shadow: inset 0 0 0 1.5px var(--text-3), 0 0 0 2px var(--ring); }
-.result .node { background: var(--ring); box-shadow: inset 0 0 0 2px var(--text), 0 0 0 3px var(--ring); }
 
 .text { display: grid; min-width: 0; padding-top: 1px; }
 .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

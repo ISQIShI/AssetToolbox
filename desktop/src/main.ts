@@ -2,9 +2,11 @@ import { createApp } from 'vue';
 import './styles/tokens.css';
 import './styles/base.css';
 import { initTheme } from './core/theme';
+import { initMaterial } from './core/material';
 import App from './App.vue';
 
 initTheme();
+void initMaterial();
 
 // 这是桌面软件而不是网页：屏蔽浏览器的右键菜单（文本输入除外）、刷新和打印快捷键，
 // 避免误触后丢失未保存的编辑或跳出应用界面。开发模式保留，便于调试。

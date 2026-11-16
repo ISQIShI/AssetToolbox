@@ -30,9 +30,10 @@
 | `components/StepEditor.vue` | 单个步骤：启用、排序与删除命令、组合、两组参数 |
 | `components/ParameterFields.vue` | 按字段描述渲染参数控件 |
 | `components/PathField.vue` | 路径输入与原生选择 |
-| `components/ScanSummary.vue` | 扫描结果 |
+| `components/RunInspector.vue` | 处理页右侧的概览栏：当前作业、扫描数字、各资源格式的步骤数与文件数 |
 | `components/RestoreTable.vue` | 恢复检查结果的筛选、搜索、勾选、分页 |
-| `components/JobDock.vue` | 底部作业栏 |
+| `components/JobDock.vue` | 作业栏：处理页以 `panel` 变体放在概览栏里，其他页面停靠在工作区底部 |
+| `core/material.ts` | 判断 Windows 11 并给 `<html>` 标记 `data-material="mica"`，令窗口框架透出系统材质 |
 | `styles/tokens.css`、`styles/base.css` | 浅色与深色设计令牌、共享控件；组件布局写在各自的 scoped 样式中 |
 
 ## 工作台状态
@@ -82,7 +83,8 @@ stateDiagram-v2
 - 在 submit 返回前点击取消会记录待取消，拿到 ID 后立即发送 `cancel`。
 - 作业结束后执行 `onDone` 回调并刷新任务列表。`preview` 和 `restore-check` 两类在 `state.preview` 存在时清除 `job`，结果由页面显示；出错时保留作业栏。
 - 窗口关闭：有作业时阻止关闭，设 `closing` 并取消；status 收到 done 后再调用原生 `close()`。桥接保证工作进程已退出。
-- 作业栏在任何页面都显示，直到用户关闭。关闭只清除前端状态，不删除任务或报告。
+- 作业在任何页面都显示，直到用户关闭：处理页（配置与目录可用时）由 `ProcessView` 里的概览栏渲染 `JobDock variant="panel"`，其余情况由 `App.vue` 在工作区底部渲染；两处条件互斥，同一时刻只有一个 `.dock`。关闭只清除前端状态，不删除任务或报告。
+- **拖入来源**：`core/api.ts` 的 `onFolderDrop` 封装 Tauri 的 `onDragDropEvent`，`ProcessView` 在挂载期间监听；松开后调用工作台的 `useDroppedSource`，它先用原生命令 `is_directory`（只读判断路径是否为现有文件夹）校验第一个路径，再写入 `config.sourceDir`。作业运行时忽略拖入。
 
 ## 请求映射
 
@@ -90,7 +92,7 @@ stateDiagram-v2
 | --- | --- | --- |
 | 启动 | `bootstrap`、`tasks` | 处理配置加载失败时仍可使用任务和恢复 |
 | 保存配置 | `save` | 成功后用返回值替换当前配置 |
-| 扫描预览 | `normalize` → `submit {request: {mode:'preview'}}` | 不保存配置；结果写入 `scan` 并选中“扫描结果”站点 |
+| 扫描预览 | `normalize` → `submit {request: {mode:'preview'}}` | 不保存配置；结果写入 `scan`，显示在概览栏；选中的站点不变 |
 | 开始处理 | `normalize` → `save` → `submit {request: {mode:'process'}}` | 保存失败显示提示，但本次仍处理 |
 | 刷新依赖状态 | `providers` | 只替换目录中的工具列表，不重置配置 |
 | 打开获取页面 | 原生 `open_provider_source({id})` | 前端只传 ID，地址由核心解析 |
@@ -136,11 +138,11 @@ stateDiagram-v2
 
 | 层级 | 文件 | 覆盖 |
 | --- | --- | --- |
-| 组件与模型 | `desktop/tests/ui.test.ts` | 动态参数及命名空间、组合切换、停用只读、缺依赖提示；恢复筛选与勾选、范围预选、取消后只读；工具页渠道与刷新；请求构造、体积格式、操作分组与去重、任务状态 |
-| 应用流程 | `desktop/tests/app.test.ts` | 扫描结果归位与过期、跨页取消、作业栏持久与关闭、预览错误、缺依赖拦截、三级步骤选择/搜索/返回/焦点/关闭、排序与删除步骤、续跑与重试请求、任务恢复与独立备份请求、快捷键与状态栏、外观切换 |
-| 原生 | `desktop/tests/native.spec.ts` | 构建后的 EXE：工具缺失与恢复、动态扩展参数、选择器在 1220×850/840×620 和浅色/深色下的边界及截图、键盘添加、扫描、另存、覆盖备份、跨页取消、续跑、重试、选择性恢复、真实图片缩放、配置重启、运行中关闭 |
+| 组件与模型 | `desktop/tests/ui.test.ts` | 动态参数及命名空间、组合切换、停用只读、缺依赖提示、数值越界提示、窗口材质判断；恢复筛选与勾选、范围预选、取消后只读；工具页渠道与刷新；请求构造、体积格式、操作分组与去重、任务状态 |
+| 应用流程 | `desktop/tests/app.test.ts` | 扫描结果留在概览栏与过期、处理页作业卡片与底部作业栏互斥、拖入来源与非文件夹拒绝、来源落地区、跨页取消、作业栏持久与关闭、预览错误、缺依赖拦截、三级步骤选择/搜索/返回/焦点/关闭、排序与删除步骤、续跑与重试请求、任务恢复与独立备份请求、快捷键与状态栏、外观切换 |
+| 原生 | `desktop/tests/native.spec.ts` | 构建后的 EXE：工具缺失与恢复、动态扩展参数、选择器在 1220×850/840×620（视口尺寸；窗口默认 1280×850） 和浅色/深色下的边界及截图、键盘添加、扫描、另存、覆盖备份、跨页取消、续跑、重试、选择性恢复、真实图片缩放、配置重启、运行中关闭 |
 
-测试只依赖语义选择器、`data-station`、`data-step-id`、`data-provider-id`、作业栏的 `data-job-id`、`data-state`，以及少量结构类名（`nav.tabs`、`.rail`、`.adder`、`.choice`、`.editor`、`.runbar`、`.summary-link`、`.dock`、`.statusbar`、`.restore-table .foot`、工具行的 `.state`）。调整样式类名时保持这些钩子。原生窗口的拖动、缩放与窗口按钮无法由 CDP 测试覆盖，改动标题栏后需要人工核对。截图保存在 `desktop/test-results/`，不提交。
+测试只依赖语义选择器、`data-station`、`data-step-id`、`data-provider-id`、作业栏的 `data-job-id`、`data-state`，以及少量结构类名（`nav.tabs`、`.rail`、`.adder`、`.choice`、`.editor`、`.runbar`、`.summary-link`、`.dock`、`.inspector`、`.statusbar`、`.restore-table .foot`、工具行的 `.state`）。调整样式类名时保持这些钩子。原生窗口的拖动、缩放与窗口按钮无法由 CDP 测试覆盖，改动标题栏后需要人工核对。截图保存在 `desktop/test-results/`，不提交。
 
 ## 音频操作与结果
 

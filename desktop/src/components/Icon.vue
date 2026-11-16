@@ -27,6 +27,8 @@ const paths = {
     alert: ['M8 4.6v4', 'M8 10.9v.3'],
     external: ['M9.2 2.8h4v4', 'M13 3L7.6 8.4', 'M11.2 9.4v3.8H2.8V4.8h3.8'],
     download: ['M8 2.5v8', 'M4.5 7.2L8 10.7l3.5-3.5', 'M3 13.5h10'],
+    info: ['M8 7.4v3.6', 'M8 4.9v.2'],
+    jobs: ['M1.8 8.4h2.7l1.7-4.6 3.1 8.6 1.8-4h3.1'],
     report: ['M3.5 2h6l3 3v9h-9z', 'M9.5 2v3h3', 'M5.8 8.2h4.4', 'M5.8 11h4.4'],
 } as const;
 export type IconName = keyof typeof paths;
@@ -40,7 +42,7 @@ defineProps<{ name: IconName; size?: number }>();
     <template v-else-if="name === 'theme'"><circle cx="8" cy="8" r="5.5" /><path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor" stroke="none" /></template>
     <path v-else-if="name === 'play'" d="M5 3.3v9.4a.4.4 0 0 0 .6.3l7.3-4.7a.4.4 0 0 0 0-.6L5.6 3a.4.4 0 0 0-.6.3z" fill="currentColor" stroke="none" />
     <circle v-else-if="name === 'scan'" cx="7" cy="7" r="4.3" />
-    <circle v-else-if="name === 'ok' || name === 'alert'" cx="8" cy="8" r="5.7" />
+    <circle v-else-if="name === 'ok' || name === 'alert' || name === 'info'" cx="8" cy="8" r="5.7" />
   </svg>
 </template>
 

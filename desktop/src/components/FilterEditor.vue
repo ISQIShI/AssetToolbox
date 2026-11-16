@@ -3,6 +3,8 @@ import { computed, useId } from 'vue';
 import type { FilterRule, ResourceFilter, ResourceProperty, ResourceType } from '../core/types';
 import { resourceGroups, groupByResourceKind, resourceKindLabel } from '../core/resource-groups';
 import SelectBox, { type SelectEntry } from './SelectBox.vue';
+import Tip from './Tip.vue';
+import Icon from './Icon.vue';
 const props = defineProps<{ modelValue?: ResourceFilter; properties: ResourceProperty[]; resourceTypes?: ResourceType[]; resourceType?: string; disabled?: boolean; title: string; hint: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: ResourceFilter] }>();
 const id = useId();
@@ -43,9 +45,7 @@ function remove(group: number, index: number) {
 
 <template>
   <section class="group filter-editor" :aria-label="title">
-    <header class="filter-heading"><h3>{{ title }}</h3><button v-if="filter.any.length" type="button" class="button quiet small" :disabled="disabled" @click="update(next => { next.any = []; })">清除条件</button></header>
-    <p class="muted small">{{ hint }}</p>
-    <p v-if="!filter.any.length" class="muted small">未设置条件，全部通过。</p>
+    <header class="filter-heading"><h3>{{ title }}</h3><Tip v-if="hint" :text="hint"><button type="button" class="info" :aria-label="`${title}说明`"><Icon name="info" /></button></Tip><span v-if="!filter.any.length" class="muted small state">未设置，全部通过</span><button v-if="filter.any.length" type="button" class="button quiet small" :disabled="disabled" @click="update(next => { next.any = []; })">清除条件</button></header>
     <fieldset v-for="(group, gi) in filter.any" :key="gi" class="filter-group" :disabled="disabled">
       <legend>{{ gi ? '或：' : '' }}第 {{ gi + 1 }} 组 · 以下条件全部满足</legend>
       <div v-for="(rule, ri) in group.all" :key="ri" class="filter-rule">
@@ -68,8 +68,12 @@ function remove(group: number, index: number) {
 
 <style scoped>
 .filter-editor { min-width: 0; }
-.filter-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
-.filter-group { min-width: 0; margin: 0; padding: var(--s-2); border: 1px solid var(--border-soft); border-radius: var(--r-control); display: grid; gap: var(--s-2); }
+.filter-heading { display: flex; align-items: center; gap: var(--s-2); min-height: var(--control-small); }
+.filter-heading > .button { margin-left: auto; }
+.info { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-3); }
+.info:hover { color: var(--text); background: var(--hover); }
+.state { margin-left: auto; }
+.filter-group { min-width: 0; margin: 0; padding: var(--s-2) var(--s-3) var(--s-3); border: 0; border-radius: var(--r-control); background: var(--surface); display: grid; gap: var(--s-2); }
 .filter-group legend { color: var(--text-2); font-size: var(--t-small); padding: 0 var(--s-1); }
 .filter-rule { display: grid; grid-template-columns: minmax(0, 1fr) minmax(80px, .7fr) minmax(60px, .6fr) auto; gap: var(--s-1); }
 .filter-rule .input, .filter-rule :deep(.select) { width: 100%; min-width: 0; }

@@ -52,7 +52,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect(page.getByLabel('来源文件夹', { exact: true })).toHaveValue(source);
     }
     const tab = (name: string) => page.getByRole('navigation', { name: '工作区' }).getByRole('button', { name, exact: false });
-    const station = (name: 'source' | 'output' | 'scan') => page.locator(`[data-station="${name}"]`);
+    const station = (name: 'source' | 'output') => page.locator(`[data-station="${name}"]`);
     const button = (name: string) => page.getByRole('button', { name, exact: true });
     let observedJob = '';
     async function started() {
@@ -92,7 +92,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
         await page.screenshot({ path: info.outputPath('compact.png'), fullPage: true });
         await page.setViewportSize({ width: 1220, height: 850 });
-        // 扫描预览：结果归入处理线末端，作业栏收起；其他页面不显示。
+        // 扫描预览：结果留在右侧概览栏，作业卡片收起；其他页面不显示。
         await button('扫描预览').click();
         await expect(page.getByRole('heading', { name: '扫描结果', exact: true })).toBeVisible();
         await expect(page.locator('.dock')).toHaveCount(0);

@@ -16,6 +16,23 @@ export async function chooseFolder(title: string, defaultPath?: string): Promise
     return open({ title, directory: true, multiple: false, ...(defaultPath ? { defaultPath } : {}) });
 }
 
+/** 路径是否为现有文件夹；用于校验拖入窗口的内容。 */
+export async function isDirectory(path: string): Promise<boolean> {
+    if (browserPreview) return true;
+    return invoke('is_directory', { path });
+}
+
+export interface FolderDropEvent { type: 'over' | 'leave' | 'drop'; paths: string[] }
+/** 监听从资源管理器拖入窗口的文件；没有原生窗口时不做任何事。返回取消监听的函数。 */
+export async function onFolderDrop(handler: (event: FolderDropEvent) => void): Promise<() => void> {
+    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return () => {};
+    const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+    return getCurrentWebview().onDragDropEvent(({ payload }) => {
+        if (payload.type === 'drop') handler({ type: 'drop', paths: payload.paths });
+        else handler({ type: payload.type === 'leave' ? 'leave' : 'over', paths: [] });
+    });
+}
+
 export async function openReport(id: string): Promise<void> {
     if (browserPreview) return;
     return invoke('open_report', { id });

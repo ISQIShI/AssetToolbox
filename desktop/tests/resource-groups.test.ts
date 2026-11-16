@@ -5,7 +5,9 @@ import type { ResourceFilter, ResourceType, ScanPreview } from '../src/core/type
 import { previewProperties } from '../src/core/preview-properties';
 import { choose, optionGroups, optionLabels, selectBoxes } from './select';
 import FilterEditor from '../src/components/FilterEditor.vue';
-import ScanSummary from '../src/components/ScanSummary.vue';
+import RunInspector from '../src/components/RunInspector.vue';
+import { ref } from 'vue';
+import { workbenchKey } from '../src/core/workbench';
 
 const types: ResourceType[] = [
     { id: 'mp3', displayName: 'MP3', kind: 'audio', extensions: ['.mp3'], version: '1.0.0' },
@@ -46,10 +48,15 @@ it('aggregates scan groups without merging file-level format counts or losing un
         { id: 'png', name: 'PNG', enabled: true, count: 2, bytes: 20 },
         { id: 'gone', name: '旧目录格式', enabled: false, count: 3, bytes: 30 },
     ] };
-    const wrapper = mount(ScanSummary, { props: { scan, resourceTypes: types } });
+    // 概览栏只读取工作台的这几项状态。
+    const bench = { config: ref({ pipeline: [{ enabled: true, resourceType: 'png' }, { enabled: false, resourceType: 'jpg' }] }), definition: ref({ resourceTypes: types }), scan: ref(scan), scanStale: ref(false), busy: ref(false), job: ref(undefined), runPipeline: () => {} };
+    const wrapper = mount(RunInspector, { global: { provide: { [workbenchKey as symbol]: bench } } });
     const image = wrapper.get('tbody[aria-label="图片"]');
     expect(image.findAll('tr')).toHaveLength(3); expect(image.get('.resource-group').text()).toContain('30 B');
-    expect(image.findAll('td.number').map(cell => cell.text())).toEqual(['1', '10 B', '2', '20 B']);
+    // 每行依次是：启用的步骤数、文件数、体积；停用的步骤不计数。
+    expect(image.findAll('td.number').map(cell => cell.text())).toEqual(['—', '1', '10 B', '1', '2', '20 B']);
+    expect(wrapper.get('tbody[aria-label="音频"]').findAll('td.number').map(cell => cell.text())).toEqual(['—', '0', '—']);
     expect(wrapper.get('tbody[aria-label="其他"]').text()).toContain('旧目录格式');
+    expect(wrapper.get('tbody[aria-label="其他"]').text()).toContain('30 B');
     expect(scan.resources).toHaveLength(3); wrapper.unmount();
 });

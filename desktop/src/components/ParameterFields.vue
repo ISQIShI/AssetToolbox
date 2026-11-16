@@ -7,9 +7,13 @@ const props = defineProps<{ fields: Field[]; modelValue: Record<string, Value>; 
 const emit = defineEmits<{ 'update:modelValue': [value: Record<string, Value>] }>();
 function update(key: string, value: Value) { emit('update:modelValue', { ...props.modelValue, [key]: value }); }
 function numeric(event: Event): Value { const raw = (event.target as HTMLInputElement).value; return raw === '' ? '' : Number(raw); }
-function hint(field: Field) {
-    const range = field.min !== undefined && field.max !== undefined ? `范围 ${field.min}–${field.max}` : '';
-    return [range, field.hint].filter(Boolean).join('。');
+// 取值范围平时不占位置，只在当前值越界（或为空）时作为错误提示出现。
+function rangeError(field: Field) {
+    if (field.type !== 'integer' && field.type !== 'number') return '';
+    const value = props.modelValue[field.key];
+    const low = field.min !== undefined && (value === '' || Number(value) < field.min), high = field.max !== undefined && Number(value) > field.max;
+    if (!low && !high) return '';
+    return field.min !== undefined && field.max !== undefined ? `请输入 ${field.min}–${field.max} 之间的值` : low ? `不能小于 ${field.min}` : `不能大于 ${field.max}`;
 }
 </script>
 
@@ -23,9 +27,10 @@ function hint(field: Field) {
       <div v-else class="field">
         <label class="label" :for="`${idPrefix}-${field.key}`">{{ field.label }}</label>
         <SelectBox v-if="field.type === 'enum'" :id="`${idPrefix}-${field.key}`" class="choice" :model-value="String(modelValue[field.key])" :options="(field.choices || []).map(choice => ({ value: String(choice.value), label: choice.label }))" :disabled="disabled" @update:model-value="update(field.key, $event)" />
-        <input v-else-if="field.type === 'integer' || field.type === 'number'" :id="`${idPrefix}-${field.key}`" class="input number" type="number" inputmode="decimal" :value="modelValue[field.key]" :min="field.min" :max="field.max" :step="field.step || 1" :disabled="disabled" @input="update(field.key, numeric($event))">
+        <input v-else-if="field.type === 'integer' || field.type === 'number'" :id="`${idPrefix}-${field.key}`" class="input number" type="number" inputmode="decimal" :value="modelValue[field.key]" :min="field.min" :max="field.max" :step="field.step || 1" :disabled="disabled" :aria-invalid="rangeError(field) ? 'true' : undefined" :title="field.min !== undefined && field.max !== undefined ? `${field.min}–${field.max}` : undefined" @input="update(field.key, numeric($event))">
         <input v-else :id="`${idPrefix}-${field.key}`" class="input" type="text" :value="modelValue[field.key]" :maxlength="field.maxLength" :disabled="disabled" @input="update(field.key, ($event.target as HTMLInputElement).value)">
-        <p v-if="hint(field)" class="hint">{{ hint(field) }}</p>
+        <p v-if="rangeError(field)" class="hint tone danger" role="alert">{{ rangeError(field) }}</p>
+        <p v-else-if="field.hint" class="hint">{{ field.hint }}</p>
       </div>
     </template>
   </div>
@@ -34,6 +39,7 @@ function hint(field: Field) {
 <style scoped>
 .parameters { display: grid; gap: var(--s-2); }
 .number { max-width: 140px; }
+.number[aria-invalid='true'] { border-color: var(--danger); }
 .option { min-height: var(--control-height); }
 @container editor (max-width: 420px) {
   .field { grid-template-columns: minmax(0, 1fr); }
