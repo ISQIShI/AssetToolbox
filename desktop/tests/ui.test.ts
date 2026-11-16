@@ -194,3 +194,20 @@ describe('模型', () => {
         expect(groups.every(group => group.resourceTypes.length === 1 && group.resourceTypes[0]!.id === 'png')).toBe(true);
     });
 });
+
+describe('步骤排序与启停', () => {
+    it('moves a step to an absolute position, ignores invalid targets and toggles enablement in place', () => {
+        const bench = createWorkbench();
+        const step = (id: string): Step => ({ ...config.pipeline[0]!, id });
+        bench.boot.value = { config, definition, warnings: [] } as never;
+        bench.config.value = { ...structuredClone(config), pipeline: [step('a'), step('b'), step('c')] };
+        const ids = () => bench.config.value!.pipeline.map(item => item.id);
+        bench.moveStepTo(0, 2); expect(ids()).toEqual(['b', 'c', 'a']);
+        bench.moveStepTo(2, 0); expect(ids()).toEqual(['a', 'b', 'c']);
+        bench.moveStepTo(1, 1); bench.moveStepTo(0, 3); bench.moveStepTo(5, 0); bench.moveStepTo(0, -1);
+        expect(ids()).toEqual(['a', 'b', 'c']);
+        bench.toggleStep(1);
+        expect(bench.config.value!.pipeline.map(item => item.enabled)).toEqual([true, false, true]);
+        expect(ids()).toEqual(['a', 'b', 'c']);
+    });
+});

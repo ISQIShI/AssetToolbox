@@ -3,7 +3,7 @@
 import { computed, inject, ref, type InjectionKey } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { call, chooseFolder, openProviderSource, openReport } from './api';
-import { bytes, createStep, isMissing, processingRequest, providerOf } from './model';
+import { bytes, createStep, isMissing, processingRequest, providerOf, stepTitle } from './model';
 import type { StoragePreview, StorageResult, StorageSelection } from './types';
 import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, ResultPage, RestoreFile, AudioResult, RestorePreview, RestoreScope, ScanPreview, Selection, Step, Task } from './types';
 
@@ -11,6 +11,8 @@ export type Page = 'process' | 'tasks' | 'restore' | 'tools' | 'jobs';
 export type JobKind = 'preview' | 'process' | 'resume' | 'retry' | 'restore-check' | 'restore' | 'dependency';
 export interface ActiveJob { id: string; kind: JobKind; title: string; state: JobState; cancelRequested: boolean }
 export type RestoreSource = { kind: 'task'; taskId: string } | { kind: 'export'; backupDir: string; outputDir: string };
+
+export interface ConfirmRequest { title: string; message: string; confirmLabel: string; danger?: boolean }
 
 const POLL_MS = 250;
 
@@ -211,6 +213,45 @@ export function createWorkbench() {
             && definition.value?.operations.find(item => item.id === step.operation)?.preserveOriginal) config.value.saveMode = 'saveAs';
         config.value.pipeline[index] = step;
     }
+    /** 把步骤移到指定位置（拖拽排序用）；选中项不变。 */
+    function moveStepTo(from: number, to: number) {
+        const pipeline = config.value?.pipeline;
+        if (!pipeline || from === to || !pipeline[from] || to < 0 || to >= pipeline.length) return;
+        const [step] = pipeline.splice(from, 1); pipeline.splice(to, 0, step!);
+    }
+    function toggleStep(index: number) {
+        const step = config.value?.pipeline[index];
+        if (step) updateStep(index, { ...step, enabled: !step.enabled });
+    }
+
+    // ---------- 确认对话框：同一时间最多一个，由 App 中的 ConfirmDialog 显示 ----------
+    const confirmation = ref<ConfirmRequest>();
+    let settleConfirmation: ((accepted: boolean) => void) | undefined;
+    function confirm(request: ConfirmRequest): Promise<boolean> {
+        settleConfirmation?.(false);
+        confirmation.value = request;
+        return new Promise(resolve => { settleConfirmation = resolve; });
+    }
+    function answerConfirmation(accepted: boolean) {
+        const settle = settleConfirmation; settleConfirmation = undefined; confirmation.value = undefined; settle?.(accepted);
+    }
+    /** 删除步骤会丢掉它的参数和过滤条件且无法撤销，先确认。 */
+    async function requestRemoveStep(index: number) {
+        const step = config.value?.pipeline[index];
+        if (!step || !definition.value || busy.value) return;
+        const accepted = await confirm({ title: '删除这个步骤？', message: `第 ${index + 1} 步“${stepTitle(definition.value, step)}”的参数和过滤条件会一起删除，无法撤销。`, confirmLabel: '删除', danger: true });
+        // 等待确认期间步骤可能已被移动或删除，按 ID 重新定位。
+        const current = config.value?.pipeline.findIndex(item => item.id === step.id) ?? -1;
+        if (accepted && current >= 0 && !busy.value) removeStep(current);
+    }
+    /** 覆盖原文件且不备份时，原文件无法从本工具恢复，开始前再确认一次。 */
+    async function requestProcess() {
+        if (!config.value || busy.value) return;
+        if (config.value.saveMode === 'overwrite' && !config.value.backupEnabled
+            && !(await confirm({ title: '不备份就覆盖原文件？', message: '处理结果会直接替换原文件，并且没有启用备份。替换后无法从本工具恢复原文件。', confirmLabel: '继续处理', danger: true }))) return;
+        await runPipeline('process');
+    }
+
     function removeStep(index: number) {
         const pipeline = config.value?.pipeline;
         if (!pipeline?.[index]) return;
@@ -263,7 +304,8 @@ export function createWorkbench() {
         job, submitting, closing, definition, busy, missingProviders, blockedSteps,
         fail, initialize, refreshTasks, refreshProviders, browse, saveConfig, installDependency,
         launch, cancelJob, dismissJob, openJobReport, requestClose, stop: () => clearTimeout(timer),
-        runPipeline, addStep, moveStep, removeStep, updateStep,
+        runPipeline, addStep, moveStep, moveStepTo, toggleStep, removeStep, updateStep,
+        confirmation, confirm, answerConfirmation, requestRemoveStep, requestProcess,
         continueTask, showTask, checkRestore, recheckRestore, restoreSelected, openSource,
     };
 }

@@ -21,10 +21,12 @@ ADR 0006 之后界面的外观全部由项目自己的令牌和样式决定，�
     - `SelectBox.vue`：下拉选择。接口是 `modelValue`、`options`（可含分组）、`id`、`disabled`、`placeholder`。替换全部 10 处原生 `<select>`。
     - `Tip.vue`：提示。接口是 `text`、`shortcut`、`side`。替换按钮上的 `title`。
 - 浮层由 Reka 挂到 `body`，样式写在 `styles/base.css` 的 `.select-popup`、`.select-item`、`.tooltip` 中，只引用令牌。
-- 按需求逐个引入：本次只做 Select 和 Tooltip。对话框、右键菜单、折叠等在有实际需求时再封装，不预先铺开。
+- 按需求逐个引入，每个都封装成项目组件。第一步是 Select 和 Tooltip；随后补上确认对话框 `ConfirmDialog.vue`（AlertDialog）和处理线步骤的右键菜单 `StepMenu.vue`（ContextMenu）。
+- “添加步骤”选择器保留项目自己的实现，只把定位改用 `@floating-ui/dom`（Reka 的传递依赖，提升为直接依赖并精确锁定 1.8.0）。
+- 折叠面板继续用原生 `details`，展开动画用 CSS 实现，不引入 Collapsible；步骤拖拽排序用指针事件自己实现，不引入排序库。
 - 按钮、输入框、勾选框、表格等没有复杂行为的控件继续自写，不换成库组件。
 
-明确不包含：带外观的组件库（Element Plus、Naive UI 等）；把现有“添加步骤”选择器迁移到 Reka；主题系统变更。
+明确不包含：带外观的组件库（Element Plus、Naive UI 等）；把现有“添加步骤”选择器整体迁移到 Reka；主题系统变更。
 
 ## 备选方案与取舍
 
@@ -40,5 +42,5 @@ ADR 0006 之后界面的外观全部由项目自己的令牌和样式决定，�
 - 新增运行依赖 `reka-ui` 及其传递依赖（`@floating-ui/*`、`@vueuse/*`、`@tanstack/vue-virtual`、`aria-hidden`、`defu`、`ohash` 为 MIT；`@internationalized/date`、`@internationalized/number`、`@swc/helpers` 为 Apache-2.0；`tslib` 为 0BSD），登记在第三方声明。安装时未执行安装脚本，`npm audit` 为 0 项漏洞。
 - 目录外的旧过滤值仍作为可见选项保留；空值用占位文字表达，不再是一个空选项。
 - 被截断数据的完整内容（作业编号等）仍可用原生 `title`，不要求换成 `Tip`。
-- 验证结果见[验证记录](../verification/2026-11-15-headless-ui-primitives.md)。
+- 验证结果见[下拉与提示](../verification/2026-11-15-headless-ui-primitives.md)和[对话框、右键菜单与排序](../verification/2026-11-15-dialogs-menus-sorting.md)两份记录。
 - 回退方式：还原本次提交。配置、任务和报告格式未变。

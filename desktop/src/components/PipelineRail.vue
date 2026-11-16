@@ -7,6 +7,8 @@ import type { ResourceType } from '../core/types';
 import { resourceGroups, resourceKindLabel } from '../core/resource-groups';
 import Icon from './Icon.vue';
 import Tip from './Tip.vue';
+import StepMenu from './StepMenu.vue';
+import { computePosition, flip, offset, shift, size } from '@floating-ui/dom';
 
 const bench = useWorkbench();
 const { config, definition, station, scan, scanStale, busy } = bench;
@@ -46,17 +48,22 @@ function outside(event: Event) {
     const target = event.target as Node;
     if (!menu.value?.contains(target) && !addButton.value?.contains(target)) close(false);
 }
+// 按添加按钮定位：默认在下方左对齐，空间不足时翻到上方，并始终留在窗口内；高度不超过可用空间。
+async function place() {
+    if (!addButton.value || !menu.value) return;
+    const { x, y } = await computePosition(addButton.value, menu.value, {
+        strategy: 'fixed', placement: 'bottom-start',
+        middleware: [offset({ mainAxis: 2, crossAxis: 8 }), flip({ padding: 8 }), shift({ padding: 8 }),
+            size({ padding: 8, apply: ({ availableHeight }) => { menuStyle.value = { ...menuStyle.value, maxHeight: `${Math.max(160, Math.min(360, availableHeight))}px` }; } })],
+    });
+    menuStyle.value = { ...menuStyle.value, left: `${x}px`, top: `${y}px` };
+}
 function open() {
-    const rect = addButton.value!.getBoundingClientRect();
-    const below = window.innerHeight - rect.bottom;
-    const left = `${Math.max(12, Math.min(rect.left + 8, window.innerWidth - 332))}px`;
-    menuStyle.value = below >= 360 || below >= rect.top
-        ? { left, top: `${rect.bottom + 2}px`, maxHeight: `${Math.min(360, below - 12)}px` }
-        : { left, bottom: `${window.innerHeight - rect.top + 2}px`, maxHeight: `${Math.min(360, rect.top - 12)}px` };
+    menuStyle.value = { left: '0px', top: '0px', maxHeight: '360px' };
     operationId.value = '';
     query.value = '';
     adding.value = true;
-    void nextTick(() => search.value?.focus());
+    void nextTick(() => { void place(); search.value?.focus(); });
     document.addEventListener('pointerdown', outside, true);
     window.addEventListener('resize', dismiss);
 }
@@ -92,13 +99,66 @@ function menuKey(event: KeyboardEvent) {
     items[target]?.focus();
 }
 watch([busy, full], ([isBusy, isFull]) => { if (isBusy || isFull) close(false); });
+
+// ---------- 步骤排序：拖拽（指针）与 Alt+上/下（键盘）----------
+// 拖动超过阈值后才进入排序，按指针所在位置实时移动步骤；松开后吞掉这次点击，避免误切换选中项。
+const DRAG_THRESHOLD = 5;
+const line = ref<HTMLElement>();
+const draggingId = ref<string>();
+let drag: { id: string; startY: number; moved: boolean } | undefined;
+const indexOfStep = (id: string) => config.value?.pipeline.findIndex(step => step.id === id) ?? -1;
+function dragMove(event: PointerEvent) {
+    if (!drag || !line.value) return;
+    if (!drag.moved) {
+        if (Math.abs(event.clientY - drag.startY) < DRAG_THRESHOLD) return;
+        drag.moved = true; draggingId.value = drag.id;
+    }
+    const from = indexOfStep(drag.id);
+    const items = Array.from(line.value.querySelectorAll<HTMLElement>('[data-step-id]'));
+    if (from < 0 || !items.length) return;
+    // 目标位置：指针越过哪个步骤的中线，就排到它的那一侧。
+    let to = from;
+    items.forEach((item, index) => {
+        const rect = item.getBoundingClientRect(), middle = rect.top + rect.height / 2;
+        if (index < from && event.clientY < middle) to = Math.min(to, index);
+        if (index > from && event.clientY > middle) to = Math.max(to, index);
+    });
+    if (to !== from) bench.moveStepTo(from, to);
+}
+function dragEnd() {
+    window.removeEventListener('pointermove', dragMove);
+    window.removeEventListener('pointerup', dragEnd);
+    window.removeEventListener('pointercancel', dragEnd);
+    const moved = drag?.moved;
+    drag = undefined; draggingId.value = undefined;
+    if (!moved) return;
+    // 吞掉紧随松开而来的那一次点击；它若没有发生（例如在窗口外松开），下一轮事件循环就撤销，避免误吞之后的点击。
+    const swallow = (event: Event) => { event.stopPropagation(); event.preventDefault(); };
+    window.addEventListener('click', swallow, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0);
+}
+function dragStart(event: PointerEvent, id: string) {
+    if (event.button !== 0 || busy.value || (config.value?.pipeline.length || 0) < 2) return;
+    drag = { id, startY: event.clientY, moved: false };
+    window.addEventListener('pointermove', dragMove);
+    window.addEventListener('pointerup', dragEnd);
+    window.addEventListener('pointercancel', dragEnd);
+}
+function stepKey(event: KeyboardEvent, id: string) {
+    if (!event.altKey || busy.value || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+    event.preventDefault();
+    const target = event.currentTarget as HTMLElement;
+    bench.moveStep(indexOfStep(id), event.key === 'ArrowUp' ? -1 : 1);
+    void nextTick(() => target.focus());
+}
+onUnmounted(dragEnd);
 onUnmounted(() => close(false));
 </script>
 
 <template>
   <nav class="rail" aria-label="处理顺序" @scroll.self="dismiss">
     <div class="rail-heading"><strong>处理线</strong><span>{{ steps.length }} 个步骤</span></div>
-    <ol class="line">
+    <ol ref="line" class="line">
       <li class="station endpoint">
         <button type="button" class="station-button" data-station="source" :aria-current="station === 'source' ? 'true' : undefined" @click="station = 'source'">
           <span class="node" aria-hidden="true"></span>
@@ -106,18 +166,20 @@ onUnmounted(() => close(false));
         </button>
       </li>
 
-      <li v-for="item in steps" :key="item.key" class="station" :class="{ off: !item.step.enabled, missing: item.missing }" :data-step-id="item.step.id">
-        <button type="button" class="station-button" :aria-current="station === item.key ? 'true' : undefined" @click="station = item.key">
-          <span class="node numbered" aria-hidden="true">{{ item.number }}</span>
-          <span class="text">
-            <span class="title"><span class="visually-hidden">第 {{ item.number }} 步 </span>{{ item.title }}</span>
-            <span class="sub">
-              <span v-if="item.missing" class="tone missing"><span class="missing-swatch" aria-hidden="true"></span> 缺少依赖</span>
-              <span v-else-if="!item.step.enabled">已停用</span>
-              <span v-else>{{ item.tool }}</span>
+      <li v-for="(item, index) in steps" :key="item.key" class="station" :class="{ off: !item.step.enabled, missing: item.missing, dragging: draggingId === item.step.id }" :data-step-id="item.step.id">
+        <StepMenu :index="index" :count="steps.length" :enabled="item.step.enabled" :disabled="busy" @select="station = item.key" @move="bench.moveStep(index, $event)" @toggle="bench.toggleStep(index)" @remove="bench.requestRemoveStep(index)">
+          <button type="button" class="station-button" :aria-current="station === item.key ? 'true' : undefined" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" @click="station = item.key" @pointerdown="dragStart($event, item.step.id)" @keydown="stepKey($event, item.step.id)">
+            <span class="node numbered" aria-hidden="true">{{ item.number }}</span>
+            <span class="text">
+              <span class="title"><span class="visually-hidden">第 {{ item.number }} 步 </span>{{ item.title }}</span>
+              <span class="sub">
+                <span v-if="item.missing" class="tone missing"><span class="missing-swatch" aria-hidden="true"></span> 缺少依赖</span>
+                <span v-else-if="!item.step.enabled">已停用</span>
+                <span v-else>{{ item.tool }}</span>
+              </span>
             </span>
-          </span>
-        </button>
+          </button>
+        </StepMenu>
       </li>
 
       <li class="station adder">
@@ -219,6 +281,9 @@ onUnmounted(() => close(false));
 .station-button[aria-current='true'] { --ring: var(--accent-wash); background: var(--accent-wash); }
 .station-button:disabled { color: var(--text-3); }
 .station-button:focus-visible { outline-offset: -2px; }
+/* 拖拽中的步骤：抬起并标出强调色边框；其余步骤实时让位 */
+.dragging .station-button { background: var(--control); box-shadow: 0 0 0 1px var(--accent), var(--shadow-float); cursor: grabbing; --ring: var(--control); }
+.dragging { z-index: 4; }
 
 /* 节点带一圈与底色相同的描边，把竖线在节点处“断开” */
 .node {

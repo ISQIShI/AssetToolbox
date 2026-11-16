@@ -24,6 +24,8 @@
 | `components/Icon.vue` | 自绘的单色线条图标 |
 | `components/SelectBox.vue` | 下拉选择：封装 Reka UI 的 Select，接口为 `modelValue`、`options`（可分组）、`id`、`disabled`、`placeholder` |
 | `components/Tip.vue` | 提示：封装 Reka UI 的 Tooltip，接口为 `text`、`shortcut`、`side` |
+| `components/ConfirmDialog.vue` | 确认对话框：封装 Reka UI 的 AlertDialog，显示 `bench.confirmation`，在 `App.vue` 中挂载一次 |
+| `components/StepMenu.vue` | 处理线步骤的右键菜单：封装 Reka UI 的 ContextMenu，只发出 `select`、`move`、`toggle`、`remove` 事件 |
 | `components/PipelineRail.vue` | 处理线与“操作 → 资源类型”两级步骤选择器、搜索与键盘导航 |
 | `components/StepEditor.vue` | 单个步骤：启用、排序与删除命令、组合、两组参数 |
 | `components/ParameterFields.vue` | 按字段描述渲染参数控件 |
@@ -121,6 +123,14 @@ stateDiagram-v2
 - 弹出列表和提示由 Reka 通过 Teleport 挂到 `body`，不在组件的 scoped 样式作用域内，样式统一写在 `styles/base.css`。父组件要调整触发按钮的布局时用 `:deep()` 或 `base.css` 中的共享规则。
 - `Tip` 自带 `TooltipProvider`，单独挂载的组件（包括组件测试）不需要额外的提供者。它用 `as-child` 把行为加到插槽里的控件上，不增加 DOM 层级，因此不影响已有的选择器。
 - 组件测试（jsdom）不模拟指针与浮层交互：用 `tests/select.ts` 的 `selectBox()`、`choose()`、`optionLabels()` 通过 `SelectBox` 的公开接口验证本项目的逻辑。原生 E2E 用 `tests/native-select.ts` 的 `pickOption(page, scope, 标签, 核心ID)` 真实点开并点选，选项通过 `role="option"` 与 `data-value` 定位。
+
+## 确认、右键菜单与步骤排序
+
+- **确认**：`bench.confirm(request)` 返回 `Promise<boolean>`，把请求放进 `bench.confirmation`；`ConfirmDialog` 显示它并调用 `bench.answerConfirmation()`。新请求到来时，尚未回答的旧请求按取消处理。取消（按钮或 Esc）经 Reka 的 `update:open` 统一处理；确认按钮是普通按钮，先回答再关闭，避免关闭事件抢先把它判为取消。
+- `requestRemoveStep(index)` 确认后按步骤 ID 重新定位再删除，等待期间步骤被移动或作业开始都不会误删。`requestProcess()` 仅在“覆盖原文件且未启用备份”时先确认，然后调用 `runPipeline('process')`；取消时不保存配置、不提交作业。视图里的删除与开始处理都走这两个函数，不直接调用 `removeStep` / `runPipeline('process')`。
+- **右键菜单**：`StepMenu` 用 `as-child` 把行为加到步骤按钮上，不增加 DOM 层级。菜单项只发事件，移动、启停、删除仍由工作台的 `moveStep`、`toggleStep`（经 `updateStep`，保留受保护操作改为另存的规则）、`requestRemoveStep` 执行。
+- **拖拽排序**：`PipelineRail` 在步骤按钮 `pointerdown` 时开始监听 `window` 的 `pointermove` / `pointerup`（不使用指针捕获，因为重排会移动 DOM 节点）。移动超过阈值后，按指针越过了哪个步骤的中线计算目标位置并调用 `bench.moveStepTo(from, to)`，列表实时重排。松开后吞掉紧随其后的那一次 `click`，下一轮事件循环即撤销这个拦截。没有使用 HTML5 拖放，所以不需要改动 Tauri 的拖放设置。
+- **添加步骤选择器的定位**：`@floating-ui/dom` 的 `computePosition`（`fixed` 策略，`offset`、`flip`、`shift`、`size`）。选择器本身仍是项目自己的实现，留在处理线的 DOM 里，没有迁移到 Reka。
 
 ## 验证
 

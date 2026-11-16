@@ -62,7 +62,7 @@ HTTP 改动增加 `node --test tests/http.test.js`：真实回环 socket、令�
 
 界面使用系统字体，不打包字体文件；图标是 `desktop/src/components/Icon.vue` 中自绘的 SVG 路径，没有图标库依赖。原生窗口关闭了系统边框，标题栏由前端绘制，所需窗口权限登记在 `desktop/src-tauri/capabilities/default.json`，增减权限时同步[前端设计规范](design/frontend-design.md#窗口骨架)。
 
-桌面运行依赖 `reka-ui` 精确锁定 2.11.0（MIT），只作为无样式的行为层，由 `SelectBox.vue` 和 `Tip.vue` 封装后使用；升级时同步[前端设计规范](design/frontend-design.md#下拉选择与提示)、[ADR 0018](decisions/0018-headless-ui-primitives.md)与第三方声明，并重跑原生 E2E（下拉交互只有原生测试覆盖）。
+桌面运行依赖 `reka-ui` 精确锁定 2.11.0（MIT），只作为无样式的行为层，由 `SelectBox.vue`、`Tip.vue`、`ConfirmDialog.vue`、`StepMenu.vue` 封装后使用；`@floating-ui/dom` 精确锁定 1.8.0（MIT），只用于“添加步骤”选择器的定位；升级时同步[前端设计规范](design/frontend-design.md#下拉选择与提示)、[ADR 0018](decisions/0018-headless-ui-primitives.md)与第三方声明，并重跑原生 E2E（下拉交互只有原生测试覆盖）。
 
 `package.json` 的 `allowScripts` 仅批准 `esbuild@0.28.2` 的安装脚本；npm 11.20+ 会据此处理安装脚本许可。新版本提示未许可时，先审阅具体包及脚本，再更新许可，不使用全局放开所有依赖脚本的配置。`whatwg-encoding` 的弃用提示来自 jsdom 26 的传递依赖，不影响当前验证；不要仅为消除提示直接替换其内部实现。
 

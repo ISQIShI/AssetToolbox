@@ -20,6 +20,13 @@ async function finish(value: Partial<JobState>) {
     state = { ...state, done: true, phase: 'finished', exitCode: 0, ...value };
     await vi.advanceTimersByTimeAsync(250); await flushPromises();
 }
+// 确认对话框由 Reka UI 挂到 body 上，不在 wrapper 内。
+const dialog = () => document.body.querySelector<HTMLElement>('.dialog');
+async function answer(accept: boolean) {
+    await flushPromises();
+    const target = accept ? dialog()!.querySelector<HTMLElement>('[data-confirm]')! : Array.from(dialog()!.querySelectorAll<HTMLElement>('button')).find(item => item.textContent?.trim() === '取消')!;
+    target.click(); await flushPromises();
+}
 async function mountApp() { wrapper = mount(App, { attachTo: document.body }); await flushPromises(); }
 
 beforeEach(() => {
@@ -118,8 +125,14 @@ it('adds a step from the catalog menu, selects it, and removes it again', async 
     expect(wrapper.find('input[type="number"]').element).toHaveProperty('value', '512');
     await button('上移').trigger('click');
     expect(wrapper.find('.rail [data-step-id]').text()).toContain('PNG 图片缩放');
-    await button('删除步骤').trigger('click');
+    // 删除先确认：取消保留步骤，确认后才删除。
+    await button('删除步骤').trigger('click'); await flushPromises();
+    expect(dialog()!.textContent).toContain('第 1 步“PNG 图片缩放”');
+    await answer(false);
+    expect(dialog()).toBeNull(); expect(wrapper.findAll('.rail [data-step-id]')).toHaveLength(2);
+    await button('删除步骤').trigger('click'); await answer(true);
     expect(wrapper.findAll('.rail [data-step-id]')).toHaveLength(1);
+    expect(wrapper.find('.rail [data-step-id]').text()).not.toContain('PNG 图片缩放');
 });
 
 it('resumes and retries tasks by task file only', async () => {
@@ -307,4 +320,35 @@ it('switches appearance with a single click each way and returns to following th
     await toggle.trigger('click');
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(toggle.attributes('aria-label')).toBe('外观：浅色（跟随系统）');
+});
+
+it('asks before overwriting without backup and starts only after confirmation', async () => {
+    await mountApp();
+    await wrapper.find('[data-station="output"]').trigger('click');
+    await wrapper.find('.check input').setValue(false);
+    await button('开始处理').trigger('click'); await flushPromises();
+    expect(dialog()!.textContent).toContain('没有启用备份');
+    await answer(false);
+    expect(call).not.toHaveBeenCalledWith('submit', expect.anything());
+    expect(call).not.toHaveBeenCalledWith('save', expect.anything());
+    await button('开始处理').trigger('click'); await answer(true);
+    expect(call).toHaveBeenCalledWith('submit', expect.objectContaining({ request: expect.objectContaining({ mode: 'process' }) }));
+    expect(wrapper.find('.dock').exists()).toBe(true);
+});
+
+it('reorders steps from the keyboard and by position, and toggles a step without selecting another', async () => {
+    await mountApp();
+    await wrapper.find('.adder .station-button').trigger('click');
+    await wrapper.find('.choice[aria-label="图片缩放"]').trigger('click');
+    await wrapper.find('.choice[aria-label="PNG"]').trigger('click');
+    const order = () => wrapper.findAll('.rail [data-step-id]').map(item => item.text().includes('图片缩放') ? 'resize' : 'compress');
+    expect(order()).toEqual(['compress', 'resize']);
+    const second = wrapper.findAll('.rail [data-step-id] .station-button')[1]!;
+    await second.trigger('keydown', { key: 'ArrowUp', altKey: true });
+    expect(order()).toEqual(['resize', 'compress']);
+    await wrapper.findAll('.rail [data-step-id] .station-button')[0]!.trigger('keydown', { key: 'ArrowUp', altKey: true });
+    expect(order()).toEqual(['resize', 'compress']);
+    await wrapper.findAll('.rail [data-step-id] .station-button')[0]!.trigger('keydown', { key: 'ArrowDown' });
+    expect(order()).toEqual(['resize', 'compress']);
+    expect(wrapper.find('.editor h2').text()).toBe('PNG 图片缩放');
 });

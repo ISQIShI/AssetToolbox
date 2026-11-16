@@ -41,6 +41,7 @@
   --brand: #256b4d;         /* 仅用于标题栏的应用图标，与程序图标一致 */
 
   --shadow-float: 0 8px 24px rgb(20 28 48 / 0.16), 0 1px 3px rgb(20 28 48 / 0.12);
+  --scrim: rgb(20 28 48 / 0.32);   /* 对话框遮罩 */
 
   /* 字体：使用系统界面字体，与 Windows 自身一致 */
   --font-sans: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', sans-serif;
@@ -114,6 +115,7 @@
   --brand: #2f8660;
 
   --shadow-float: 0 8px 24px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.4);
+  --scrim: rgb(0 0 0 / 0.5);
 }
 
 @media (max-width: 1000px) {

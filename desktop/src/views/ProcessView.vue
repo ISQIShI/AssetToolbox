@@ -58,7 +58,7 @@ const canStart = computed(() => !busy.value && !blockedSteps.value.length && Boo
       <div class="run-actions">
         <Tip text="保存当前处理线，下次打开时恢复" shortcut="Ctrl+S"><button type="button" class="button quiet" :disabled="busy" @click="bench.saveConfig()"><Icon name="save" />保存配置</button></Tip>
         <Tip text="只统计文件，不改动任何内容"><button type="button" class="button" :disabled="busy" @click="bench.runPipeline('preview')"><Icon name="scan" />扫描预览</button></Tip>
-        <button type="button" class="button primary" :disabled="!canStart" @click="bench.runPipeline('process')"><Icon name="play" />开始处理</button>
+        <button type="button" class="button primary" :disabled="!canStart" @click="bench.requestProcess()"><Icon name="play" />开始处理</button>
       </div>
     </header>
 
@@ -76,7 +76,7 @@ const canStart = computed(() => !busy.value && !blockedSteps.value.length && Boo
           :disabled="busy"
           @update:model-value="bench.updateStep(current.index, $event)"
           @move="bench.moveStep(current.index, $event)"
-          @remove="bench.removeStep(current.index)"
+          @remove="bench.requestRemoveStep(current.index)"
           @show-tools="bench.page.value = 'tools'"
         />
 

@@ -198,6 +198,16 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await page.getByLabel('目标高度', { exact: true }).fill('20');
         await button('上移').click();
         await expect(page.locator('.rail [data-step-id]').first()).toContainText('PNG 图片缩放');
+        // 拖拽排序：把第一步拖到第二步下方；再用右键菜单移回，顺序与选中项都应保持一致。
+        const railSteps = page.locator('.rail [data-step-id] .station-button');
+        const from = (await railSteps.nth(0).boundingBox())!, to = (await railSteps.nth(1).boundingBox())!;
+        await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2); await page.mouse.down();
+        await page.mouse.move(from.x + from.width / 2, to.y + to.height * 0.8, { steps: 6 }); await page.mouse.up();
+        await expect(page.locator('.rail [data-step-id]').nth(1)).toContainText('PNG 图片缩放');
+        await expect(page.locator('.editor h2')).toHaveText('PNG 图片缩放');
+        await railSteps.nth(1).click({ button: 'right' });
+        await page.getByRole('menuitem', { name: '上移' }).click();
+        await expect(page.locator('.rail [data-step-id]').first()).toContainText('PNG 图片缩放');
         await page.screenshot({ path: info.outputPath('resize.png'), fullPage: true });
         await button('开始处理').click(); await done();
         const resized = await sharp(path.join(imageOutput, '透明.png')).metadata();
@@ -205,7 +215,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         expect((await sharp(path.join(imageSource, '透明.png')).metadata()).width).toBe(80);
         await button('关闭作业结果').click();
         await page.locator('.rail [data-step-id] button').first().click();
-        await button('删除步骤').click();
+        await button('删除步骤').click(); await button('删除').click();
         const adapterSource = path.join(root, '适配器素材'), adapterOutput = path.join(root, '适配器结果'); fs.mkdirSync(adapterSource);
         fs.writeFileSync(path.join(adapterSource, 'a.pack'), 'PACK:axxxxxxxxxxxxxxxxx');
         await station('source').click(); await page.getByLabel('来源文件夹', { exact: true }).fill(adapterSource);
@@ -243,7 +253,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         expect(JSON.parse(cliStatus.stdout).result).toEqual(nativeStatus);
         expect(nativeStatus.taskId).toBe(adapterTask.id); expect(nativeStatus.task).not.toHaveProperty('taskFile');
         expect(nativeStatus.hasReport).toBe(true); expect(nativeStatus).not.toHaveProperty('reportDirectory');
-        await button('关闭作业结果').click(); await button('删除步骤').click();
+        await button('关闭作业结果').click(); await button('删除步骤').click(); await button('删除').click();
         await station('source').click();
         await page.getByLabel('来源文件夹', { exact: true }).fill(source);
         await station('output').click();

@@ -13,6 +13,7 @@ import JobsView from './views/JobsView.vue';
 import JobDock from './components/JobDock.vue';
 import TitleBar from './components/TitleBar.vue';
 import Tip from './components/Tip.vue';
+import ConfirmDialog from './components/ConfirmDialog.vue';
 import Icon, { type IconName } from './components/Icon.vue';
 
 const bench = createWorkbench();
@@ -101,6 +102,7 @@ onUnmounted(() => { window.removeEventListener('keydown', shortcut); bench.stop(
         </main>
 
         <JobDock v-if="job" />
+        <ConfirmDialog />
       </div>
     </div>
 

@@ -117,6 +117,30 @@ input[type='search']::-webkit-search-cancel-button { display: none; }
 .select-group + .select-group { margin-top: var(--s-1); padding-top: var(--s-1); border-top: 1px solid var(--border-soft); }
 .select-group-label { padding: var(--s-1) var(--s-2) 2px; color: var(--text-2); font-size: var(--t-small); }
 
+/* 右键菜单（StepMenu 等）：与下拉列表同一套浮层外观 */
+.menu-popup { z-index: 40; min-width: 168px; padding: var(--s-1); border: 1px solid var(--border-soft); border-radius: var(--r-float); background: var(--control); box-shadow: var(--shadow-float); }
+.menu-item { display: flex; align-items: center; gap: var(--s-2); min-height: 28px; padding: 0 var(--s-3) 0 var(--s-2); border-radius: var(--r-control); outline: none; white-space: nowrap; }
+.menu-item[data-highlighted] { background: var(--hover); }
+.menu-item[data-disabled] { color: var(--text-3); }
+.menu-item.danger { color: var(--danger); }
+.menu-item.danger[data-highlighted] { background: var(--danger-wash); }
+.menu-item kbd { margin-left: auto; padding-left: var(--s-4); color: var(--text-2); font: inherit; font-size: var(--t-small); }
+.menu-separator { height: 1px; margin: var(--s-1) 0; background: var(--border-soft); }
+
+/* 确认对话框（ConfirmDialog）：遮罩压暗窗口内容，对话框居中 */
+.dialog-overlay { position: fixed; inset: 0; z-index: 60; background: var(--scrim); }
+.dialog { position: fixed; z-index: 61; top: 50%; left: 50%; transform: translate(-50%, -50%); display: grid; gap: var(--s-2); width: min(420px, calc(100vw - 48px)); padding: var(--s-5); border: 1px solid var(--border-soft); border-radius: var(--r-float); background: var(--control); box-shadow: var(--shadow-float); }
+.dialog h2 { font-size: var(--t-title); }
+.dialog p { color: var(--text-2); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-3); }
+.button.danger-solid { border-color: var(--danger); background: var(--danger); color: var(--control); font-weight: 600; }
+.button.danger-solid:hover:not(:disabled) { background-image: linear-gradient(var(--pressed), var(--pressed)); }
+
+/* 折叠面板（details）展开与收起的高度过渡 */
+:root { interpolate-size: allow-keywords; }
+details::details-content { block-size: 0; overflow: clip; transition: block-size 0.15s ease, content-visibility 0.15s allow-discrete; }
+details[open]::details-content { block-size: auto; }
+
 /* 提示（Tip） */
 .tooltip { z-index: 50; display: flex; align-items: center; gap: var(--s-2); max-width: 280px; padding: 5px var(--s-2); border: 1px solid var(--border-soft); border-radius: var(--r-control); background: var(--control); color: var(--text); font-size: var(--t-small); line-height: 1.4; box-shadow: var(--shadow-float); pointer-events: none; }
 .tooltip kbd { padding: 0 5px; border: 1px solid var(--border-soft); border-radius: 3px; background: var(--pane); color: var(--text-2); font: inherit; white-space: nowrap; }
