@@ -2,8 +2,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { byExtension, providers, operations, normalizePipeline } = require('./framework/registry');
-const { relativeFile, safeSource, digest } = require('./tasks');
+const { byExtension, providers, operations, normalizePipeline, normalizeFilter, propertyCatalog } = require('./framework/registry');
+const { matches } = require('./framework/filters');
+const { relativeFile, safeSource, digest, snapshot } = require('./tasks');
 const { providerAvailability } = require('./framework/availability');
 
 function isWithin(parent, child) {
@@ -75,6 +76,7 @@ function collectResources(folder, { exclude = [], extensions = byExtension, shou
 
 function prepareFolder(folder, options) {
     const pipeline = normalizePipeline(options.pipeline);
+    const sourceFilter = normalizeFilter(options.sourceFilter);
     const enabled = pipeline.filter(step => step.enabled);
     const observationOnly = enabled.length > 0 && enabled.every(step => operations.get(step.operation).resultPolicy === 'observe');
     if (enabled.some(step => operations.get(step.operation).preserveOriginal) && options.outputDir === undefined && options.backupDir === undefined) throw new Error('音频处理需另存结果，或在覆盖时指定备份目录，以保留原文件');
@@ -95,14 +97,30 @@ function prepareFolder(folder, options) {
         });
         collected = { root: sourceRoot, files };
     } else collected = collectResources(sourceRoot, { exclude: excluded, shouldCancel: options.shouldCancel, onProgress: options.onProgress });
-    return { ...collected, pipeline, outputRoot, backupRoot };
+    const discovered = collected.files.length, sourceSnapshots = new Map();
+    let filteredOut = 0;
+    // 固定清单路径只做安全校验；续跑/重试不能重新套来源条件而悄悄缩小或扩大任务。
+    if (options.fileList === undefined && sourceFilter.any.length) {
+        const selected = [];
+        for (const filename of collected.files) {
+            if (options.shouldCancel?.()) { collected.cancelled = true; break; }
+            const stat = safeSource(sourceRoot, filename), before = snapshot(stat);
+            let included;
+            try { included = matches(sourceFilter, propertyCatalog.context({ filename, relativePath: path.relative(sourceRoot, filename), resourceType: byExtension.get(path.extname(filename).toLowerCase()), stat })); }
+            catch (error) { throw Error('来源属性读取失败（' + path.relative(sourceRoot, filename) + '）：' + error.message); }
+            if (JSON.stringify(before) !== JSON.stringify(snapshot(safeSource(sourceRoot, filename)))) throw Error('来源在属性读取期间发生变化：' + filename);
+            if (included) { selected.push(filename); sourceSnapshots.set(filename, before); } else filteredOut++;
+        }
+        collected.files = selected;
+    }
+    return { ...collected, pipeline, sourceFilter, sourceSnapshots, discovered, filteredOut, outputRoot, backupRoot };
 }
 
-// 只读预检：不读取素材内容、不执行转换；允许提供方启动只读依赖检查进程。
+// 只读预检：按过滤器需要读取属性，不执行转换；允许提供方启动只读依赖检查进程。
 function scanFolder(folder, options = {}) {
-    const { root, files, pipeline, outputRoot, backupRoot, cancelled } = prepareFolder(folder, options);
+    const { root, files, pipeline, outputRoot, backupRoot, cancelled, discovered, filteredOut } = prepareFolder(folder, options);
     const result = { root, outputRoot, backupRoot, total: files.length, checked: 0, totalBytes: 0, enabledFiles: 0,
-        conflicts: 0, issues: [], resources: [], cancelled: Boolean(cancelled) };
+        discovered, filteredOut, conflicts: 0, issues: [], resources: [], cancelled: Boolean(cancelled) };
     const groups = new Map();
     const issue = message => { if (result.issues.length < 30) result.issues.push(message); };
     for (const [index, filename] of files.entries()) {
@@ -216,7 +234,7 @@ function replaceIfUnchanged(filename, original, processed, mode) {
     }
 }
 
-function processResource(filename, workDirectory, executables, pipeline) {
+function processResource(filename, workDirectory, executables, pipeline, relativePath) {
     const type = byExtension.get(path.extname(filename).toLowerCase());
     if (fs.lstatSync(filename).isSymbolicLink()) throw new Error('文件已变为符号链接，已取消处理');
     const original = fs.readFileSync(filename), mode = fs.statSync(filename).mode;
@@ -232,6 +250,10 @@ function processResource(filename, workDirectory, executables, pipeline) {
         if (!type.validate(current)) throw new Error('文件内容不是有效的 ' + type.displayName + ' 格式');
         for (const step of steps) {
             const provider = providers.get(step.provider), operation = operations.get(step.operation);
+            if (!matches(step.filter, propertyCatalog.context({ filename, relativePath, resourceType: type, buffer: current, stat: fs.statSync(filename) }))) {
+                stepResults.push({ id: step.id, operation: step.operation, provider: step.provider, status: 'filtered', message: '当前输入未满足步骤过滤条件', inputBytes: current.length, outputBytes: current.length });
+                continue;
+            }
             fs.writeFileSync(input, current);
             if (fs.existsSync(output)) fs.unlinkSync(output);
             const result = provider.adapters[operation.id].execute({ executable: executables.get(provider.id), input, output, workDirectory,
@@ -265,8 +287,8 @@ function processFolder(folder, options = {}) {
     const { log = console.log, onProgress = () => {}, onFile = () => {}, shouldCancel = () => false } = options;
     // 参数校验必须早于扫描和文件写入；界面/API/命令行使用相同规则。
     const started = Date.now();
-    const { root, files, pipeline, outputRoot, backupRoot, cancelled } = prepareFolder(folder, options);
-    const summary = { total: files.length, processed: 0, skipped: 0, failed: 0, savedBytes: 0, copied: 0, backedUp: 0, backupDirectory: null };
+    const { root, files, pipeline, outputRoot, backupRoot, cancelled, discovered, filteredOut, sourceSnapshots } = prepareFolder(folder, options);
+    const summary = { total: files.length, discovered, filteredOut, processed: 0, skipped: 0, failed: 0, savedBytes: 0, copied: 0, backedUp: 0, backupDirectory: null };
     if (cancelled || shouldCancel()) return { ...summary, cancelled: true };
     const backupSession = backupRoot && (options.backupSession || path.join(backupRoot, `backup-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`));
     if (backupSession && (path.dirname(backupSession) !== backupRoot || !path.basename(backupSession).startsWith('backup-'))) throw new Error('备份子目录无效');
@@ -304,9 +326,10 @@ function processFolder(folder, options = {}) {
                 status: 'failed', originalBytes: null, outputBytes: null, savedBytes: 0, copied: false, backedUp: false, message: '' };
             onProgress({ phase: 'processing', total: files.length, processed: index, current: relativePath, summary: { ...summary } });
             try {
-                safeSource(root, filename);
+                const currentSnapshot = snapshot(safeSource(root, filename));
+                if (sourceSnapshots.has(filename) && JSON.stringify(sourceSnapshots.get(filename)) !== JSON.stringify(currentSnapshot)) throw Error('源文件在来源过滤后发生变化，未处理');
                 options.beforeFile?.(relativePath, filename);
-                const result = processResource(filename, workDirectory, executables, pipeline);
+                const result = processResource(filename, workDirectory, executables, pipeline, relativePath);
                 record.steps = result.stepResults;
                 record.readOnly = result.readOnly;
                 record.originalBytes = result.original.length;

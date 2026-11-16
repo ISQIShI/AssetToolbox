@@ -1,0 +1,7 @@
+{
+  "schema": "asset-toolbox.filter/1",
+  "any": [{ "all": [
+    { "property": "resource-type", "operator": "eq", "value": "jpg" },
+    { "property": "image-width", "operator": "gt", "value": 1024 }
+  ] }]
+}

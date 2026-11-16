@@ -44,7 +44,7 @@ function processAlive(pid) {
     catch (error) { return error.code !== 'ESRCH'; }
 }
 function validateHeader(header) {
-    if (!header || header.schema !== 'asset-toolbox.task/1' || typeof header.id !== 'string' || typeof header.source !== 'string' || !path.isAbsolute(header.source) ||
+    if (!header || header.schema !== 'asset-toolbox.task/2' || typeof header.id !== 'string' || typeof header.source !== 'string' || !path.isAbsolute(header.source) ||
         !Array.isArray(header.pipeline) || header.pipeline.some(step => !step || typeof step.id !== 'string' || !step.versions)) throw new Error('任务断点格式无效或版本不支持');
     for (const key of ['outputDir', 'backupDir']) if (header[key] !== null && (typeof header[key] !== 'string' || !path.isAbsolute(header[key]))) throw new Error('任务路径无效：' + key);
     if (header.outputDir && header.backupDir) throw new Error('任务保存方式冲突');
@@ -54,8 +54,9 @@ function createTask(plan, root = TASK_ROOT) {
     fs.mkdirSync(root, { recursive: true });
     const id = new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID();
     const directory = path.join(root, id); fs.mkdirSync(directory);
-    const header = { schema: 'asset-toolbox.task/1', id, createdAt: new Date().toISOString(), source: plan.root,
-        outputDir: plan.outputRoot, backupDir: plan.backupRoot, pipeline: plan.pipeline,
+    const header = { schema: 'asset-toolbox.task/2', id, createdAt: new Date().toISOString(), source: plan.root,
+        outputDir: plan.outputRoot, backupDir: plan.backupRoot, pipeline: plan.pipeline, sourceFilter: plan.sourceFilter,
+        sourceSelection: { discovered: plan.discovered, filteredOut: plan.filteredOut },
         backupSession: plan.backupRoot ? path.join(plan.backupRoot, 'backup-' + id) : null };
     const taskFile = path.join(directory, 'task.json');
     writeDurable(taskFile, JSON.stringify(header, null, 2));
@@ -67,7 +68,7 @@ function loadTask(taskFile) {
     const header = JSON.parse(fs.readFileSync(taskFile, 'utf8').replace(/^\uFEFF/, ''));
     validateHeader(header);
     const entries = new Map(), journal = path.join(path.dirname(taskFile), 'events.jsonl');
-    let scanComplete = false, restoreStarted = false, restoreSelection = null, validLength = 0;
+    let scanComplete = false, restoreStarted = false, restoreSelection = null, validLength = 0, sourceSelection = header.sourceSelection;
     const apply = event => {
         if (event.type === 'plan') {
             if (scanComplete || !Array.isArray(event.files)) throw new Error('任务扫描记录无效');
@@ -76,6 +77,7 @@ function loadTask(taskFile) {
                 if (entries.has(file.path) || typeof file.resourceType !== 'string' || !file.snapshot || !Number.isFinite(file.snapshot.size) || !Number.isFinite(file.snapshot.mtimeMs)) throw new Error('任务文件清单无效');
                 entries.set(file.path, { ...file, status: 'pending', ownedOutputHash: null });
             }
+            sourceSelection = event.sourceSelection || sourceSelection;
             scanComplete = true;
         } else if (event.type === 'intent' || event.type === 'result') {
             const entry = entries.get(event.path);
@@ -113,7 +115,7 @@ function loadTask(taskFile) {
         for (const line of bytes.subarray(0, validLength).toString('utf8').split('\n').filter(Boolean)) apply(JSON.parse(line));
     }
     let locked = false;
-    const task = { header, taskFile, entries, get scanComplete() { return scanComplete; }, get restoreStarted() { return restoreStarted; }, get restoreSelection() { return restoreSelection; }, get journalLength() { return validLength; },
+    const task = { header, taskFile, entries, get sourceSelection() { return sourceSelection; }, get scanComplete() { return scanComplete; }, get restoreStarted() { return restoreStarted; }, get restoreSelection() { return restoreSelection; }, get journalLength() { return validLength; },
         lock() {
             const filename = path.join(path.dirname(taskFile), 'task.lock'), token = randomUUID();
             const claim = path.join(path.dirname(taskFile), `claim-${process.pid}-${token}.lock`);
@@ -141,7 +143,7 @@ function loadTask(taskFile) {
                 const fresh = loadTask(taskFile);
                 if (JSON.stringify(fresh.header) !== JSON.stringify(header)) throw new Error('任务定义已改变，请重新选择任务');
                 entries.clear(); for (const [key, value] of fresh.entries) entries.set(key, value);
-                scanComplete = fresh.scanComplete; restoreStarted = fresh.restoreStarted; restoreSelection = fresh.restoreSelection; validLength = fresh.journalLength;
+                scanComplete = fresh.scanComplete; sourceSelection = fresh.sourceSelection; restoreStarted = fresh.restoreStarted; restoreSelection = fresh.restoreSelection; validLength = fresh.journalLength;
                 if (fs.existsSync(journal)) fs.truncateSync(journal, validLength);
             } catch (error) { fs.unlinkSync(filename); locked = false; throw error; }
             return () => {

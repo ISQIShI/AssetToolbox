@@ -11,7 +11,7 @@ function enter(request, directory) {
     if (!fs.existsSync(filename)) return acquire();
     const meta = JSON.parse(fs.readFileSync(filename, 'utf8'));
     const claim = JSON.parse(fs.readFileSync(path.join(directory, 'dispatch.json'), 'utf8'));
-    const root = path.join(__dirname, '..', 'data', 'jobs', 'v5');
+    const root = path.join(__dirname, '..', 'data', 'jobs', 'v6');
     if (meta.schema !== JOB || !/^[a-f0-9]{64}$/.test(meta.id) || path.resolve(directory) !== path.join(root, meta.id) ||
         claim.schema !== 'asset-toolbox.dispatch/3' || claim.owner !== meta.owner || claim.sequence !== meta.sequence ||
         process.ppid !== meta.ownerPid || !alive(meta.ownerPid)) fail('UNSUPPORTED_VERSION', '工作进程缺少有效的调度声明');

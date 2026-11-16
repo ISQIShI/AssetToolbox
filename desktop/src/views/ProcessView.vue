@@ -7,6 +7,7 @@ import StepEditor from '../components/StepEditor.vue';
 import PathField from '../components/PathField.vue';
 import ScanSummary from '../components/ScanSummary.vue';
 import Icon from '../components/Icon.vue';
+import FilterEditor from '../components/FilterEditor.vue';
 
 const bench = useWorkbench();
 const { config, definition, boot, station, scan, scanStale, busy, blockedSteps } = bench;
@@ -107,6 +108,7 @@ const canStart = computed(() => !busy.value && !blockedSteps.value.length && Boo
           <section class="group">
             <PathField v-model="config.sourceDir" label="来源文件夹" dialog-title="选择来源文件夹" :disabled="busy" />
           </section>
+          <FilterEditor v-model="config.sourceFilter" :properties="definition.properties" :disabled="busy" title="来源过滤" hint="仅匹配的文件进入任务。排除的文件不复制、不处理、不备份；续跑使用已经固定的清单。分辨率可分别设置宽度、高度或总像素数。" />
           <section class="coverage">
             <h3>会识别的资源</h3>
             <div class="grid-frame">

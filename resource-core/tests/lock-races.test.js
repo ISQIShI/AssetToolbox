@@ -128,7 +128,7 @@ test('an orphan worker retains resources after finishing work until its process 
     try {
         const end = Date.now() + 10000;
         while (!fs.existsSync(finished)) { assert.ok(Date.now() < end); await delay(10); }
-        const directory = path.join(f.core, 'data/jobs/v5', job.jobId);
+        const directory = path.join(f.core, 'data/jobs/v6', job.jobId);
         const metaFile = path.join(directory, 'job.json'), meta = JSON.parse(fs.readFileSync(metaFile));
         const worker = JSON.parse(fs.readFileSync(path.join(directory, 'worker.json')));
         const dead = spawnSync(process.execPath, ['-e', ''], { windowsHide: true }); assert.equal(dead.status, 0);
@@ -141,7 +141,7 @@ test('an orphan worker retains resources after finishing work until its process 
         observer.queue.tick();
         assert.equal(observer.status(next.jobId).phase, 'queued');
         assert.equal(observer.status(next.jobId).waitReason, 'resource-conflict');
-        assert.equal(fs.existsSync(path.join(f.core, 'data/jobs/v5', next.jobId, 'dispatch.json')), false);
+        assert.equal(fs.existsSync(path.join(f.core, 'data/jobs/v6', next.jobId, 'dispatch.json')), false);
         assert.throws(() => lock.acquire(), { code: 'BUSY' });
         fs.writeFileSync(exit, '');
         const first = await f.until(job.jobId); assert.equal(first.exitCode, 0, JSON.stringify(first));

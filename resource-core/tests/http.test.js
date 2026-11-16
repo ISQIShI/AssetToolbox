@@ -30,7 +30,7 @@ async function fixture(t, gated = false) {
     t.after(async () => { fs.writeFileSync(gate, ''); await server.close(); assert.equal(path.dirname(fs.realpathSync(root)), parent); assert.ok(path.basename(root).startsWith('asset-http-')); fs.rmSync(root, { recursive: true, force: true }); });
     const request = { mode: 'process', folder: source, outputDir: output, pipeline: [{ id: 'compress', resourceType: 'fixture', operation: 'compress', provider: 'fixture', enabled: true, parameters: {}, providerOptions: {} }] };
     const call = async (action, input = {}) => {
-        const response = await fetch(url + '/api/v7/' + action, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+        const response = await fetch(url + '/api/v8/' + action, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
         return { status: response.status, body: await response.json() };
     };
     const until = async (jobId, predicate = state => state.done) => {
@@ -56,7 +56,7 @@ function raw(url, { headers = {}, body = '{}', method = 'POST', chunks } = {}) {
 }
 
 test('HTTP requires token, correct Host and no browser Origin, and exposes only Agent actions', async t => {
-    const f = await fixture(t), endpoint = f.url + '/api/v7/capabilities';
+    const f = await fixture(t), endpoint = f.url + '/api/v8/capabilities';
     assert.equal(f.server.server.address().address, '127.0.0.1');
     assert.equal((await raw(endpoint)).status, 401);
     assert.equal((await raw(endpoint, { headers: { Authorization: 'Bearer ' + 'x'.repeat(43) } })).status, 401);
@@ -65,7 +65,7 @@ test('HTTP requires token, correct Host and no browser Origin, and exposes only 
     assert.equal((await raw(endpoint, { headers: { ...headers, Host: 'evil.example' } })).status, 403);
     assert.equal((await raw(endpoint, { headers, method: 'GET' })).status, 405);
     assert.equal((await raw(endpoint, { headers, method: 'OPTIONS' })).status, 405);
-    const discovered = await f.call('capabilities'); assert.equal(discovered.status, 200); assert.equal(discovered.body.result.apiVersion, 3);
+    const discovered = await f.call('capabilities'); assert.equal(discovered.status, 200); assert.equal(discovered.body.result.apiVersion, 4);
     assert.equal((await f.call('bootstrap')).status, 404); assert.equal((await f.call('save')).status, 404);
     const oldApi = await raw(f.url + '/api/v1/capabilities', { headers });
     assert.equal(oldApi.status, 410); assert.equal(JSON.parse(oldApi.text).error.code, 'UNSUPPORTED_VERSION');
@@ -73,6 +73,7 @@ test('HTTP requires token, correct Host and no browser Origin, and exposes only 
     assert.equal((await raw(f.url + '/api/v3/capabilities', { headers })).status, 410);
     assert.equal((await raw(f.url + '/api/v4/capabilities', { headers })).status, 410);
     assert.equal((await raw(f.url + '/api/v6/capabilities', { headers })).status, 410);
+    assert.equal((await raw(f.url + '/api/v7/capabilities', { headers })).status, 410);
     assert.equal((await f.call('queue')).body.result.slots.length, 2);
     assert.equal((await f.call('scheduling-set', { maxConcurrent: 3 })).status, 403);
     assert.equal((await f.call('storage-preview')).status, 403);
@@ -85,7 +86,7 @@ test('HTTP requires token, correct Host and no browser Origin, and exposes only 
 });
 
 test('HTTP rejects malformed, oversized and compressed inputs before application dispatch', async t => {
-    const f = await fixture(t), endpoint = f.url + '/api/v7/capabilities';
+    const f = await fixture(t), endpoint = f.url + '/api/v8/capabilities';
     const headers = { Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json' };
     assert.equal((await raw(endpoint, { headers, body: '{' })).status, 400);
     assert.equal((await raw(endpoint, { headers, body: Buffer.from([0xff]) })).status, 400);
@@ -95,7 +96,7 @@ test('HTTP rejects malformed, oversized and compressed inputs before application
     assert.equal((await raw(endpoint, { headers, chunks: ['"', 'x'.repeat(1024 * 1024), '"'] })).status, 413);
     assert.equal((await f.call('capabilities', [])).status, 400);
     assert.equal((await f.call('capabilities')).status, 200);
-    assert.equal(fs.existsSync(path.join(f.core, 'data/jobs/v5')), false);
+    assert.equal(fs.existsSync(path.join(f.core, 'data/jobs/v6')), false);
 });
 
 test('HTTP submit survives request completion, shares idempotency with CLI and returns paginated results', async t => {
@@ -152,7 +153,7 @@ test('standalone HTTP entry needs no MCP package; occupied ports fail cleanly wi
     const args = [script, '--policy', f.policyFile, '--token-file', tokenFile, '--port'];
     const occupied = spawnSync(process.execPath, [...args, String(new URL(f.url).port)], { encoding: 'utf8', windowsHide: true, timeout: 10000 });
     assert.equal(occupied.status, 1); assert.match(occupied.stderr, /EADDRINUSE/); assert.equal(occupied.stderr.includes(f.token), false);
-    assert.equal(fs.existsSync(path.join(f.core, 'data/jobs/v5')), false);
+    assert.equal(fs.existsSync(path.join(f.core, 'data/jobs/v6')), false);
     const child = spawn(process.execPath, [...args, '0'], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const exited = new Promise(resolve => child.once('close', resolve));
     t.after(async () => { child.kill(); await exited; });
@@ -168,10 +169,10 @@ test('standalone HTTP entry needs no MCP package; occupied ports fail cleanly wi
 test('aborted request bodies do not submit work or poison subsequent HTTP requests', async t => {
     const f = await fixture(t);
     await new Promise(resolve => {
-        const req = http.request(f.url + '/api/v7/submit', { method: 'POST', headers: { Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json', 'Content-Length': 500 } });
+        const req = http.request(f.url + '/api/v8/submit', { method: 'POST', headers: { Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json', 'Content-Length': 500 } });
         req.on('error', () => {}); req.on('close', resolve);
         req.write('{"request":'); setTimeout(() => req.destroy(), 40);
     });
     assert.equal((await f.call('capabilities')).status, 200);
-    assert.equal(fs.existsSync(path.join(f.core, 'data/jobs/v5')), false);
+    assert.equal(fs.existsSync(path.join(f.core, 'data/jobs/v6')), false);
 });

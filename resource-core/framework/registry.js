@@ -27,6 +27,8 @@ function discover(root, category) {
 }
 function createRegistry(root = path.join(__dirname, '..')) {
     const resourceTypes = discover(root, 'resource-types'), operations = discover(root, 'operations'), providers = discover(root, 'providers');
+    const propertyCatalog = require('./properties').createProperties(root, resourceTypes);
+    const normalizeFilter = (input, type) => require('./filters').normalizeFilter(input, propertyCatalog, type);
     const byExtension = new Map();
     for (const type of resourceTypes.values()) {
         if (typeof type.kind !== 'string' || !Array.isArray(type.extensions) || !type.extensions.length || typeof type.validate !== 'function') throw new Error('资源类型定义无效：' + type.id);
@@ -77,7 +79,7 @@ function createRegistry(root = path.join(__dirname, '..')) {
         return input.map(step => {
             if (!step || typeof step !== 'object' || Array.isArray(step) || typeof step.id !== 'string' || !identifier.test(step.id) || seen.has(step.id) || typeof step.enabled !== 'boolean') throw new Error('步骤 ID/开关无效或重复');
             seen.add(step.id);
-            const allowed = ['id', 'resourceType', 'operation', 'provider', 'enabled', 'parameters', 'providerOptions', 'versions'];
+            const allowed = ['id', 'resourceType', 'operation', 'provider', 'enabled', 'parameters', 'providerOptions', 'versions', 'filter'];
             if (Object.keys(step).some(key => !allowed.includes(key))) throw new Error('步骤包含未知字段');
             const type = resourceTypes.get(step.resourceType), operation = operations.get(step.operation), provider = providers.get(step.provider);
             if (!type || !operation || !provider || !provider.supports.some(s => s.resourceType === type.id && s.operation === operation.id)) throw new Error('资源类型、操作与提供方不匹配：' + step.id);
@@ -85,18 +87,18 @@ function createRegistry(root = path.join(__dirname, '..')) {
             const versions = { resourceType: type.version, operation: operation.version, provider: provider.version, adapter: adapter.version };
             if (step.versions !== undefined && (!step.versions || typeof step.versions !== 'object' || Array.isArray(step.versions) || Object.keys(step.versions).length !== 4 || Object.keys(versions).some(key => step.versions[key] !== versions[key]))) throw new Error('步骤实现版本不匹配（须包含当前适配器版本）：' + step.id);
             return { id: step.id, resourceType: type.id, operation: operation.id, provider: provider.id, enabled: step.enabled,
-                parameters: normalizeParameters(operation.schema, step.parameters), providerOptions: normalizeParameters(adapter.schema, step.providerOptions), versions };
+                parameters: normalizeParameters(operation.schema, step.parameters), providerOptions: normalizeParameters(adapter.schema, step.providerOptions), versions, filter: normalizeFilter(step.filter, type.id) };
         });
     }
     function describe() {
         const base = definition => ({ id: definition.id, displayName: definition.displayName, description: definition.description || '', version: definition.version });
-        return { apiVersion: 3,
+        return { apiVersion: 4, properties: propertyCatalog.describe(), filterSchema: require('./filters').SCHEMA,
             resourceTypes: [...resourceTypes.values()].map(type => ({ ...base(type), kind: type.kind, extensions: type.extensions })),
             operations: [...operations.values()].map(operation => ({ ...base(operation), accepts: operation.accepts, resultPolicy: operation.resultPolicy, preserveOriginal: Boolean(operation.preserveOriginal), fields: operation.schema.fields })),
             providers: [...providers.values()].map(provider => ({ ...base(provider), supports: provider.supports,
                 adapters: Object.entries(provider.adapters).map(([operation, adapter]) => ({ operation, version: adapter.version, fields: adapter.schema.fields })),
                 availability: providerAvailability(provider), acquisition: provider.acquisition || null, dependency: management(provider.id, root) })) };
     }
-    return { resourceTypes, operations, providers, byExtension, normalizePipeline, describe };
+    return { resourceTypes, operations, providers, byExtension, normalizePipeline, normalizeFilter, propertyCatalog, describe };
 }
 module.exports = { ...createRegistry(), createRegistry };

@@ -8,7 +8,7 @@ beforeEach(() => {
     snapshot = { configured: false, config: null, state: 'stopped', endpoints: null, owned: false, tokenFile: null };
     vi.resetAllMocks(); vi.mocked(call).mockImplementation(async (action, input: any) => {
         if (action === 'service-configure') snapshot = { ...snapshot, configured: true, config: input };
-        if (action === 'service-start') snapshot = { ...snapshot, state: 'running', owned: true, endpoints: { apiUrl: 'http://127.0.0.1:1234/api/v7/', mcpUrl: null } };
+        if (action === 'service-start') snapshot = { ...snapshot, state: 'running', owned: true, endpoints: { apiUrl: 'http://127.0.0.1:1234/api/v8/', mcpUrl: null } };
         if (action === 'service-stop') snapshot = { ...snapshot, state: 'stopped' };
         return snapshot;
     });

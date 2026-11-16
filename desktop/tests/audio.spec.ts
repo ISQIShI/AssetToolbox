@@ -19,7 +19,7 @@ test(`${browserOnly ? 'browser with real core' : 'native'} audio analysis, peak-
     const ffmpeg = path.join(tool, 'resource-core/providers/ffmpeg/ffmpeg.exe');
     require(path.join(project, 'resource-core/providers/ffmpeg/audio')).run(ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2', path.join(source, 'tone.wav')]);
     const original = fs.readFileSync(path.join(source, 'tone.wav'));
-    const settings = { schema: 'asset-toolbox.settings/2', sourceDir: source, outputDir: '', backupDir: '', saveMode: 'saveAs', backupEnabled: false,
+    const settings = { schema: 'asset-toolbox.settings/3', sourceDir: source, outputDir: '', backupDir: '', saveMode: 'saveAs', backupEnabled: false,
         pipeline: [{ id: 'audio', resourceType: 'wav', operation: 'audio-analyze', provider: 'ffmpeg', enabled: true, parameters: {}, providerOptions: {} }] };
     fs.mkdirSync(path.join(tool, 'resource-core/data')); fs.writeFileSync(path.join(tool, 'resource-core/data/settings.json'), JSON.stringify(settings));
     let child: ChildProcess | undefined, browser: Browser | undefined, page: Page | undefined;

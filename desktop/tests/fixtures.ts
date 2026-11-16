@@ -1,7 +1,8 @@
 import type { Configuration, Definition, Provider, Task } from '../src/core/types';
+import { previewProperties } from '../src/core/preview-properties';
 
 export const definition: Definition = {
-    apiVersion: 3,
+    apiVersion: 4, properties: previewProperties, filterSchema: 'asset-toolbox.filter/1',
     resourceTypes: [{ id: 'png', displayName: 'PNG', extensions: ['.png'], kind: 'image', version: '1.0.0' }],
     operations: [
         { id: 'compress', displayName: '压缩', description: '仅在结果体积变小时采用新内容。', accepts: ['image'], resultPolicy: 'smaller-only', fields: [], version: '1.0.0' },
@@ -22,7 +23,7 @@ export const missingProvider = (provider: Provider = definition.providers[0]!): 
 });
 
 export const config: Configuration = {
-    schema: 'asset-toolbox.settings/2', sourceDir: 'D:\\中文 素材', saveMode: 'overwrite', outputDir: 'D:\\输出', backupDir: 'D:\\备份', backupEnabled: true,
+    schema: 'asset-toolbox.settings/3', sourceDir: 'D:\\中文 素材', saveMode: 'overwrite', outputDir: 'D:\\输出', backupDir: 'D:\\备份', backupEnabled: true,
     pipeline: [{ id: 'first', resourceType: 'png', operation: 'compress', provider: 'test', enabled: true, parameters: {}, providerOptions: { level: 3, rate: .5, flag: false, mode: 'a', text: '长文本' } }],
 };
 

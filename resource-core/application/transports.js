@@ -12,7 +12,7 @@ async function startHttp(service, { port, token, mcp = false }) {
     const server = require('./http').createHttpServer({ service, port, token, ...adapter });
     try {
         const { url } = await server.listen();
-        return { ...server, endpoints: { apiUrl: url + '/api/v7/', healthUrl: url + '/health', mcpUrl: mcp ? url + '/mcp' : null } };
+        return { ...server, endpoints: { apiUrl: url + '/api/v8/', healthUrl: url + '/health', mcpUrl: mcp ? url + '/mcp' : null } };
     } catch (error) { await server.close(); throw error; }
 }
 async function startStdio(service) { return (await mcpAdapter()).stdioAdapter(service); }

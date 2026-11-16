@@ -81,11 +81,12 @@ export function retargetStep(definition: Definition, step: Step, resourceType: s
     if (!implementation || !support) return undefined;
     const next = createStep(definition, resourceType, support.operation, implementation.id);
     return { ...next, id: step.id, enabled: step.enabled,
+        ...(resourceType === step.resourceType ? { filter: step.filter } : {}),
         parameters: support.operation === step.operation ? { ...step.parameters } : next.parameters };
 }
 
 export function resetStep(definition: Definition, step: Step): Step {
-    return { ...createStep(definition, step.resourceType, step.operation, step.provider), id: step.id, enabled: step.enabled };
+    return { ...createStep(definition, step.resourceType, step.operation, step.provider), id: step.id, enabled: step.enabled, filter: step.filter };
 }
 
 export function initialSelection(files: RestoreFile[], scope: RestoreScope): Set<string> {
@@ -112,6 +113,7 @@ export function processingRequest(config: Configuration, mode: 'preview' | 'proc
     if (enabled.some(step => definition?.operations.find(op => op.id === step.operation)?.preserveOriginal) && config.saveMode === 'overwrite' && !config.backupEnabled) throw new Error('音频覆盖处理必须启用备份，或改为另存结果');
     return {
         mode, folder: clean(config.sourceDir), pipeline: config.pipeline,
+        ...(config.sourceFilter ? { sourceFilter: config.sourceFilter } : {}),
         ...(!observationOnly && config.saveMode === 'saveAs' ? { outputDir: clean(config.outputDir) } : !observationOnly && config.backupEnabled ? { backupDir: clean(config.backupDir) } : {}),
     };
 }

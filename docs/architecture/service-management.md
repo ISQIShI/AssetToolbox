@@ -1,6 +1,6 @@
 # 本机服务管理与入口覆盖
 
-状态：已实现。应用/响应 /7、HTTP /api/v7、自动化 policy /2；job/5 与资源处理契约不变。源码：`application/{services,transports,service,contract}.js`、`agent-mcp/{server,tools,transports}.mjs`、`ServicePanel.vue`。决策见 [ADR 0016](../decisions/0016-service-management.md)。
+状态：已实现。应用/响应 /8、HTTP /api/v8、自动化 policy /2；job/6 与资源处理契约不变。源码：`application/{services,transports,service,contract}.js`、`agent-mcp/{server,tools,transports}.mjs`、`ServicePanel.vue`。决策见 [ADR 0016](../decisions/0016-service-management.md)。
 
 ## 公共动作与入口
 
@@ -12,7 +12,7 @@
 | service-stop | `{}` | 请求安全停止，返回 requested=true；轮询状态直到 stopped，运行中的文件允许先结束 |
 | service-client-config | `{transport:"stdio"或"http"}` | 生成 stdio 宿主启动配置，或运行中的 HTTP 端点、认证占位和令牌文件路径 |
 
-桌面“工具 → Agent 接入与服务管理”提供全部动作。CLI 提供 `service status/configure/start/stop/client-config`，同时保留 `api service-*`；HTTP 使用 `POST /api/v7/service-*`；两种 MCP 使用 `asset_service-*`。MCP 从公共 schema 枚举动作，缺少工具说明直接失败，不能悄悄漏掉新能力。
+桌面“工具 → Agent 接入与服务管理”提供全部动作。CLI 提供 `service status/configure/start/stop/client-config`，同时保留 `api service-*`；HTTP 使用 `POST /api/v8/service-*`；两种 MCP 使用 `asset_service-*`。MCP 从公共 schema 枚举动作，缺少工具说明直接失败，不能悄悄漏掉新能力。
 
 stdio 需要与 Agent 宿主建立标准输入/输出管道，不能在桌面中启动一个没有宿主连接的 stdio 进程；桌面生成可供宿主采用的配置，宿主负责按会话启动。HTTP 与 MCP HTTP 共用同一监听器和 policy 应用服务，不监听局域网。
 
@@ -52,3 +52,5 @@ stdio 需要与 Agent 宿主建立标准输入/输出管道，不能在桌面中
 统一契约变更必须同步核心实现、schema、桌面操作路径、CLI 命令/帮助、两种 MCP 工具、HTTP 路由及文档示例；入口可以按权限明确拒绝，但不能缺少访问路径或偷偷采用另一套业务实现。专属窗口、对话框、主题等能力仅留在对应入口。
 
 验收检查“动作 → 桌面控件/流程 → CLI → MCP stdio/HTTP → HTTP”的覆盖矩阵，并包含真实跨入口请求、相同错误与生命周期验证；不能用 schema 相等代替行为验收。当前新增五项完整覆盖在 `services.test.js`、MCP `http.test.mjs`、组件 `services.test.ts` 及原生 `native.spec.ts`。
+
+属性与过滤不增加独立动作：capabilities 发现属性目录，validate/submit 接收来源和步骤条件；桌面共享编辑器、CLI `--source-filter` 与 JSON 请求、两种 MCP 工具、HTTP /api/v8 均已接入。MCP http 测试逐入口比较规范化、拒绝、排除数量和 filtered 结果，详见[属性与过滤器](properties-and-filters.md)。

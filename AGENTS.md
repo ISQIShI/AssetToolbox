@@ -10,7 +10,7 @@
 
 - `desktop/src/`：Vue 3、TypeScript 界面；`desktop/src-tauri/`：Rust/Tauri 2 宿主。
 - `resource-core/`：Node CommonJS 引擎、任务、恢复、配置和桌面桥接。
-- `resource-types/`、`operations/`、`providers/` 位于核心目录内，分别定义格式识别、处理语义、工具实现；`framework/` 负责发现、schema 和进程调用。
+- `resource-types/`、`operations/`、`providers/` 位于核心目录内，分别定义格式识别、处理语义、工具实现；`properties/` 定义通用与专属属性，`framework/` 负责发现、schema、过滤和进程调用。
 - `resource-core/tests/`、`desktop/tests/`：核心、组件及原生 E2E 测试；`docs/`：架构、流程和决策。
 - `resource-core/data/`：运行时配置、任务、报告，禁止提交。
 - `resource-core/application/`：统一应用服务、共享作业与 HTTP API；`agent-mcp/`：独立 stdio/HTTP MCP 包，`examples/`：接入样例。
@@ -21,13 +21,15 @@ Windows x64 环境按 `.nvmrc`、`rust-toolchain.toml`、`.vsconfig` 配置。�
 
 核心目录：`npm run test:source` 不要求外部编码器；`npm run test:codecs` 验证真实工具；`npm test` 全量执行，缺工具明确失败。桌面目录：`npm run dev` 启动原生开发；`npm test` 跑组件测试；`npm run typecheck` 检查类型；`npm run build` 构建并校验便携依赖；`npm run test:e2e` 验证刚构建的 EXE；`npm run test:e2e:network` 单独验证真实下载安装/更新。详细前提见[开发指南](docs/development.md)。
 
-应用接口改动必读[统一应用接口](docs/architecture/application.md)、[自动化专题](docs/architecture/automation.md)、[HTTP 专题](docs/architecture/http.md)及 [ADR 0009](docs/decisions/0009-agent-interfaces.md)/[0010](docs/decisions/0010-local-http.md)/[0011](docs/decisions/0011-unified-application.md)。MCP 目录独立执行 `npm ci --ignore-scripts`、`npm test`；保持官方 SDK 锁文件。全部 CLI（含快捷命令）、桌面桥接、HTTP 和 MCP 必须复用 ApplicationService 的同一套 /7 公共作业动作；禁止桌面专用 start/poll 分支或入口直接调用 JobSession/引擎。统一 jobId/taskId、幂等提交和分页结果，权限及生命周期由启动上下文注入，MCP schema 取自 contract.js；不能通过 shell 拼接参数或各写一套处理逻辑。权限来自启动上下文，禁止工具参数扩权或通过 HTTP 暴露桌面设置。转换另存或授权备份覆盖，恢复带显式预览哈希。保留幂等键、分页和跨入口锁；stdio 断连取消，HTTP 连接断开不取消已提交作业，服务退出才请求取消自己拥有的作业。保留默认 stdio，HTTP 只能显式启动、回环监听并验证令牌/Host/Origin/正文上限；MCP 两种传输共用工具工厂，HTTP 每请求创建协议实例。不要把应用目录限制描述为 OS 沙箱。
+应用接口改动必读[统一应用接口](docs/architecture/application.md)、[自动化专题](docs/architecture/automation.md)、[HTTP 专题](docs/architecture/http.md)及 [ADR 0009](docs/decisions/0009-agent-interfaces.md)/[0010](docs/decisions/0010-local-http.md)/[0011](docs/decisions/0011-unified-application.md)。MCP 目录独立执行 `npm ci --ignore-scripts`、`npm test`；保持官方 SDK 锁文件。全部 CLI（含快捷命令）、桌面桥接、HTTP 和 MCP 必须复用 ApplicationService 的同一套 /8 公共作业动作；禁止桌面专用 start/poll 分支或入口直接调用 JobSession/引擎。统一 jobId/taskId、幂等提交和分页结果，权限及生命周期由启动上下文注入，MCP schema 取自 contract.js；不能通过 shell 拼接参数或各写一套处理逻辑。权限来自启动上下文，禁止工具参数扩权或通过 HTTP 暴露桌面设置。转换另存或授权备份覆盖，恢复带显式预览哈希。保留幂等键、分页和跨入口锁；stdio 断连取消，HTTP 连接断开不取消已提交作业，服务退出才请求取消自己拥有的作业。保留默认 stdio，HTTP 只能显式启动、回环监听并验证令牌/Host/Origin/正文上限；MCP 两种传输共用工具工厂，HTTP 每请求创建协议实例。不要把应用目录限制描述为 OS 沙箱。
 
 JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分号。组件用 PascalCase，函数及参数用 camelCase，扩展和步骤 ID 用 `[a-z][a-z0-9-]*`。TypeScript 严格模式；没有独立 lint/格式化工具。
 
 ## 扩展与文件安全
 
 新功能遵循“资源类型—处理操作—实现提供方”；参数按步骤分为 `parameters` 与 `providerOptions`。验收策略属于操作，压缩才采用更小规则。提供方只处理临时文件，禁止直接修改素材；全部步骤成功才提交一次。保留哈希、原子替换、任务锁、按文件边界取消、显式恢复选择及冲突保护。
+
+属性/选择条件改动必读[属性与过滤器](docs/architecture/properties-and-filters.md)及 [ADR 0017](docs/decisions/0017-properties-and-filters.md)。属性由代码只读获取，通用组自动关联，专属组由类型声明；条件统一使用 filter/1，禁止提供方/入口另写选择逻辑。sourceFilter 在固定清单前排除，不复制或备份；step.filter 读取当前中间产物，不匹配只跳过步骤。属性语义变化升级组版本，续跑固定原清单及版本；恢复仅按备份/显式选择/哈希执行，不加载属性插件或继承处理过滤。当前 settings/3、task/report/2、job/6、目录 API 4，旧格式拒绝且不迁移。
 
 提供方使用 API 2 的 `adapters[operationId]`，每项独立声明资源类型、schema、execute 和 version；依赖与 prepare 留在提供方层。不要重复定义 supports 或顶层执行/参数接口。步骤固定适配器版本，同操作切换提供方保留公共参数；详见[ADR 0007](docs/decisions/0007-operation-adapters.md)。
 
@@ -50,7 +52,7 @@ JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分�
 自动安装依赖必读[依赖管理](docs/architecture/dependencies.md)：清单固定版本、来源与摘要，前端仅传提供方 ID；校验后写入独立目录并原子启用，不覆盖手动文件或运行中的依赖，不放宽 TLS、摘要、解包和文件安全断言。
 
 
-音频扩展必读[音频专题](docs/architecture/audio.md)及 [ADR 0008](docs/decisions/0008-audio-observation.md)：目录 API 3，操作 API 2 新增 observe/preserveOriginal；纯分析禁止素材写入，音频转换必须另存或备份。仅固定增益，超峰限制或失败，不自动动态压缩；测量与未达目标、重编码和元数据损失必须前端可见。FFmpeg 为手动依赖，不放宽自动安装校验。
+音频扩展必读[音频专题](docs/architecture/audio.md)及 [ADR 0008](docs/decisions/0008-audio-observation.md)：目录 API 4，操作 API 2 新增 observe/preserveOriginal；纯分析禁止素材写入，音频转换必须另存或备份。仅固定增益，超峰限制或失败，不自动动态压缩；测量与未达目标、重编码和元数据损失必须前端可见。FFmpeg 为手动依赖，不放宽自动安装校验。
 
 ## 测试分层与存储维护
 

@@ -11,15 +11,16 @@
 | [文档管理规范](documentation.md) | 分类、维护责任、更新时机、决策与归档规则 |
 | [总体架构](architecture/overview.md) | 系统边界、进程关系、完整处理流程、设计取舍 |
 | [前端设计规范](design/frontend-design.md) | 桌面软件的设计主张、浅色/深色令牌、窗口骨架、两级步骤选择器、组件、交互约定、状态语义与浏览器调试；任何界面改动必读 |
-| [持久队列与有限并行](architecture/queue.md) | 资源读写冲突、可配置并行预算与稳定槽位、冲突 FIFO、公平性、维护与崩溃保护、API /7 与 job/5 |
+| [持久队列与有限并行](architecture/queue.md) | 资源读写冲突、可配置并行预算与稳定槽位、冲突 FIFO、公平性、维护与崩溃保护、API /8 与 job/6 |
 | [统一作业中心与入口冲突](architecture/job-center.md) | 跨入口作业观察、取消、生命周期和串行/队列/并行方案比较 |
 | [前端架构](architecture/frontend.md) | 源码结构、工作台状态、作业生命周期、请求映射、步骤编辑与恢复勾选 |
 | [后端与框架设计](architecture/backend.md) | Rust 宿主、Node 调度、处理流水线、提供方扩展、安全恢复 |
 | [扩展契约](architecture/extensions.md) | 类型/操作/提供方、按操作适配器、公共与专属参数、版本及新增实现示例 |
+| [资源属性与过滤器](architecture/properties-and-filters.md) | 通用/专属代码属性、有界 AND/OR、来源排除、步骤条件、中间产物、续跑及恢复边界 |
 | [音频处理](architecture/audio.md) | 分析、固定增益、响度归一化、峰值策略、质量边界和报告 |
 | [提供方依赖管理](architecture/dependencies.md) | 固定核验清单、HTTPS/摘要校验、自动安装更新、取消与不可变目录 |
 | [通信协议](architecture/protocol.md) | Tauri 命令、JSON Lines、操作与作业模式、错误语义 |
-| [统一应用接口](architecture/application.md) | 应用/响应 /7、持久作业 /5、唯一实现、启动上下文与跨入口访问 |
+| [统一应用接口](architecture/application.md) | 应用/响应 /8、持久作业 /6、唯一实现、启动上下文与跨入口访问 |
 | [外部 Agent 接入](architecture/automation.md) | 共享应用 API、结构化 CLI、本地 MCP、启动权限、幂等与分页查询 |
 | [本机 HTTP 与 MCP HTTP](architecture/http.md) | 统一应用上下文、独立/联合启动、令牌、Streamable HTTP、生命周期与边界 |
 | [服务管理与入口覆盖](architecture/service-management.md) | 桌面/CLI/MCP/HTTP 配置与启停服务、连接配置、管理授权、所有者退出和公共能力交付矩阵 |
@@ -48,6 +49,7 @@
 | --- | --- | --- |
 | 界面视觉或交互 | 前端设计规范、前端架构、通信协议 | `desktop/tests/*.test.ts`，1220×850 与 840×620 截图；涉及原生流程时补 E2E |
 | 编码器或参数 | 后端设计、扩展契约、持久化 | `adapters`、`contract`、`resize`、`resources`、`compress` |
+| 属性或资源过滤 | 属性与过滤器、扩展契约、持久化、统一应用接口 | 核心 `filters`/`resize`、组件 filters、五入口 MCP http、原生 filters-native |
 | 音频测量或处理 | 音频专题、扩展契约、依赖管理 | 核心 audio、前端 audio.test.ts、原生 audio.spec.ts |
 | 任务、取消、续跑 | 后端设计、通信协议、持久化 | `batch`、`desktop`、`resume` |
 | CLI、MCP、HTTP 或外部 Agent | 统一应用接口、外部 Agent 接入、本机 HTTP、通信协议、持久化 | 核心 `application`、`unified`、`http`、`desktop` 及 `agent-mcp` 官方客户端测试 |

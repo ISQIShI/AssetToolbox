@@ -1,19 +1,19 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { normalizePipeline, providers } = require('./framework/registry');
+const { normalizePipeline, normalizeFilter, providers } = require('./framework/registry');
 const SETTINGS_FILE = path.join(__dirname, 'data', 'settings.json');
 function defaultConfiguration() {
     const pipeline = [['png', 'pngquant', true], ['jpg', 'jpg-c', true], ['mp3', 'lame', false]]
         .filter(([, provider]) => providers.has(provider)).map(([resourceType, provider, enabled]) => ({ id: resourceType + '-compress', resourceType, operation: 'compress', provider, enabled }));
-    return { schema: 'asset-toolbox.settings/2', sourceDir: '', outputDir: '', backupDir: '', saveMode: 'saveAs', backupEnabled: false, pipeline: normalizePipeline(pipeline) };
+    return { schema: 'asset-toolbox.settings/3', sourceDir: '', outputDir: '', backupDir: '', saveMode: 'saveAs', backupEnabled: false, sourceFilter: normalizeFilter(), pipeline: normalizePipeline(pipeline) };
 }
 function validateConfiguration(input) {
-    if (!input || input.schema !== 'asset-toolbox.settings/2' || Object.keys(input).some(key => !['schema', 'sourceDir', 'outputDir', 'backupDir', 'saveMode', 'backupEnabled', 'pipeline'].includes(key))) throw new Error('不支持的设置契约');
+    if (!input || input.schema !== 'asset-toolbox.settings/3' || Object.keys(input).some(key => !['schema', 'sourceDir', 'outputDir', 'backupDir', 'saveMode', 'backupEnabled', 'pipeline', 'sourceFilter'].includes(key))) throw new Error('不支持的设置契约');
     for (const key of ['sourceDir', 'outputDir', 'backupDir']) if (typeof input[key] !== 'string' || input[key].includes('\0')) throw new Error('无效的路径配置：' + key);
     if (!['overwrite', 'saveAs'].includes(input.saveMode) || typeof input.backupEnabled !== 'boolean') throw new Error('无效的保存方式');
     return { schema: input.schema, sourceDir: input.sourceDir, outputDir: input.outputDir, backupDir: input.backupDir,
-        saveMode: input.saveMode, backupEnabled: input.backupEnabled, pipeline: normalizePipeline(input.pipeline) };
+        saveMode: input.saveMode, backupEnabled: input.backupEnabled, sourceFilter: normalizeFilter(input.sourceFilter), pipeline: normalizePipeline(input.pipeline) };
 }
 function loadConfiguration(root = path.join(__dirname, 'data')) {
     const filename = path.join(root, 'settings.json');

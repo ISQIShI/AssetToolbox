@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { fixture } = require('./fixtures/application');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const directory = (f, id) => path.join(f.core, 'data/jobs/v5', id);
+const directory = (f, id) => path.join(f.core, 'data/jobs/v6', id);
 test('conflicting FIFO spans owners and multiple submissions and never overlaps execution', async t => {
     const f = fixture(t, { allowOverwrite: true }, 4, 100), other = new f.ApplicationService(f.policyFile); t.after(() => other.shutdown());
     const { outputDir, ...base } = f.request, request = { ...base, backupDir: f.backup };
@@ -60,7 +60,7 @@ test('queue capacity is bounded before reserving an idempotency key', async t =>
     try {
         for (let i = 0; i < 100; i++) f.service.submit({ ...f.request, mode: 'preview' }, 'capacity-' + i);
         assert.throws(() => f.service.submit(f.request, 'overflow'), { code: 'BUSY' });
-        assert.equal(fs.readdirSync(path.join(f.core, 'data/jobs/v5')).length, 100);
+        assert.equal(fs.readdirSync(path.join(f.core, 'data/jobs/v6')).length, 100);
         await f.service.shutdown();
     } finally { release(); }
 });

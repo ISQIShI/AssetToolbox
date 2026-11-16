@@ -44,6 +44,7 @@ test('fit modes, no-enlargement and JPEG orientation have explicit output dimens
     const output = path.join(root, 'no-enlarge'); engine.processFolder(source, { pipeline: [step({ width: 400, height: 200, withoutEnlargement: true })], outputDir: output, log() {} });
     assert.equal((await sharp(path.join(output, 'wide.png')).metadata()).width, 40);
     await sharp({ create: { width: 40, height: 20, channels: 3, background: '#cc3322' } }).jpeg().withMetadata({ orientation: 6 }).toFile(path.join(source, 'rotated.jpg'));
+    assert.deepEqual(require('../properties/image/metadata').dimensions(fs.readFileSync(path.join(source, 'rotated.jpg')), 'jpg'), { width: 20, height: 40 });
     const jpegOut = path.join(root, 'jpeg'); engine.processFolder(source, { pipeline: [step({ width: 10, height: 10 }, 'jpg')], outputDir: jpegOut, log() {} });
     const jpeg = await sharp(path.join(jpegOut, 'rotated.jpg')).metadata(); assert.deepEqual([jpeg.width, jpeg.height], [5, 10]); assert.equal(jpeg.orientation, undefined);
 });
@@ -57,7 +58,7 @@ test('ordered repeated operations and compression commit once, snapshot versions
     assert.equal(result.exitCode, 0, result.error); assert.equal(result.summary.backedUp, 1);
     const metadata = await sharp(path.join(source, 'tile.png')).metadata(); assert.deepEqual([metadata.width, metadata.height], [10, 5]);
     const tasks = require(path.join(core, 'tasks')), task = tasks.loadTask(result.task.taskFile);
-    assert.equal(task.header.schema, 'asset-toolbox.task/1'); assert.equal(task.header.pipeline[0].versions.provider, '2.0.0');
+    assert.equal(task.header.schema, 'asset-toolbox.task/2'); assert.equal(task.header.pipeline[0].versions.provider, '2.0.0');
     assert.equal([...task.entries.values()][0].record.steps.length, 3);
     require(path.join(core, 'framework/registry')).providers.get('sharp').adapters['image-resize'].version = '2.0.0';
     assert.match(run({ mode: 'resume', taskFile: task.taskFile }).error, /版本不匹配/);

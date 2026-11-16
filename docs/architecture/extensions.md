@@ -1,6 +1,6 @@
 # 资源处理扩展契约
 
-状态：已实现。目录 API 为 3，提供方 API 为 2，资源类型 API 为 1；既有转换操作使用 API 1，音频操作使用 API 2。只读与保留原文件语义见 [ADR 0008](../decisions/0008-audio-observation.md)。决策见 [ADR 0007](../decisions/0007-operation-adapters.md)，三层边界沿用 [ADR 0003](../decisions/0003-processing-contract.md)。入口为 `resource-core/framework/registry.js`、`schema.js`、`engine.js`；本契约不依赖 Cordis。
+状态：已实现。目录 API 为 4，提供方 API 为 2，资源类型 API 为 1；既有转换操作使用 API 1，音频操作使用 API 2。只读与保留原文件语义见 [ADR 0008](../decisions/0008-audio-observation.md)。决策见 [ADR 0007](../decisions/0007-operation-adapters.md)，三层边界沿用 [ADR 0003](../decisions/0003-processing-contract.md)。入口为 `resource-core/framework/registry.js`、`schema.js`、`engine.js`；本契约不依赖 Cordis。
 
 ## 三层职责
 
@@ -42,9 +42,9 @@
 
 规范化后填入 `versions: {resourceType, operation, provider, adapter}`；已有版本必须完整且精确匹配。新增步骤可省略 versions，由核心补齐；旧三字段快照拒绝处理。适配器行为或参数改变升级其 version；共享工具准备、依赖或提供方共同行为改变升级 provider.version。只升级一个适配器不使同提供方其他操作的快照失效。版本是开发者维护的契约标识，并非代码或编码器哈希锁定。
 
-配置升级为 `asset-toolbox.settings/2`，拒绝读取或转换 `/1`；原文件保留，需重新建立配置。任务及报告外层 `/1` 不变，内部保存上述完整步骤快照；旧快照不可续跑/重试。备份恢复仍基于哈希和事件，不加载适配器，也不迁移原任务，见[持久化](persistence.md)。
+配置使用 `asset-toolbox.settings/3`、任务及报告 `/2`，保存来源过滤及步骤过滤快照；旧配置 /1–2、任务/报告 /1 拒绝且不迁移。旧备份文件保留，可使用独立备份导出；当前任务恢复仍基于哈希和事件，不加载适配器，见[持久化](persistence.md)。
 
-前端从目录 API 3 的 `providers[].adapters[]` 按 operation 选择字段，条目含 `operation/version/fields`；顶层 provider.fields 已移除。切换工具时若操作 ID 相同，复制保留公共参数，专属参数取新适配器默认值；切换操作则重置两组参数。保留步骤 ID、顺序和启用状态，清除旧 versions，核心再次规范化。不会记忆切走工具的专属参数；“恢复默认参数”显式重置两组。
+前端从目录 API 4 的 `providers[].adapters[]` 按 operation 选择字段，条目含 `operation/version/fields`；顶层 provider.fields 已移除。切换工具时若操作 ID 相同，复制保留公共参数，专属参数取新适配器默认值；切换操作则重置两组参数。保留步骤 ID、顺序和启用状态，清除旧 versions，核心再次规范化。不会记忆切走工具的专属参数；“恢复默认参数”显式重置两组。
 
 ## 提供方执行接口
 
@@ -107,4 +107,8 @@ LAME 优先从受管理目录定位可执行文件，Sharp 的 `prepare()` 固�
 
 操作 API 2 的 `observe` 适配器同步返回 `{metadata}`，不得返回 output/skipped，也不得改写临时输入或生成预期输出；引擎校验这些边界并记录步骤 `status: analyzed`。混合处理线中分析当前步骤输入；后续转换仍遵循一次提交。仅有观察步骤的文件不复制、备份或写 intent；全观察任务忽略保存的输出/备份路径，仍保存任务和报告。空处理线的既有复制语义不变。
 
-`preserveOriginal: true` 要求另存或有效备份目录，prepareFolder 拒绝无备份覆盖；前端添加、选择或重新启用该操作时默认另存。新配置 saveMode 默认为 saveAs，已有 /2 配置保留显式选择。成功、跳过和失败步骤可携带 metadata；失败元数据只用于报告，不表示中间文件已提交。
+`preserveOriginal: true` 要求另存或有效备份目录，prepareFolder 拒绝无备份覆盖；前端添加、选择或重新启用该操作时默认另存。新配置 saveMode 默认为 saveAs，保存 /3 配置中的显式选择。成功、跳过和失败步骤可携带 metadata；失败元数据只用于报告，不表示中间文件已提交。
+
+## 属性与共享过滤
+
+资源类型可声明 `propertyGroups`，通用属性组自动适用；目录 API 4 增加 properties/filterSchema。步骤可带 filter/1 条件，核心在 execute 前读取当前输入，未匹配记录 filtered；条件不属于操作或提供方参数。来源 sourceFilter 在固定计划前排除文件，排除文件不复制和备份。同类型切换提供方或恢复参数保留步骤过滤，切换类型清空。定义、版本和恢复边界见[属性与过滤器](properties-and-filters.md)。压缩更小才接受、音频峰值限制等仍属于操作验收，不能改成可绕过的条件。

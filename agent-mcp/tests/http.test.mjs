@@ -90,7 +90,7 @@ test('Streamable HTTP supports both protocol eras and concurrent clients without
     assert.equal(stream.status, 200); assert.match(stream.headers.get('content-type'), /text\/event-stream/);
     assert.match(await stream.text(), /"id":42/);
     const [capabilities, jobs] = await Promise.all([legacy.call('capabilities'), modern.call('jobs')]);
-    assert.equal(capabilities.result.apiVersion, 3); assert.equal(jobs.result.total, 0);
+    assert.equal(capabilities.result.apiVersion, 4); assert.equal(jobs.result.total, 0);
     const snapshot = await modern.call('queue');
     assert.deepEqual(snapshot.result, (await f.api('queue', {})).body.result);
     assert.equal(snapshot.result.canConfigure, false);
@@ -146,7 +146,7 @@ test('desktop, CLI, stdio MCP, HTTP and HTTP MCP share schemas, durable jobs, ca
     };
     const calls = [desktop, cli, async (action, input = {}) => (await stdio.callTool({ name: 'asset_' + action, arguments: input })).structuredContent, async (action, input) => (await f.api(action, input)).body, remote.call];
     const catalogs = await Promise.all(calls.map(call => call('capabilities')));
-    for (const response of catalogs) { assert.equal(response.schema, 'asset-toolbox.response/7'); assert.deepEqual(response.result.inputSchemas, catalogs[0].result.inputSchemas); }
+    for (const response of catalogs) { assert.equal(response.schema, 'asset-toolbox.response/8'); assert.deepEqual(response.result.inputSchemas, catalogs[0].result.inputSchemas); }
     for (const call of calls.slice(1)) {
         assert.equal((await call('service-status')).error.code, 'PERMISSION_DENIED');
         assert.equal((await call('storage-preview')).error.code, 'PERMISSION_DENIED');
@@ -156,6 +156,25 @@ test('desktop, CLI, stdio MCP, HTTP and HTTP MCP share schemas, durable jobs, ca
     const errors = await Promise.all(calls.map(call => call('validate', { request: invalid })));
     for (const response of errors) { assert.equal(response.ok, false); assert.deepEqual(response.error, errors[0].error); }
     for (const call of calls) assert.equal((await call('validate', { request: f.request })).ok, true);
+
+    const sourceFilter = { schema: 'asset-toolbox.filter/1', any: [{ all: [{ property: 'file-name', operator: 'eq', value: '0.pack' }] }] };
+    const stepFilter = { schema: 'asset-toolbox.filter/1', any: [{ all: [{ property: 'file-size', operator: 'gt', value: 10000 }] }] };
+    const filtered = { ...f.request, sourceFilter, pipeline: [{ ...f.request.pipeline[0], filter: stepFilter }] };
+    const normalized = await Promise.all(calls.map(call => call('validate', { request: filtered })));
+    for (const value of normalized) { assert.equal(value.ok, true); assert.deepEqual(value, normalized[0]); }
+    for (const value of catalogs) assert.deepEqual(value.result.properties, catalogs[0].result.properties);
+    for (const [index, call] of calls.entries()) {
+        const invalidFilter = await call('validate', { request: { ...filtered, sourceFilter: { ...sourceFilter, any: [{ all: [{ property: 'unknown', operator: 'eq', value: 1 }] }] } } });
+        assert.equal(invalidFilter.ok, false); assert.equal(invalidFilter.error.code, 'INVALID_REQUEST');
+        const previewFilter = await call('submit', { request: { ...filtered, mode: 'preview' }, idempotencyKey: 'filtered-preview' });
+        const result = await until(remote.call, previewFilter.result.jobId); assert.equal(result.exitCode, 0);
+        assert.equal(result.preview.total, 1); assert.equal(result.preview.filteredOut, 7);
+        const processedFilter = await call('submit', { request: { ...filtered, outputDir: path.join(f.request.outputDir, 'filtered-' + index) }, idempotencyKey: 'filtered-process-' + index });
+        assert.equal(processedFilter.ok, true, JSON.stringify(processedFilter));
+        const completed = await until(remote.call, processedFilter.result.jobId); assert.equal(completed.exitCode, 0);
+        const files = (await remote.call('results', { jobId: processedFilter.result.jobId })).result.items;
+        assert.equal(files.length, 1); assert.equal(files[0].steps[0].status, 'filtered');
+    }
 
     // 桌面创建，外部连接查询/取消；同一 jobId 在所有入口可见。
     const submitted = await desktop('submit', { request: f.request, idempotencyKey: 'desktop-owned' });

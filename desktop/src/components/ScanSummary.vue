@@ -15,10 +15,11 @@ const emit = defineEmits<{ rescan: [] }>();
     <p v-if="scan.cancelled" class="callout warn"><Icon name="alert" class="tone warn" /><span>扫描已取消，结果不完整。检查了 {{ scan.checked }} / {{ scan.total }} 个文件。</span></p>
     <p v-else-if="stale" class="callout warn"><Icon name="alert" class="tone warn" /><span>扫描后配置已更改，下面的结果可能不再准确。</span></p>
 
+    <p v-if="scan.filteredOut" class="muted">发现 {{ scan.discovered }} 个支持的文件，来源条件排除 {{ scan.filteredOut }} 个；下方仅统计入选文件。步骤条件在实际执行时按当前输入判断。</p>
     <dl class="figures">
       <div><dt>识别的资源文件</dt><dd>{{ scan.total }}</dd></div>
       <div><dt>原始体积</dt><dd>{{ bytes(scan.totalBytes) }}</dd></div>
-      <div><dt>将经过启用步骤</dt><dd>{{ scan.enabledFiles }}</dd></div>
+      <div><dt>已配置启用步骤</dt><dd>{{ scan.enabledFiles }}</dd></div>
       <div :class="{ alert: scan.conflicts }"><dt>输出冲突</dt><dd>{{ scan.conflicts }}</dd></div>
     </dl>
 

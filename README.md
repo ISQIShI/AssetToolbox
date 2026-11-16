@@ -52,20 +52,23 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 - 在“任务”页点“检查备份”，或在“恢复”页选择任务后检查。检查会核对备份/目标哈希，只恢复明确勾选项；用户后来编辑的文件列为冲突。开始恢复后禁止原任务继续处理，恢复本身可继续/重试。
 - 没有任务记录的独立备份，在“恢复”页选“独立备份文件夹”，检查后导出到指定目录；目标已有不同内容时不会覆盖。
 
-当前配置契约为 `asset-toolbox.settings/2`，旧 `/1` 配置不自动迁移，也不覆盖原文件，需重新建立配置。缺少适配器版本的旧任务不能续跑或重试处理，已有备份仍可检查和恢复。
+当前配置契约为 `asset-toolbox.settings/3`，旧 /1–2 配置拒绝且不自动迁移，也不覆盖原文件，需重新建立配置。任务/报告升级 /2，旧 /1 任务不能续跑或按任务恢复；已有备份普通文件保留，可通过“独立备份文件夹”检查并导出恢复。
 
 配置、持久任务和报告分别位于核心 `data/settings.json`、`data/tasks/`、`data/reports/`；报告有 JSON 与 UTF-8 CSV。预览不创建任务或报告。不要删除仍需续跑或恢复的任务记录。
 
 ## 命令行
+
+来源和每个步骤都可以设置属性条件。例如来源设置“资源类型 ID 等于 jpg”且“图片宽度大于 1024 px”，排除文件不复制、不处理、不备份。步骤过滤读取前一步的实际产物，未匹配只跳过该步骤。分辨率可分别约束宽/高或总像素数；规则支持“且/或”，详见[属性与过滤器](docs/architecture/properties-and-filters.md)。恢复不继承处理过滤条件。
 
 将步骤数组保存为 `pipeline.json`，格式见[扩展契约示例](docs/architecture/extensions.md#步骤及参数)，在工具根目录执行：
 
 ```powershell
 .\runtime\node.exe resource-core/cli.js "D:\Assets" --pipeline pipeline.json --preview
 .\runtime\node.exe resource-core/cli.js "D:\Assets" --pipeline pipeline.json --output "D:\Results"
+.\runtime\node.exe resource-core/cli.js "D:\Assets" --pipeline pipeline.json --source-filter examples/source-filter.example.json --preview
 ```
 
-上述快捷命令与桌面、CLI API、MCP 和 HTTP 使用同一应用 /7 服务，返回结构化响应并创建持久 jobId；处理还生成 taskId，可续跑和恢复。API 的本机人工调用可显式使用 --local，外部 Agent 使用固定 --policy。
+上述快捷命令与桌面、CLI API、MCP 和 HTTP 使用同一应用 /8 服务，返回结构化响应并创建持久 jobId；处理还生成 taskId，可续跑和恢复。API 的本机人工调用可显式使用 --local，外部 Agent 使用固定 --policy。
 
 ```powershell
 .\runtime\node.exe resource-core/cli.js api submit --local --input request.json
@@ -77,7 +80,7 @@ Windows x64，需要 WebView2 Runtime。双击根目录 `AssetToolbox.exe`。移
 
 桌面和 Agent 共用[资源感知队列](docs/architecture/queue.md)：同安装按配置的 1–8 个槽位并行（默认 2），冲突项按登记顺序等待，最多 100 个未结束项。作业中心显示等待原因及槽位用量；登记顺位不是预计启动顺序。
 
-应用/响应 /7、HTTP /api/v7，旧 /api/v1–6 明确拒绝；持久 job 升级 /5，不读取或迁移旧 /1–4 作业；素材任务/报告及 settings 版本不变，桌面须使用配套新 EXE 与核心。详细契约和最终架构见[统一应用接口](docs/architecture/application.md)。
+应用/响应 /8、HTTP /api/v8，旧 /api/v1–7 明确拒绝；持久 job 升级 /6，不读取或迁移旧 /1–5 作业。升级前关闭旧入口，桌面、核心和 MCP 必须成套更新。详细契约和最终架构见[统一应用接口](docs/architecture/application.md)。
 
 ## 存储维护
 

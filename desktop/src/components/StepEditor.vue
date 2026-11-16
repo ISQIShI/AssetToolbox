@@ -5,6 +5,7 @@ import type { Definition, Step } from '../core/types';
 import { isMissing, resetStep, retargetStep, stepTitle } from '../core/model';
 import ParameterFields from './ParameterFields.vue';
 import Icon from './Icon.vue';
+import FilterEditor from './FilterEditor.vue';
 
 const props = defineProps<{ definition: Definition; modelValue: Step; index: number; count: number; disabled?: boolean }>();
 const emit = defineEmits<{ 'update:modelValue': [value: Step]; remove: []; move: [offset: number]; 'show-tools': [] }>();
@@ -76,6 +77,7 @@ function retarget(resourceType: string, operationId?: string, providerId?: strin
       </div>
     </section>
 
+    <FilterEditor :properties="definition.properties" :resource-type="step.resourceType" :model-value="step.filter" :disabled="locked" title="步骤过滤" hint="只对满足条件的当前输入执行此步骤；前一步改变尺寸后按新尺寸判断。未匹配仅跳过本步骤。" @update:model-value="patch({ filter: $event })" />
     <section v-if="operation?.fields.length" class="group">
       <h3>{{ operation.displayName }}参数</h3>
       <ParameterFields :id-prefix="`${id}-op`" :fields="operation.fields" :model-value="step.parameters" :disabled="locked" @update:model-value="patch({ parameters: $event })" />

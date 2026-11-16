@@ -1,14 +1,18 @@
-const API = 'asset-toolbox.application/7';
-const RESPONSE = 'asset-toolbox.response/7';
-const JOB = 'asset-toolbox.job/5';
+const API = 'asset-toolbox.application/8';
+const RESPONSE = 'asset-toolbox.response/8';
+const JOB = 'asset-toolbox.job/6';
 const object = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 const string = { type: 'string' };
 const parameters = { type: 'object', additionalProperties: { anyOf: [string, { type: 'number' }, { type: 'boolean' }] } };
+const filter = object({ schema: { const: 'asset-toolbox.filter/1' }, any: { type: 'array', maxItems: 16, items: object({ all: { type: 'array', minItems: 1, maxItems: 16,
+    items: object({ property: string, operator: { enum: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'contains', 'starts-with', 'ends-with'] },
+        value: { anyOf: [{ type: 'number' }, { type: 'string', maxLength: 1024 }, { type: 'boolean' }] }, version: string }, ['property', 'operator', 'value']) } }) } });
 const step = object({ id: string, resourceType: string, operation: string, provider: string, enabled: { type: 'boolean' }, parameters, providerOptions: parameters,
+    filter,
     versions: object(Object.fromEntries(['resourceType', 'operation', 'provider', 'adapter'].map(key => [key, string]))) }, ['id', 'resourceType', 'operation', 'provider', 'enabled']);
 const selection = { type: 'array', minItems: 1, items: object({ path: string, backupHash: string, targetHash: { anyOf: [string, { type: 'null' }] } }) };
 const request = { oneOf: [
-    ...['preview', 'process'].map(mode => object({ mode: { const: mode }, folder: string, outputDir: string, backupDir: string, pipeline: { type: 'array', maxItems: 64, items: step } }, ['mode', 'folder', 'pipeline'])),
+    ...['preview', 'process'].map(mode => object({ mode: { const: mode }, folder: string, outputDir: string, backupDir: string, sourceFilter: filter, pipeline: { type: 'array', maxItems: 64, items: step } }, ['mode', 'folder', 'pipeline'])),
     ...['resume', 'retry', 'restore-preview'].map(mode => object({ mode: { const: mode }, taskId: string })),
     ...['restore', 'restore-retry'].map(mode => object({ mode: { const: mode }, taskId: string, selection })),
     object({ mode: { const: 'restore-export-preview' }, backupDir: string, outputDir: string }),

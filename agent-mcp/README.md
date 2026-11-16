@@ -1,6 +1,10 @@
 # AssetToolbox MCP
 
-独立的本地 MCP 入口；默认 stdio，另支持 Streamable HTTP。使用官方 SDK 直接调用 `resource-core/application` 的 /7 公共作业接口，不需要模型密钥。先安装核心依赖，再在此目录执行：
+独立的本地 MCP 入口；默认 stdio，另支持 Streamable HTTP。使用官方 SDK 直接调用 `resource-core/application` 的 /8 公共作业接口，不需要模型密钥。
+
+`asset_capabilities` 返回代码属性目录；`asset_validate/asset_submit` 的 process/preview 请求支持 sourceFilter，步骤支持 filter，两种传输一致。来源排除不复制或备份，步骤过滤按当前中间产物求值，恢复仍须显式选择；格式见[属性与过滤器](../docs/architecture/properties-and-filters.md)。
+
+先安装核心依赖，再在此目录执行：
 
 ```powershell
 npm ci --ignore-scripts
@@ -19,4 +23,4 @@ SDK server/client 固定 2.4.0，Node HTTP 适配器固定 2.1.2（包元数据 
 
 新增五个 `asset_service-*` 工具管理已配置的本机监听器；需要 policy/2 的 allowServiceManagement 且与服务配置等权。可通过桌面生成 stdio 配置，由宿主启动会话；拥有服务的 stdio 断连会安全关闭该监听器。HTTP 连接说明不返回令牌正文。旧 policy/1 拒绝，详见[服务管理与入口覆盖](../docs/architecture/service-management.md)。
 
-当前 API /7、HTTP /api/v7。submit 可返回等待中的作业；查询 queued/queuePosition、waitReason 后继续轮询至 done，登记顺位不代表启动顺序。默认 2 项、可配置 1–8 项无资源冲突的作业并行，100 个未结束项；capabilities.scheduling 可发现预算。stdio 退出取消自己所有等待和运行项，HTTP 客户端断开不取消，停止服务才取消。完整语义见[队列](../docs/architecture/queue.md)。
+当前 API /8、HTTP /api/v8。submit 可返回等待中的作业；查询 queued/queuePosition、waitReason 后继续轮询至 done，登记顺位不代表启动顺序。默认 2 项、可配置 1–8 项无资源冲突的作业并行，100 个未结束项；capabilities.scheduling 可发现预算。stdio 退出取消自己所有等待和运行项，HTTP 客户端断开不取消，停止服务才取消。完整语义见[队列](../docs/architecture/queue.md)。

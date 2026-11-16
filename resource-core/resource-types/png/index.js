@@ -1,1 +1,1 @@
-module.exports = { apiVersion: 1, version: '1.0.0', displayName: 'PNG', kind: 'image', extensions: [".png"], validate: data => data.length >= 8 && data.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) };
+module.exports = { apiVersion: 1, version: '1.0.0', displayName: 'PNG', kind: 'image', propertyGroups: ['image'], extensions: ['.png'], validate: data => data.length >= 8 && data.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) };

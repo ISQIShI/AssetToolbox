@@ -13,7 +13,7 @@ const { fixture } = require('./fixtures/application');
 test('application discovers live adapter schemas; validates scopes, unknown keys, versions and source preservation', async t => {
     const f = fixture(t);
     const catalog = (await f.call('capabilities')).result;
-    assert.equal(catalog.applicationApi, 'asset-toolbox.application/7');
+    assert.equal(catalog.applicationApi, 'asset-toolbox.application/8');
     assert.equal(catalog.operations.find(op => op.id === 'image-resize').parametersSchema.properties.width.minimum, 1);
     assert.ok(catalog.providers.find(p => p.id === 'ffmpeg').acquisition.instructions);
     assert.equal((await f.call('validate', { request: f.request })).ok, true);

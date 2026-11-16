@@ -38,7 +38,7 @@ test('three slots execute concurrently with stable identities; overflow waits an
     assert.equal(hidden.slots.filter(slot => slot.job).length, 1); assert.deepEqual(hidden.waiting, []);
     for (const job of jobs.slice(1)) assert.equal(JSON.stringify(hidden).includes(job.jobId), false);
     for (const job of jobs) { await until(() => service.status(job.jobId).done); assert.equal(service.status(job.jobId).exitCode, 0); }
-    const claims = jobs.map(job => JSON.parse(fs.readFileSync(path.join(f.core, 'data/jobs/v5', job.jobId, 'dispatch.json'))));
+    const claims = jobs.map(job => JSON.parse(fs.readFileSync(path.join(f.core, 'data/jobs/v6', job.jobId, 'dispatch.json'))));
     assert.deepEqual(claims.slice(0, 3).map(claim => claim.slot), [1, 2, 3]);
     assert.ok([1, 2, 3].includes(claims[3].slot));
     service.dispatch('scheduling-set', { maxConcurrent: 1 });
@@ -79,7 +79,7 @@ test('slot gaps remain stable and duplicate reservations or execution slots fail
         assert.throws(() => lock.acquireShared(resources, waiting.id, 3), { code: 'BUSY' });
         assert.throws(() => lock.acquireShared(resources, waiting.id, 4), { code: 'BUSY' });
         assert.throws(() => service.dispatch('queue'), /作业目录缺失/);
-        fs.mkdirSync(path.join(f.core, 'data/jobs/v5'), { recursive: true });
+        fs.mkdirSync(path.join(f.core, 'data/jobs/v6'), { recursive: true });
         const snapshot = service.dispatch('queue');
         assert.deepEqual(snapshot.slots.map(item => item.occupied), [false, false, true]);
         assert.equal(snapshot.slots[2].job, null); // 无 job.json 的活占用依然保留槽位。

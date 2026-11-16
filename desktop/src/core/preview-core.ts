@@ -3,6 +3,7 @@
 import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provider, RestorePreview, ScanPreview, Task } from './types';
 
 import { audioTypes, audioOperations, audioProvider } from './preview-audio';
+import { previewProperties } from './preview-properties';
 
 const params = new URLSearchParams(location.search);
 const acquisition = (name: string, version: string, license: string, url: string, instructions: string) => ({ name, version, license, url, source: url, instructions, redistribution: '仅本地使用，发布前须完成许可核对。', checkedAt: '2026-11-08' });
@@ -33,7 +34,7 @@ for (const provider of providers) {
     if (automatic && params.has('missing-auto')) provider.availability = { available: false, reason: '尚未安装所需文件' };
 }
 const definition: Definition = {
-    apiVersion: 3,
+    apiVersion: 4, properties: previewProperties, filterSchema: 'asset-toolbox.filter/1',
     resourceTypes: [
         { id: 'jpg', displayName: 'JPEG', kind: 'image', extensions: ['.jpg', '.jpeg'], version: '1.0.0' },
         { id: 'mp3', displayName: 'MP3', kind: 'audio', extensions: ['.mp3'], version: '1.0.0' },
@@ -56,7 +57,7 @@ definition.resourceTypes.push(...audioTypes);
 definition.operations.push(...audioOperations);
 providers.push(audioProvider);
 let config: Configuration = {
-    schema: 'asset-toolbox.settings/2', sourceDir: 'D:\\Projects\\StarHarbor\\Assets\\UI', outputDir: '', backupDir: 'D:\\Projects\\StarHarbor\\Backups', saveMode: 'overwrite', backupEnabled: true,
+    schema: 'asset-toolbox.settings/3', sourceDir: 'D:\\Projects\\StarHarbor\\Assets\\UI', outputDir: '', backupDir: 'D:\\Projects\\StarHarbor\\Backups', saveMode: 'overwrite', backupEnabled: true,
     pipeline: [
         { id: 'resize-ui', resourceType: 'png', operation: 'image-resize', provider: 'sharp', enabled: true, parameters: { width: 1024, height: 1024, fit: 'inside', kernel: 'lanczos3', withoutEnlargement: true }, providerOptions: { jpegQuality: 90 } },
         { id: 'png', resourceType: 'png', operation: 'compress', provider: 'pngquant', enabled: true, parameters: {}, providerOptions: { speed: 3, qualityMin: 50, qualityMax: 80 } },
@@ -86,7 +87,7 @@ const jobs = new Map<string, { request: JobRequest; started: number; cancelled: 
 const DURATION = Number(params.get('duration') || 4000);
 let maxConcurrent = 2;
 let serviceConfig: any = null, serviceRunning = false;
-function serviceSnapshot() { return { configured: !!serviceConfig, config: serviceConfig, state: serviceRunning ? 'running' : 'stopped', owned: serviceRunning, tokenFile: serviceConfig ? '浏览器预览：未生成令牌' : null, endpoints: serviceRunning ? { apiUrl: 'http://127.0.0.1:8787/api/v7/', mcpUrl: serviceConfig.mcp ? 'http://127.0.0.1:8787/mcp' : null } : null }; }
+function serviceSnapshot() { return { configured: !!serviceConfig, config: serviceConfig, state: serviceRunning ? 'running' : 'stopped', owned: serviceRunning, tokenFile: serviceConfig ? '浏览器预览：未生成令牌' : null, endpoints: serviceRunning ? { apiUrl: 'http://127.0.0.1:8787/api/v8/', mcpUrl: serviceConfig.mcp ? 'http://127.0.0.1:8787/mcp' : null } : null }; }
 
 function poll(id: string): JobState {
     const job = jobs.get(id);

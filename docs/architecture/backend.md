@@ -24,6 +24,8 @@ Rust 保持一个 Node JSON Lines 会话，对 invoke 请求串行派发；目�
 
 ## 错误与边界
 
+来源与步骤条件共用 `framework/filters.js`，属性由 `properties/` 代码组只读获取。来源过滤先于固定 plan，排除文件不复制/备份；步骤过滤读取前一步产物，不匹配记为 filtered。续跑沿用清单，恢复不加载属性或继承处理条件；实现和版本详见[属性与过滤器](properties-and-filters.md)。
+
 参数和依赖预检错误在提交前失败；单文件错误继续后续文件；报告写入错误告警，不回滚素材或抹掉日志。取消是协作式文件边界取消；各提供方决定工具调用超时。GUI/CLI/MCP/HTTP 工作进程按同一用户与核心安装共享资源占用，按配置的 1–8 个槽位并行（默认 2），见[自动化专题](automation.md)；此锁不覆盖其他安装副本或外部编辑器，也不是整批事务。源文件大小、时间戳与哈希继续保护冲突。扩展可信，不能把路径检查视为恶意代码沙箱。
 
 验证：`contract`、`resize`、`compress`、`resources`、`batch`、`desktop`、`resume`、`restore`、`restore-preview` 核心测试，以及真实原生 E2E。

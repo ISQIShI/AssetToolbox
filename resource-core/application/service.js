@@ -6,7 +6,7 @@ const { acquire, alive } = require('./lock');
 const { fail, record, canonical, within } = require('./policy');
 const { localContext, policyContext, assertContext } = require('./context');
 const { API, RESPONSE, JOB, ACTION_FIELDS, inputSchemas } = require('./contract');
-const ROOT = path.join(__dirname, '..', 'data', 'jobs', 'v5');
+const ROOT = path.join(__dirname, '..', 'data', 'jobs', 'v6');
 const fingerprint = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const read = filename => JSON.parse(fs.readFileSync(filename, 'utf8'));
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])])) : value;
@@ -54,11 +54,11 @@ class ApplicationService {
         return filename;
     }
     normalize(input) {
-        record(input, ['mode', 'folder', 'outputDir', 'backupDir', 'pipeline', 'taskId', 'selection', 'providerId']);
+        record(input, ['mode', 'folder', 'outputDir', 'backupDir', 'pipeline', 'sourceFilter', 'taskId', 'selection', 'providerId']);
         let request;
         if (['process', 'preview'].includes(input.mode)) {
-            record(input, ['mode', 'folder', 'outputDir', 'backupDir', 'pipeline']);
-            request = { mode: input.mode, folder: canonical(input.folder), pipeline: require('../framework/registry').normalizePipeline(input.pipeline) };
+            record(input, ['mode', 'folder', 'outputDir', 'backupDir', 'pipeline', 'sourceFilter']);
+            request = { mode: input.mode, folder: canonical(input.folder), pipeline: require('../framework/registry').normalizePipeline(input.pipeline), sourceFilter: require('../framework/registry').normalizeFilter(input.sourceFilter) };
             for (const key of ['outputDir', 'backupDir']) if (input[key] !== undefined) request[key] = canonical(input[key]);
             if (request.outputDir && request.backupDir) fail('INVALID_REQUEST', '另存与覆盖备份不能同时启用');
         } else if (['resume', 'retry', 'restore-preview', 'restore', 'restore-retry'].includes(input.mode)) {
@@ -93,7 +93,7 @@ class ApplicationService {
     metadata(id) {
         if (typeof id !== 'string' || !/^[a-f0-9]{64}$/.test(id)) fail('INVALID_REQUEST', '无效作业 ID');
         const directory = path.join(this.directory, id);
-        if (!fs.existsSync(directory)) fail('NOT_FOUND', '没有该 /5 作业；不读取或迁移旧作业');
+        if (!fs.existsSync(directory)) fail('NOT_FOUND', '没有该 /6 作业；不读取或迁移旧作业');
         if (fs.realpathSync(directory) !== directory) fail('PATH_FORBIDDEN', '作业目录不能是链接');
         const meta = read(path.join(directory, 'job.json'));
         if (meta.schema !== JOB || meta.id !== id || !Number.isSafeInteger(meta.sequence) || meta.sequence < 1 || typeof meta.owner !== 'string' || !meta.publicRequest) fail('UNSUPPORTED_VERSION', '作业格式不支持');
@@ -209,7 +209,7 @@ class ApplicationService {
         if (kind === 'restore') return page(state.preview?.files || [], pagination);
         const filename = path.join(this.reportLocation(id), 'report.json');
         const report = read(filename);
-        if (report.schema !== 'asset-toolbox.report/1') fail('UNSUPPORTED_VERSION', '报告版本不支持');
+        if (report.schema !== 'asset-toolbox.report/2') fail('UNSUPPORTED_VERSION', '报告版本不支持');
         return { ...page(kind === 'audio' ? report.audioResults || [] : report.files, pagination), summary: report.summary, error: report.error || null };
     }
     dispatch(action, input = {}) {

@@ -1,6 +1,6 @@
 # 外部 Agent、CLI 与 MCP
 
-状态：已实现统一应用 API /7、结构化 CLI、桌面公共作业接口、stdio MCP，以及按需启动的本机 HTTP API / MCP Streamable HTTP。源码为 `resource-core/application/`、`resource-core/cli.js`、`agent-mcp/server.mjs`；决策见 [ADR 0009](../decisions/0009-agent-interfaces.md)、[0010](../decisions/0010-local-http.md) 和 [0011](../decisions/0011-unified-application.md)。不需要模型密钥；stdio 保持默认，HTTP 启动与认证见[专门指南](http.md)。
+状态：已实现统一应用 API /8、结构化 CLI、桌面公共作业接口、stdio MCP，以及按需启动的本机 HTTP API / MCP Streamable HTTP。源码为 `resource-core/application/`、`resource-core/cli.js`、`agent-mcp/server.mjs`；决策见 [ADR 0009](../decisions/0009-agent-interfaces.md)、[0010](../decisions/0010-local-http.md) 和 [0011](../decisions/0011-unified-application.md)。不需要模型密钥；stdio 保持默认，HTTP 启动与认证见[专门指南](http.md)。
 
 ## 接入与目录授权
 
@@ -30,14 +30,14 @@
 
 ## 统一动作
 
-CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST /api/v7/<action>`。三者直接调用同一应用服务，MCP 不执行 shell 或解析 CLI 文本。桌面直接使用相同公共动作和作业 DTO，通过启动上下文区分权限和生命周期；专属设置独立，见[统一应用接口](application.md)。
+CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST /api/v8/<action>`。三者直接调用同一应用服务，MCP 不执行 shell 或解析 CLI 文本。桌面直接使用相同公共动作和作业 DTO，通过启动上下文区分权限和生命周期；专属设置独立，见[统一应用接口](application.md)。
 
 | action | 输入 | 返回及用途 |
 | --- | --- | --- |
 | service-status / service-start / service-stop | `{}` | 受管理服务状态 / 启动 / 安全停止请求，见[服务管理](service-management.md) |
 | service-configure | `{port,mcp,policy}` | 停止时配置，Agent 必须获独立管理授权且不能扩大 policy |
 | service-client-config | `{transport}` | stdio 或 http 连接配置；不返回令牌正文 |
-| capabilities | `{}` | 目录 API 3、每操作/适配器 JSON Schema、版本、依赖获取说明，以及当前 policy |
+| capabilities | `{}` | 目录 API 4、每操作/适配器 JSON Schema、版本、依赖获取说明，以及当前 policy |
 | validate | `{request}` | 规范化步骤与版本、校验路径权限；不扫描、不编码 |
 | submit | `{request, idempotencyKey}` | 创建作业；MCP 立即返回 jobId，CLI 等待最终状态 |
 | status / cancel | `{jobId}` | 进度/结果或协作取消请求 |
@@ -72,7 +72,7 @@ CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST
 '{"maxConcurrent":3}' | .\runtime\node.exe resource-core/cli.js api scheduling-set --local --input -
 ```
 
-`--input -` 读取 UTF-8 stdin JSON；省略 input 等价于 `{}`。stdout 只有一个 `asset-toolbox.response/7` JSON，启动回执与日志写 stderr。成功响应 `{schema,ok:true,result}`；拒绝响应 `{schema,ok:false,error:{code,message}}`。CLI submit 始终等待，便于脚本可靠取得退出码；另一个 CLI 进程可通过相同 policy 的 jobs/status/cancel 查询和取消。
+`--input -` 读取 UTF-8 stdin JSON；省略 input 等价于 `{}`。stdout 只有一个 `asset-toolbox.response/8` JSON，启动回执与日志写 stderr。成功响应 `{schema,ok:true,result}`；拒绝响应 `{schema,ok:false,error:{code,message}}`。CLI submit 始终等待，便于脚本可靠取得退出码；另一个 CLI 进程可通过相同 policy 的 jobs/status/cancel 查询和取消。
 
 位置参数 CLI 是公共 submit 的本地适配，自动生成幂等键并等待；`api` 子命令也可显式使用 `--local` 代替 `--policy`。二者同样记录持久作业和任务。Agent 建议使用固定 policy；本地上下文和任意 shell 权限不受 Agent 目录限制。batch.js 仅为内部工作进程，不再提供用户 CLI。
 
@@ -82,7 +82,7 @@ CLI 动作为下表 action，MCP 对应 `asset_<action>`，HTTP API 对应 `POST
 
 幂等键为 1–128 个英文、数字或 `._:-`，作用域由启动上下文决定（相同规范化 policy 共用；桌面与本地 CLI 共用本地作用域）；同键同规范化请求返回同一个持久 jobId，同键不同请求明确冲突。键在启动前落盘，不自动回收；启动失败或中断也不会静默重执行。失败后先查 taskId 和报告：已有任务优先 resume/retry，确定需要新作业时才使用新键。不同键不保证业务去重。
 
-jobId 对应一次预览/执行；taskId 对应可多次续跑、重试和恢复的素材任务。全部作业存入 `data/jobs/v5/<jobId>/`，包含 /5 job 记录、request/status/cancel、worker/exit 记录；桌面也使用持久 jobId。各入口通过应用服务共用 `JobSession` 和批处理进程，自动化不会保存桌面 settings。
+jobId 对应一次预览/执行；taskId 对应可多次续跑、重试和恢复的素材任务。全部作业存入 `data/jobs/v6/<jobId>/`，包含 /6 job 记录、request/status/cancel、worker/exit 记录；桌面也使用持久 jobId。各入口通过应用服务共用 `JobSession` 和批处理进程，自动化不会保存桌面 settings。
 
 同一 Windows 用户、同一核心安装的各入口共用资源感知队列，按配置的 1–8 个槽位并行（默认 2）；冲突项等待，容量满才拒绝登记。预览和依赖安装也声明资源；原有每任务锁继续保留。不同安装副本、不同用户或直接调用 engine 库不共享此锁，不能据此并发操作同一素材。失效 PID 锁可回收；无法确认的锁保守拒绝。
 
@@ -92,10 +92,14 @@ HTTP 的单次请求或连接结束不触发作业取消，作业由服务进程
 
 验证：核心 `application.test.js` 覆盖权限、联接、幂等、分页、恢复/导出和跨入口锁，`codecs.test.js` 另验真实 Sharp/FFmpeg；MCP `server.test.mjs` 验证 stdio，HTTP 见两套 `http` 测试。远程授权、OS 常驻服务、流式报告和自动清理仍未实现；资源感知有限并行已实现。
 
-应用及响应现为 /7，作业升级为 job/5；HTTP /api/v1–6 返回 410，旧 automation 作业不读取、不迁移；公共输入不再接受桌面 taskFile/start/poll。素材任务和报告版本不变。详见[版本拒绝](application.md#版本与验证)。
+应用及响应为 /8，持久作业 job/6；HTTP /api/v1–7 返回 410，旧作业不读取、不迁移；公共输入不接受桌面 taskFile/start/poll。素材任务/报告 /2、settings/3 和目录 API 4，详见[版本拒绝](application.md#版本与验证)。
 
 手动存储维护仅允许桌面或 `--local` CLI；两种 MCP、HTTP、带 policy 的 CLI 均返回 PERMISSION_DENIED。作业被清理后返回 resultsExpired，原幂等键仍有效；不能把 RESULTS_EXPIRED 当作可以自动重新提交的理由。详见[存储维护](storage.md)。
 
-## 排队、有限并行与 /7
+## 资源过滤
 
-所有入口统一资源感知调度，按配置的 1–8 个槽位并行（默认 2），冲突项保持 FIFO，submit 成功表示已登记；status.phase=queued 时返回 queuePosition（含执行中的登记顺位，不代表启动顺序）、sequence、waitReason、runningCount 与 concurrencyLimit。CLI 仍等待至 done，无默认等待超时，Ctrl+C 请求取消；HTTP 请求断开仍继续。最多 100 个未结束作业，超限 BUSY 且不占幂等键。持有会话退出取消其全部等待项，运行项在文件边界退出；不自动接管崩溃会话。旧 HTTP 1–6 与旧 job 格式拒绝，不迁移。详见[队列](queue.md)。
+资源选择使用统一 sourceFilter 与 pipeline[].filter，属性目录由 capabilities 返回，禁止传入读取代码。CLI 快捷入口支持 `--source-filter <JSON>`，API/两种 MCP/HTTP 直接使用同一请求字段；恢复输入不支持过滤，仍显式选择备份哈希。示例和按当前中间产物求值的语义见[属性与过滤器](properties-and-filters.md)。
+
+## 排队与有限并行
+
+所有入口统一资源感知调度，按配置的 1–8 个槽位并行（默认 2），冲突项保持 FIFO，submit 成功表示已登记；status.phase=queued 时返回 queuePosition（含执行中的登记顺位，不代表启动顺序）、sequence、waitReason、runningCount 与 concurrencyLimit。CLI 仍等待至 done，无默认等待超时，Ctrl+C 请求取消；HTTP 请求断开仍继续。最多 100 个未结束作业，超限 BUSY 且不占幂等键。持有会话退出取消其全部等待项，运行项在文件边界退出；不自动接管崩溃会话。旧 HTTP 1–7 与旧 job 格式拒绝，不迁移。详见[队列](queue.md)。

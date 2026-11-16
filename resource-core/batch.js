@@ -51,7 +51,7 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
     const parentPid = process.ppid;
     const shouldCancel = () => fs.existsSync(path.join(jobDirectory, 'cancel')) ||
         (require.main === module && !require('./application/lock').alive(parentPid));
-    const report = { schema: 'asset-toolbox.report/1', startedAt, source: request.folder, mode: request.mode, files };
+    const report = { schema: 'asset-toolbox.report/2', startedAt, source: request.folder, mode: request.mode, files };
     try {
     publish({}, true);
     try {
@@ -95,8 +95,8 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
             unlock = task.lock();
             if (task.restoreStarted) throw new Error('此任务已开始从备份恢复，不能继续处理或重试处理；如需重新处理，请新建任务');
             request = { ...request, folder: task.header.source, pipeline: task.header.pipeline,
-                outputDir: task.header.outputDir, backupDir: task.header.backupDir };
-            const current = prepareFolder(request.folder, { pipeline: request.pipeline, fileList: [],
+                outputDir: task.header.outputDir, backupDir: task.header.backupDir, sourceFilter: task.header.sourceFilter };
+            const current = prepareFolder(request.folder, { pipeline: request.pipeline, sourceFilter: request.sourceFilter, fileList: [],
                 ...(request.outputDir ? { outputDir: request.outputDir } : {}), ...(request.backupDir ? { backupDir: request.backupDir } : {}) });
             if (current.root !== task.header.source || current.outputRoot !== task.header.outputDir || current.backupRoot !== task.header.backupDir) throw new Error('原任务文件夹的实际位置已改变，已停止恢复');
             report.recoveredFiles = recoverTask(task);
@@ -105,8 +105,9 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
         options = normalizePipeline(request.pipeline);
         report.source = request.folder;
         report.pipeline = options;
+        report.sourceFilter = require('./framework/registry').normalizeFilter(request.sourceFilter);
         report.outputDir = request.outputDir || null; report.backupDir = request.backupDir || null;
-        const common = { pipeline: options, shouldCancel, onProgress: update => publish(update) };
+        const common = { pipeline: options, sourceFilter: request.sourceFilter, shouldCancel, onProgress: update => publish(update) };
         if (request.outputDir) common.outputDir = request.outputDir;
         if (request.backupDir) common.backupDir = request.backupDir;
         if (request.mode === 'preview') {
@@ -124,12 +125,12 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
                     const relative = path.relative(plan.root, filename);
                     publish({ phase: 'scanning', current: relative, found: pending.length });
                     let stamp;
-                    try { stamp = snapshot(safeSource(plan.root, filename)); }
+                    try { stamp = plan.sourceSnapshots.get(filename) || snapshot(safeSource(plan.root, filename)); }
                     catch { stamp = { size: -1, mtimeMs: 0, ctimeMs: 0 }; }
                     pending.push({ path: relative, resourceType: byExtension.get(path.extname(filename).toLowerCase()).id, snapshot: stamp });
                 }
                 cancelled ||= Boolean(plan.cancelled || shouldCancel());
-                if (!cancelled) task.append({ type: 'plan', files: pending });
+                if (!cancelled) task.append({ type: 'plan', files: pending, sourceSelection: { discovered: plan.discovered, filteredOut: plan.filteredOut } });
             }
             const selected = [...task.entries.values()].filter(entry => request.mode === 'retry' ? entry.status === 'failed' : entry.status === 'pending');
             const beforeFile = (relative, filename) => {
@@ -148,6 +149,8 @@ function runJob(request, jobDirectory, reportRoot = path.join(__dirname, 'data',
                 log: message => publish({ message }), onFile: file => { task.finish(file); files.push(file); },
             });
             report.summary = summary;
+            report.sourceSelection = task.sourceSelection;
+            Object.assign(summary, task.sourceSelection);
             publish({ summary, processed: summary.processed + summary.skipped + summary.failed, total: summary.total,
                 cancelled: Boolean(summary.cancelled), exitCode: summary.failed ? 1 : summary.cancelled ? 2 : 0 }, true);
         }

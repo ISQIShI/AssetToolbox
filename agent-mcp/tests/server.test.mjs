@@ -64,7 +64,7 @@ test('official SDK discovers tools, validates input and runs idempotent jobs wit
     const f = await fixture(t);
     const { tools } = await f.client.listTools(); assert.equal(tools.length, 17);
     assert.ok(tools.find(tool => tool.name === 'asset_submit').inputSchema.properties.request);
-    const catalog = await f.call('capabilities'); assert.equal(catalog.result.apiVersion, 3);
+    const catalog = await f.call('capabilities'); assert.equal(catalog.result.apiVersion, 4);
     const invalid = await f.client.callTool({ name: 'asset_submit', arguments: { request: f.request } }); assert.equal(invalid.isError, true);
     const denied = await f.call('validate', { request: { ...f.request, outputDir: path.dirname(f.source) } }); assert.equal(denied.error.code, 'PATH_FORBIDDEN');
     const started = await f.call('submit', { request: f.request, idempotencyKey: 'mcp-process' }); assert.equal(started.ok, true);
@@ -96,5 +96,5 @@ test('stdio also negotiates the 2026-07-28 protocol with the official v2 client'
     await f.client.close();
     const modern = await f.connect({ pin: '2026-07-28' });
     assert.equal((await modern.client.listTools()).tools.length, 17);
-    assert.equal((await modern.call('capabilities')).result.applicationApi, 'asset-toolbox.application/7');
+    assert.equal((await modern.call('capabilities')).result.applicationApi, 'asset-toolbox.application/8');
 });

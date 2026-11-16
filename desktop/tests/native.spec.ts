@@ -34,7 +34,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
     const originals = new Map<string, Buffer>();
     for (const name of ['a', 'b', 'c', 'd', 'e', 'f']) { const data = Buffer.from('PACK:' + name + 'x'.repeat(4000)); const relative = path.join('二级', name + '.pack'); originals.set(relative, data); fs.writeFileSync(path.join(source, relative), data); }
     const settingsPath = path.join(tool, 'resource-core/data/settings.json');
-    const config = { schema: 'asset-toolbox.settings/2', sourceDir: source, outputDir: output, backupDir: backup, saveMode: 'saveAs', backupEnabled: true, pipeline: [{ id: 'pack', resourceType: 'extra', operation: 'compress', provider: 'extra', enabled: true, parameters: {}, providerOptions: { extraLevel: 6, extraMode: 'best', extraText: '中文 配置' } }] };
+    const config = { schema: 'asset-toolbox.settings/3', sourceDir: source, outputDir: output, backupDir: backup, saveMode: 'saveAs', backupEnabled: true, pipeline: [{ id: 'pack', resourceType: 'extra', operation: 'compress', provider: 'extra', enabled: true, parameters: {}, providerOptions: { extraLevel: 6, extraMode: 'best', extraText: '中文 配置' } }] };
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true }); fs.writeFileSync(settingsPath, JSON.stringify(config));
     // 常规原生回归不访问下载渠道；若误调用安装器，隔离副本立即失败。
     fs.writeFileSync(path.join(tool, 'resource-core/framework/dependencies/download.js'), "exports.download=async()=>{throw Error('离线原生回归禁止下载，请运行 network 项目')};");
@@ -238,7 +238,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         const nativeStatus = await page.evaluate(jobId => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'status', payload: { jobId } }), completedJobId);
         const cliStatus = spawnSync(path.join(tool, 'runtime/node.exe'), [path.join(tool, 'resource-core/cli.js'), 'api', 'status', '--local', '--input', '-'], { input: JSON.stringify({ jobId: completedJobId }), encoding: 'utf8', windowsHide: true, timeout: 15000 });
         expect(cliStatus.status, cliStatus.stderr).toBe(0);
-        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/7');
+        expect(JSON.parse(cliStatus.stdout).schema).toBe('asset-toolbox.response/8');
         expect(JSON.parse(cliStatus.stdout).result).toEqual(nativeStatus);
         expect(nativeStatus.taskId).toBe(adapterTask.id); expect(nativeStatus.task).not.toHaveProperty('taskFile');
         expect(nativeStatus.hasReport).toBe(true); expect(nativeStatus).not.toHaveProperty('reportDirectory');
@@ -342,8 +342,8 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         const parallelJob = await page.evaluate(request => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'submit', payload: { request, idempotencyKey: 'native-parallel' } }), parallelRequest);
         await button('刷新作业').click(); await page.locator('.job-row').filter({ hasText: parallelJob.jobId }).click();
         await expect(page.locator('.job-detail')).toContainText('运行中');
-        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v5', parallelJob.jobId, 'worker.json'))).toBe(true);
-        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v5', runningId, 'exit.json'))).toBe(false);
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v6', parallelJob.jobId, 'worker.json'))).toBe(true);
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v6', runningId, 'exit.json'))).toBe(false);
         await page.screenshot({ path: info.outputPath('parallel-running.png') });
         await button('取消此作业').click(); await expect(page.locator('.job-detail')).toContainText('已取消');
         expect(external.exitCode).toBeNull();
@@ -354,11 +354,11 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect(page.locator('.job-detail')).toContainText('等待冲突资源释放');
         await page.screenshot({ path: info.outputPath('queue-waiting.png') });
         await button('取消此作业').click(); await expect(page.locator('.job-detail')).toContainText('已取消');
-        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v5', queued.jobId, 'worker.json'))).toBe(false);
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v6', queued.jobId, 'worker.json'))).toBe(false);
         const closingQueued = await page.evaluate(request => (window as any).__TAURI_INTERNALS__.invoke('core_call', { action: 'submit', payload: { request, idempotencyKey: 'native-closing-queued' } }), queueRequest);
         await close(); expect(external.exitCode).toBeNull();
-        expect(JSON.parse(fs.readFileSync(path.join(tool, 'resource-core/data/jobs/v5', closingQueued.jobId, 'status.json'), 'utf8')).cancelled).toBe(true);
-        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v5', runningId, 'cancel'))).toBe(false);
+        expect(JSON.parse(fs.readFileSync(path.join(tool, 'resource-core/data/jobs/v6', closingQueued.jobId, 'status.json'), 'utf8')).cancelled).toBe(true);
+        expect(fs.existsSync(path.join(tool, 'resource-core/data/jobs/v6', runningId, 'cancel'))).toBe(false);
         await launch(); await tab('作业').click();
         await page.locator('.job-row').filter({ hasText: runningId }).click();
         await button('取消此作业').click();
@@ -366,7 +366,7 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         await expect.poll(() => external!.exitCode).not.toBeNull();
         expect(JSON.parse(externalOutput).result.state.cancelled).toBe(true);
         // 只给隔离副本中的已完成作业模拟 45 天前时间；真实配置与素材不参与清理验收。
-        const oldJob = path.join(tool, 'resource-core/data/jobs/v5', completedJobId);
+        const oldJob = path.join(tool, 'resource-core/data/jobs/v6', completedJobId);
         const jobFile = path.join(oldJob, 'job.json'), oldMeta = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
         const oldReport = JSON.parse(fs.readFileSync(path.join(oldJob, 'status.json'), 'utf8')).reportDirectory;
         const oldTime = new Date(Date.now() - 45 * 86400000);

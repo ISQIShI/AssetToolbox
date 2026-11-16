@@ -1,6 +1,6 @@
 # 持久队列与有限并行
 
-状态：已实现单安装的资源感知队列，并行数量 **1–8，默认 2**，最多保留 **100** 个未结束作业。应用/响应 /7、HTTP /api/v7、job/5、dispatch/3、execution/2、resources/1。决策见 [ADR 0014](../decisions/0014-resource-aware-concurrency.md) 和 [0015](../decisions/0015-configurable-concurrency.md)；入口与生命周期见[统一应用接口](application.md)。
+状态：已实现单安装的资源感知队列，并行数量 **1–8，默认 2**，最多保留 **100** 个未结束作业。应用/响应 /8、HTTP /api/v8、job/6、dispatch/3、execution/2、resources/1。决策见 [ADR 0014](../decisions/0014-resource-aware-concurrency.md) 和 [0015](../decisions/0015-configurable-concurrency.md)；入口与生命周期见[统一应用接口](application.md)。
 
 ## 配置、CPU 建议与稳定槽位
 
@@ -16,7 +16,7 @@ CPU 核心数不直接作为作业上限。queue 返回 availableProcessors（No
 
 ## 调度与公平性
 
-桌面、CLI、MCP stdio/HTTP 和 HTTP API 共用 ApplicationService。提交锁内预检请求、权限及依赖，计算资源集合，分配递增 sequence，排他写入并 fsync `data/jobs/v5/<jobId>/job.json`。幂等键重放原 ID；容量满不登记身份。capabilities.scheduling 公布当前 maxConcurrent、范围、maxPending 和 ordering=conflict-fifo。
+桌面、CLI、MCP stdio/HTTP 和 HTTP API 共用 ApplicationService。提交锁内预检请求、权限及依赖，计算资源集合，分配递增 sequence，排他写入并 fsync `data/jobs/v6/<jobId>/job.json`。幂等键重放原 ID；容量满不登记身份。capabilities.scheduling 公布当前 maxConcurrent、范围、maxPending 和 ordering=conflict-fifo。
 
 各原持有会话每 100ms 调度一次；无需常驻进程。调度同时取得提交锁、短执行登记锁，从持久启动声明和存活 worker 占用计算容量；启动声明一经落盘就占槽，不等待 worker 自己抢槽。只有原持有者可以启动自己的作业，不转移权限。
 
@@ -62,7 +62,7 @@ queued 状态包含 sequence、queuePosition、waitReason、runningCount、concu
 
 持有者死亡的等待项中断，不自动接管权限或重放。dispatch 落盘后永不再次启动同 ID。活 worker 继续占用，父进程死亡后按文件边界取消；确认 PID 已死的临时执行占用才回收。PID 重用、坏记录和丢失退出确认保守阻塞，不超时强抢、不强杀编码器。素材任务通过显式 resume/retry 恢复。
 
-旧 HTTP 1–6 返回 410，旧 job/1–4 不读取或迁移；新目录内旧 schema、未知 dispatch/resources/执行占用格式拒绝。task/report/settings 和提供方契约不变。升级必须关闭旧入口并配套更新 EXE、核心与 MCP；不支持同一安装同时运行旧执行锁实现。
+旧 HTTP 1–7 返回 410，旧 job/1–5 不读取或迁移；新目录内旧 schema、未知 dispatch/resources/执行占用格式拒绝。task/report/settings 和提供方契约不变。升级必须关闭旧入口并配套更新 EXE、核心与 MCP；不支持同一安装同时运行旧执行锁实现。
 
 锁只协调同一安装，不是跨安装或 OS 沙箱；外部编辑器、同权限篡改和不同安装访问相同素材仍需操作者协调。没有后台接管、自动恢复、分布式调度、目录索引或自动清理。同步扫描历史记录仍是性能边界。
 

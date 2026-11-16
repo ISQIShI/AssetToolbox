@@ -256,7 +256,7 @@ test('preserves fake and corrupt images, then continues to valid PNG and JPEG fi
 test('empty directories and invalid paths have clear outcomes', windowsOnly, t => {
     const root = temporaryRoot(t);
     assert.deepEqual(processFolder(root, { log() {} }), {
-        total: 0, processed: 0, skipped: 0, failed: 0, savedBytes: 0,
+        total: 0, discovered: 0, filteredOut: 0, processed: 0, skipped: 0, failed: 0, savedBytes: 0,
         copied: 0, backedUp: 0, backupDirectory: null,
     });
     assert.throws(() => processFolder(path.join(root, 'missing')), { code: 'ENOENT' });

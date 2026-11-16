@@ -8,7 +8,7 @@ AssetToolbox 1.0.0 是 Windows 便携资源处理工具，使用 Vue 3/TypeScrip
 flowchart TD
     UI[Vue / WebView2] -->|Tauri invoke| Host[Rust 宿主]
     Host -->|JSON Lines| Bridge[Node 桌面会话]
-    CLI[结构化 CLI] --> Application[ApplicationService /7 唯一公共用例]
+    CLI[结构化 CLI] --> Application[ApplicationService /8 唯一公共用例]
     MCP[MCP stdio / Streamable HTTP] --> Application
     HTTP[本机 HTTP API] --> Application
     Bridge --> Application
@@ -20,6 +20,8 @@ flowchart TD
     Session --> Worker[batch.js 工作进程 / 资源占用]
     Worker --> Engine[engine.js 流水线]
     Engine --> Catalog[类型 / 操作 / 提供方]
+    Engine --> Filter[共享过滤器 / 来源与步骤条件]
+    Filter --> Properties[代码属性目录 / 通用文件与专属图片属性]
     Engine --> Tool[编码器 / Sharp 子进程]
     Worker --> Restore[restore.js 恢复服务]
     Worker --> Data[任务事件 / 报告]

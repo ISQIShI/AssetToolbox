@@ -19,7 +19,7 @@ async function setup(t, requestOverrides = {}) {
     const { jobId } = f.service.submit(request, 'retention');
     const finished = await f.until(jobId); assert.equal(finished.exitCode, 0);
     const state = { ...finished, reportDirectory: f.service.rawStatus(jobId).reportDirectory };
-    const directory = path.join(f.core, 'data/jobs/v5', jobId);
+    const directory = path.join(f.core, 'data/jobs/v6', jobId);
     const age = () => {
         const old = new Date(Date.now() - 45 * 86400000);
         const file = path.join(directory, 'job.json'), meta = JSON.parse(fs.readFileSync(file)); meta.createdAt = old.toISOString(); fs.writeFileSync(file, JSON.stringify(meta));

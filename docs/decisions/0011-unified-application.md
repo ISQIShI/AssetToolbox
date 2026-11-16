@@ -2,6 +2,8 @@
 
 后续修订：[0012](0012-storage-retention-and-test-layers.md) 更新结果保留语义，[0013](0013-persistent-fifo.md) 更新应用/作业版本与调度方式；下文保留实施当时背景，统一实现与上下文原则继续有效。
 
+[0017](0017-properties-and-filters.md) 在同一公共能力中加入属性目录与来源/步骤过滤，更新应用、作业及素材任务版本；各入口仍只适配。
+
 状态：已采用。日期：2026-11-10。修订 [0009](0009-agent-interfaces.md) 和 [0010](0010-local-http.md) 的统一边界；保留 HTTP/stdio、目录授权及文件保护设计。
 
 ## 背景

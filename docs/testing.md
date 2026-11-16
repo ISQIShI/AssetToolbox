@@ -18,6 +18,8 @@
 
 核心测试文件必须登记到 `test-core.cjs` 的 source/codecs 清单；未分类或漏文件直接失败。合成提供方验证调度与文件安全，真实编码器测试验证格式和效果，两者不能互相替代。原生测试不得设置 `ASSET_TOOLBOX_AUDIO_BROWSER`；浏览器备用验证单独记录。
 
+`filters.test.js` 属于 source 层，覆盖属性/条件边界、固定清单、版本变化、备份恢复独立性；`resize.test.js` 在 codecs 层验证真实 JPEG EXIF。组件 `filters.test.ts` 验证共享编辑器，MCP `http.test.mjs` 对照五入口选择结果，原生 `filters-native.spec.ts` 用生成 JPG/PNG 验证来源排除、按中间尺寸跳步及原文件不变，并输出两种尺寸主题截图。
+
 ## 自动验证
 
 GitHub Actions 在 push、pull_request 和手动触发时使用 Windows runner；按 `.nvmrc` 和三个锁文件安装依赖，执行 source、MCP、组件、`build:web`、文档及源码检查。安装依赖需要网络，但不下载/上传第三方 EXE，不执行真实编码器或原生 E2E。不使用仓库写权限、凭据持久化或二进制 artifact。

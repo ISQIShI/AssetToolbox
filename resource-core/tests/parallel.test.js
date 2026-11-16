@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { fixture } = require('./fixtures/application');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const jobDir = (f, id) => path.join(f.core, 'data/jobs/v5', id);
+const jobDir = (f, id) => path.join(f.core, 'data/jobs/v6', id);
 function local(t, f) {
     const service = f.ApplicationService.forDesktop(); t.after(() => service.shutdown()); return service;
 }
@@ -93,7 +93,7 @@ test('spawn failure after dispatch releases the reservation without replay or qu
 
 test('automatic provider updates wait for live provider readers and can cancel without downloading', async t => {
     const f = fixture(t, { allowDependencyInstall: true });
-    fs.mkdirSync(path.join(f.core, 'data/jobs/v5'), { recursive: true });
+    fs.mkdirSync(path.join(f.core, 'data/jobs/v6'), { recursive: true });
     const lock = require(path.join(f.core, 'application/lock'));
     const release = lock.acquireShared({ schema: 'asset-toolbox.resources/1', entries: [{ kind: 'provider', key: 'sharp', access: 'read' }] }, 'f'.repeat(64));
     try {

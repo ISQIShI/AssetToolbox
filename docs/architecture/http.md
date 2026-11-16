@@ -1,10 +1,10 @@
 # 本机 HTTP API 与 MCP Streamable HTTP
 
-状态：已实现。仅支持本机 Agent；stdio MCP 保留且仍为默认启动模式。源码为 `resource-core/application/http.js`、`http-server.js`、`server-options.js`、`agent-mcp/server.mjs`、`tools.mjs`；决策见 [ADR 0010](../decisions/0010-local-http.md)。业务动作、目录 policy、幂等键和报告分页使用 /7 [自动化契约](automation.md)。
+状态：已实现。仅支持本机 Agent；stdio MCP 保留且仍为默认启动模式。源码为 `resource-core/application/http.js`、`http-server.js`、`server-options.js`、`agent-mcp/server.mjs`、`tools.mjs`；决策见 [ADR 0010](../decisions/0010-local-http.md)。业务动作、目录 policy、幂等键和报告分页使用 /8 [自动化契约](automation.md)。
 
 ## 统一应用服务边界
 
-桌面、CLI（含快捷命令）、MCP 和 HTTP 直接复用应用 /7 的公共作业契约与唯一实现。权限和 connection/server 生命周期来自启动上下文；没有桌面专用作业分支，详见[统一应用接口](application.md)。桌面设置保持独立，网络不公开 save、bootstrap 或内部执行方法。HTTP 服务只接受 policy 权限及 server 生命周期上下文。
+桌面、CLI（含快捷命令）、MCP 和 HTTP 直接复用应用 /8 的公共作业契约与唯一实现。权限和 connection/server 生命周期来自启动上下文；没有桌面专用作业分支，详见[统一应用接口](application.md)。桌面设置保持独立，网络不公开 save、bootstrap 或内部执行方法。HTTP 服务只接受 policy 权限及 server 生命周期上下文。
 
 ## 启动
 
@@ -36,25 +36,25 @@ stdio 由宿主按会话启动；HTTP 由使用者单独启动并保持运行。
 
 ## HTTP API
 
-所有请求都带 `Authorization: Bearer <令牌>`。API 是动作式 JSON 接口，路径为 `POST /api/v7/<action>`，正文与 CLI/MCP 对应动作的输入一致，响应沿用 `asset-toolbox.response/7`。
+所有请求都带 `Authorization: Bearer <令牌>`。API 是动作式 JSON 接口，路径为 `POST /api/v8/<action>`，正文与 CLI/MCP 对应动作的输入一致，响应沿用 `asset-toolbox.response/8`。
 
 | 路径 | JSON 输入 | 成功响应 |
 | --- | --- | --- |
-| `/api/v7/capabilities` | `{}` | 200，目录、schema、提供方获取信息及当前 policy |
-| `/api/v7/validate` | `{request}` | 200，规范化请求 |
-| `/api/v7/submit` | `{request,idempotencyKey}` | 202，立即返回 jobId；需继续查询状态 |
-| `/api/v7/status` | `{jobId}` | 200，进度、done、exitCode、taskId |
-| `/api/v7/cancel` | `{jobId}` | 200，取消请求回执 |
-| `/api/v7/jobs`、`/api/v7/tasks` | `{offset?,limit?}` | 200，分页摘要 |
-| `/api/v7/results` | `{jobId,kind?,offset?,limit?}` | 200，分页文件、音频或恢复结果 |
+| `/api/v8/capabilities` | `{}` | 200，目录、schema、提供方获取信息及当前 policy |
+| `/api/v8/validate` | `{request}` | 200，规范化请求 |
+| `/api/v8/submit` | `{request,idempotencyKey}` | 202，立即返回 jobId；需继续查询状态 |
+| `/api/v8/status` | `{jobId}` | 200，进度、done、exitCode、taskId |
+| `/api/v8/cancel` | `{jobId}` | 200，取消请求回执 |
+| `/api/v8/jobs`、`/api/v8/tasks` | `{offset?,limit?}` | 200，分页摘要 |
+| `/api/v8/results` | `{jobId,kind?,offset?,limit?}` | 200，分页文件、音频或恢复结果 |
 | `GET /health` | 无正文 | 200，应用接口版本及是否挂载 MCP；仍需认证 |
 
 示例：
 
 ```powershell
 $assetHeaders = @{ Authorization = 'Bearer ' + (Get-Content -Raw resource-core/data/http-token.txt).Trim() }
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v7/capabilities -Headers $assetHeaders -ContentType 'application/json' -Body '{}'
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v7/submit -Headers $assetHeaders -ContentType 'application/json' -InFile examples/agent-resize.example.json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v8/capabilities -Headers $assetHeaders -ContentType 'application/json' -Body '{}'
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v8/submit -Headers $assetHeaders -ContentType 'application/json' -InFile examples/agent-resize.example.json
 ```
 
 先复制修改请求示例中的路径和幂等键。相同 policy 的 CLI、stdio、HTTP API 与 HTTP MCP 共用幂等记录；同一 HTTP 服务中的 API 和 MCP 使用同一个应用实例。桌面/本地 CLI 作业也可按 jobId 访问，但必须通过当前 policy 对原请求的授权检查。响应丢失时使用同键重试，不以新键盲目重做。
@@ -94,8 +94,8 @@ Host 必须是当前端口的 127.0.0.1 或 localhost，不采信代理转发头
 
 ## 存储维护与版本
 
-当前 HTTP 为 /api/v7；旧 /api/v1–6 返回 410/UNSUPPORTED_VERSION。应用和响应为 /7，持久 job 为 /5，policy 为 /2。`storage-preview/storage-clean` 与 scheduling-set 仍不授权 policy；服务管理则由 policy/2 的 allowServiceManagement 显式授权并核对与服务配置等权，禁止输入扩权。已清理作业的 results 返回 410/RESULTS_EXPIRED。默认 stdio 及两种传输的工具工厂保持不变。
+当前 HTTP 为 /api/v8；旧 /api/v1–7 返回 410/UNSUPPORTED_VERSION。应用和响应为 /8，持久 job 为 /6，policy 为 /2。`storage-preview/storage-clean` 与 scheduling-set 仍不授权 policy；服务管理则由 policy/2 的 allowServiceManagement 显式授权并核对与服务配置等权，禁止输入扩权。已清理作业的 results 返回 410/RESULTS_EXPIRED。默认 stdio 及两种传输的工具工厂保持不变。
 
 POST submit 返回 202 后，作业可能排队；status 的 queued/queuePosition 表示等待，仍需轮询至 done。服务退出取消自己全部等待及运行项，单次请求断开不取消。见[队列](queue.md)。
 
-新增 queue 与 scheduling-set 同样通过 /api/v7 暴露：前者按当前 policy 过滤作业并匿名显示其他占用；后者固定返回 403/PERMISSION_DENIED，HTTP/MCP 不能修改全局预算或通过参数扩权。
+新增 queue 与 scheduling-set 同样通过 /api/v8 暴露：前者按当前 policy 过滤作业并匿名显示其他占用；后者固定返回 403/PERMISSION_DENIED，HTTP/MCP 不能修改全局预算或通过参数扩权。
