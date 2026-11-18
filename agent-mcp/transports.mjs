@@ -9,7 +9,17 @@ export function httpAdapter(service) {
         legacy: 'stateless', maxRequestBodySize: http.MAX_BODY_BYTES, maxSubscriptions: 16,
         onerror: error => console.error(error.message),
     });
-    return { mcpHandler: toNodeHandler(handler, { maxRequestBodySize: http.MAX_BODY_BYTES, onerror: error => console.error(error.message) }), closeMcp: () => handler.close() };
+    const mcpHandler = toNodeHandler({
+        async fetch(request, options) {
+            const response = await handler.fetch(request, options);
+            if (response.headers.get('connection')?.toLowerCase() !== 'keep-alive') return response;
+            // SSE 的连接复用交给 Node 决定，达到单连接请求上限时由它发送 close。
+            const outgoing = new Response(response.body, response);
+            outgoing.headers.delete('connection');
+            return outgoing;
+        },
+    }, { maxRequestBodySize: http.MAX_BODY_BYTES, onerror: error => console.error(error.message) });
+    return { mcpHandler, closeMcp: () => handler.close() };
 }
 export function stdioAdapter(service) {
     const handle = serveStdio(() => createServer(service), { onerror: error => console.error(error.message) });

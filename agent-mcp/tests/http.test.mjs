@@ -162,6 +162,41 @@ test('Streamable HTTP supports both protocol eras and concurrent clients without
     assert.equal(fs.readFileSync(path.join(f.output, '0.pack'), 'utf8'), 'PACK:dat');
 });
 
+test('顺序 MCP 请求在每个连接的第 100 次响应后正常轮换', async t => {
+    const f = await fixture(t);
+    const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+    f.cleanups.push(() => agent.destroy());
+    async function ping(id) {
+        return new Promise((resolve, reject) => {
+            const request = http.request(f.mcpUrl, { agent, method: 'POST', headers: {
+                Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json',
+                Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25',
+            } }, response => {
+                const socket = response.socket, chunks = [];
+                response.on('data', chunk => chunks.push(chunk));
+                response.on('error', reject);
+                response.on('end', () => resolve({ socket, status: response.statusCode, connection: response.headers.connection, body: Buffer.concat(chunks).toString() }));
+            });
+            request.on('error', reject);
+            request.end(JSON.stringify({ jsonrpc: '2.0', id, method: 'ping' }));
+        });
+    }
+    const first = await ping(1);
+    for (let id = 2; id < 100; id++) {
+        const result = await ping(id);
+        assert.equal(result.status, 200);
+        assert.equal(result.socket, first.socket);
+    }
+    const last = await ping(100), next = await ping(101);
+    assert.equal(last.status, 200);
+    assert.equal(next.status, 200, `第 100 次响应 Connection=${last.connection}；第 101 次响应 HTTP ${next.status}，正文 ${JSON.stringify(next.body)}`);
+    assert.equal(last.socket, first.socket);
+    assert.equal(last.connection, 'close');
+    assert.notEqual(next.socket, last.socket);
+    assert.match(last.body, /"id":100\b/);
+    assert.match(next.body, /"id":101\b/);
+});
+
 test('MCP HTTP shares authentication and bounds; cancellation is explicit and resumes through the HTTP API', async t => {
     const f = await fixture(t);
     assert.equal((await fetch(f.mcpUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);

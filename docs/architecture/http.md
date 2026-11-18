@@ -80,6 +80,8 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8787/api/v8/submit -Headers
 
 使用官方 SDK 的 [createMcpHandler](https://ts.sdk.modelcontextprotocol.io/v2/api/%40modelcontextprotocol/server/server/createMcpHandler.html) 和 Node 适配器，按请求创建新的 MCP 协议实例，共享应用服务。`tools.mjs` 是两种传输唯一的工具/schema 定义；保留传统协议的无状态处理及 2026-07-28 协商。HTTP 响应按 SDK 使用 JSON 或 SSE；不维护 MCP Session ID，GET/DELETE `/mcp` 返回 405，也不提供旧式独立 `/sse` 端点。
 
+一个 TCP 连接最多承载 100 次请求。MCP 适配器移除 SDK 在 SSE 响应上添加的 `Connection: keep-alive`，由 Node 在达到上限时发出 `Connection: close`。客户端读完本次结果后通过新连接继续查询，同一 jobId 可跨连接观察。显式关闭连接与服务退出的语义各自保留。
+
 ## 生命周期与本机保护
 
 HTTP 请求结束、客户端关闭或临时网络中断都不取消已提交作业；作业由服务进程持有。需要取消时调用 cancel。Ctrl+C/正常服务退出停止接收新请求、请求文件边界取消、等待工作进程结束后关闭连接。Windows 强杀整个进程树仍按既有 INTERRUPTED 与任务日志恢复，不承诺自动回滚。
