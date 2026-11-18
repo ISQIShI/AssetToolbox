@@ -116,3 +116,79 @@ test('committed corrupt metadata still fails instead of being treated as an unpu
     assert.equal(observer.status(job.jobId).exitCode, 0);
     assert.equal(fs.readFileSync(path.join(f.source, '0.pack'), 'utf8'), 'PACK:' + 'test'.repeat(100));
 });
+
+test('an observer cannot combine a running snapshot with a later exit marker to report interruption', async t => {
+    const f = fixture(t, {}, 1), observer = f.ApplicationService.forDesktop();
+    t.after(() => observer.shutdown());
+    const { jobId } = f.service.submit(f.request, 'exit-during-observation');
+    assert.equal((await f.until(jobId)).exitCode, 0);
+    const directory = path.join(f.service.directory, jobId);
+    const status = path.join(directory, 'status.json'), exit = path.join(directory, 'exit.json');
+    const terminal = fs.readFileSync(status), parked = path.join(directory, 'exit-held');
+    fs.renameSync(exit, parked);
+    fs.writeFileSync(status, JSON.stringify({ phase: 'processing', done: false }));
+    const read = fs.readFileSync;
+    let published = false;
+    const gate = t.mock.method(fs, 'readFileSync', (filename, ...args) => {
+        const value = read(filename, ...args);
+        if (filename === status && !published) {
+            published = true;
+            fs.writeFileSync(status, terminal);
+            fs.renameSync(parked, exit);
+        }
+        return value;
+    });
+    try {
+        const observed = observer.status(jobId);
+        assert.ok(published);
+        assert.equal(observed.done, false, JSON.stringify(observed));
+        assert.equal(observer.status(jobId).exitCode, 0);
+    } finally { gate.mock.restore(); }
+    // 终态也可能先于 worker 身份记录被观察到，已派发的作业仍要等待退出确认。
+    fs.renameSync(exit, parked);
+    const worker = path.join(directory, 'worker.json'), parkedWorker = path.join(directory, 'worker-held');
+    fs.renameSync(worker, parkedWorker);
+    try { assert.equal(observer.status(jobId).done, false); }
+    finally { fs.renameSync(parkedWorker, worker); fs.renameSync(parked, exit); }
+    assert.equal(observer.status(jobId).exitCode, 0);
+});
+
+test('owner and observer preserve terminal results across temporary sharing violations and expose persistent read failures', async t => {
+    const f = fixture(t, {}, 1), observer = f.ApplicationService.forDesktop();
+    t.after(() => observer.shutdown());
+    f.service.queue.stop();
+    const { jobId } = f.service.submit(f.request, 'terminal-read');
+    f.service.queue.closed = false; f.service.queue.tick(); f.service.queue.stop();
+    await f.service.session.current(jobId).completion;
+    const status = path.join(f.service.directory, jobId, 'status.json'), read = fs.readFileSync;
+    const original = read(status), terminal = JSON.parse(original);
+    assert.equal(terminal.done, true); assert.equal(terminal.exitCode, 0);
+    for (const service of [f.service, observer]) {
+        let code = 'EBUSY', transient = true;
+        const gate = t.mock.method(fs, 'readFileSync', (filename, ...args) => {
+            if (filename === status && code) {
+                const failure = Object.assign(Error('无法打开状态文件'), { code });
+                if (transient) code = '';
+                throw failure;
+            }
+            return read(filename, ...args);
+        });
+        try {
+            assert.equal(service.status(jobId).exitCode, 0);
+            assert.equal(code, '');
+            code = 'EACCES'; transient = false;
+            assert.throws(() => service.status(jobId), { code: 'EACCES' });
+            code = '';
+            fs.writeFileSync(status, '{');
+            assert.throws(() => service.status(jobId), SyntaxError);
+            for (const invalid of ['null', '{}', '{"done":"false"}']) {
+                fs.writeFileSync(status, invalid);
+                assert.throws(() => service.status(jobId), /done 标志/);
+            }
+            fs.unlinkSync(status);
+            assert.equal(service.status(jobId).errorCode, 'INTERRUPTED');
+            fs.writeFileSync(status, JSON.stringify({ ...terminal, exitCode: 1, error: '恢复失败' }));
+            assert.equal(service.status(jobId).error, '恢复失败');
+        } finally { gate.mock.restore(); fs.writeFileSync(status, original); }
+    }
+});

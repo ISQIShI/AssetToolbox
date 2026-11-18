@@ -3,6 +3,9 @@ const { timingSafeEqual } = require('node:crypto');
 const { ACTION_FIELDS, respond } = require('./service');
 
 const MAX_BODY_BYTES = 1024 * 1024;
+// 只给在途上传一个有界收尾窗口，丢弃的字节不解析、不缓存。
+const REJECT_DRAIN_BYTES = 2 * MAX_BODY_BYTES;
+const REJECT_DRAIN_MS = 1000;
 const errorResponse = (code, message) => ({ schema: 'asset-toolbox.response/8', ok: false, error: { code, message } });
 const statusCodes = { INVALID_REQUEST: 400, UNSUPPORTED_VERSION: 400, PATH_FORBIDDEN: 403, PERMISSION_DENIED: 403, NOT_FOUND: 404, BUSY: 409, IDEMPOTENCY_CONFLICT: 409, NOT_READY: 409, STALE_PREVIEW: 409, RESULTS_EXPIRED: 410, DEPENDENCY_MISSING: 422, MANUAL_INSTALL_REQUIRED: 422 };
 function validToken(token) { return typeof token === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(token); }
@@ -10,6 +13,32 @@ function send(res, status, body) {
     if (res.destroyed || res.writableEnded) return;
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
     res.end(JSON.stringify(body));
+}
+function rejectRequest(req, res, status, code, message) {
+    const body = Buffer.from(JSON.stringify(errorResponse(code, message)));
+    res.writeHead(status, { Connection: 'close', 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': body.length });
+    if (req.complete) { res.end(body); return; }
+    // Node 对 Connection: close 在 finish 后立即销毁 socket。先送出完整响应，
+    // 再允许客户端发完在途数据，避免 Windows 在仍有未读入站数据时复位连接。
+    res.write(body);
+    let discarded = 0;
+    function discard(chunk) {
+        discarded += chunk.length;
+        if (discarded >= REJECT_DRAIN_BYTES) finish();
+    }
+    function finish() {
+        clearTimeout(timer);
+        req.off('data', discard);
+        req.off('end', finish);
+        res.off('close', finish);
+        if (!res.destroyed && !res.writableEnded) res.end();
+    }
+    const timer = setTimeout(finish, REJECT_DRAIN_MS);
+    timer.unref();
+    req.once('end', finish);
+    res.once('close', finish);
+    req.on('data', discard);
+    req.resume();
 }
 async function readJson(req) {
     const chunks = []; let size = 0;
@@ -38,6 +67,7 @@ function createHttpServer({ service, token, port = 8787, mcpHandler, closeMcp = 
     if (!validToken(token)) throw new Error('HTTP 令牌必须为 32–128 个英文、数字、下划线或短横线');
     if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('HTTP 端口必须为 0–65535 的整数');
     const expected = Buffer.from(token);
+    const retiringSockets = new WeakSet();
     let closing = false, stopping;
     const server = http.createServer({ maxHeaderSize: 16384, requestTimeout: 15000, headersTimeout: 10000, keepAliveTimeout: 5000 }, (req, res) => {
         res.once('close', () => void service.disconnect());
@@ -51,11 +81,14 @@ function createHttpServer({ service, token, port = 8787, mcpHandler, closeMcp = 
     server.maxRequestsPerSocket = 100;
     server.setTimeout(30000, socket => socket.destroy());
     async function handle(req, res) {
+        // 同一解析批次中可能还有后续请求。在首个错误响应收尾前禁止再次派发。
+        if (retiringSockets.has(req.socket)) return;
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Content-Type-Options', 'nosniff');
         const reject = (status, code, message) => {
             // 提前拒绝时可能尚未收完声明的请求体，禁止在该连接上继续解析下一次请求。
-            res.setHeader('Connection', 'close'); req.resume(); send(res, status, errorResponse(code, message));
+            retiringSockets.add(req.socket);
+            rejectRequest(req, res, status, code, message);
         };
         for (const name of ['host', 'authorization', 'origin']) {
             if (req.rawHeaders.filter((value, index) => index % 2 === 0 && value.toLowerCase() === name).length > 1) return reject(400, 'INVALID_REQUEST', '重复的安全头');

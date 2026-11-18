@@ -18,7 +18,7 @@ const { installType } = require('../../resource-core/tests/helpers');
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function fixture(t, permissions = {}, pausePublication) {
+async function fixture(t, permissions = {}, { pausePublication, pauseSecondFile } = {}) {
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'asset-mcp-http-'));
     const tool = copyTool(root), core = path.join(tool, 'resource-core'), serverRoot = path.join(tool, 'agent-mcp');
     fs.mkdirSync(serverRoot);
@@ -28,7 +28,31 @@ async function fixture(t, permissions = {}, pausePublication) {
     fs.symlinkSync(path.join(packageRoot, 'node_modules'), path.join(serverRoot, 'node_modules'), 'junction');
     installType(tool, 'fixture');
     const provider = path.join(core, 'providers/fixture'); fs.mkdirSync(provider);
-    fs.writeFileSync(path.join(provider, 'index.js'), `const fs=require('node:fs');module.exports={apiVersion:2,version:'1.0.0',displayName:'HTTP MCP 测试',adapters:{compress:{version:'1.0.0',resourceTypes:['fixture'],execute({input,output}){Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,120);fs.writeFileSync(output,fs.readFileSync(input).subarray(0,8));return {output};}}}};`);
+    const secondFileReady = path.join(root, 'second-file-ready'), continueProcessing = path.join(root, 'continue-processing');
+    const beforeFile = pauseSecondFile ? `
+        let started = 0;
+        function beforeFile() {
+            started++;
+            if (started !== 2 || fs.existsSync(${JSON.stringify(continueProcessing)})) return;
+            fs.writeFileSync(${JSON.stringify(secondFileReady)}, '');
+            const deadline = Date.now() + 20000;
+            while (!fs.existsSync(${JSON.stringify(continueProcessing)})) {
+                if (Date.now() >= deadline) throw Error('等待测试放行第二个文件超时');
+                Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+            }
+        }
+    ` : 'function beforeFile() { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120); }';
+    fs.writeFileSync(path.join(provider, 'index.js'), `
+        const fs = require('node:fs');
+        ${beforeFile}
+        module.exports = { apiVersion: 2, version: '1.0.0', displayName: 'HTTP MCP 测试', adapters: {
+            compress: { version: '1.0.0', resourceTypes: ['fixture'], execute({ input, output }) {
+                beforeFile();
+                fs.writeFileSync(output, fs.readFileSync(input).subarray(0, 8));
+                return { output };
+            } },
+        } };
+    `);
     const source = path.join(root, '素材'), output = path.join(root, '输出'); fs.mkdirSync(source);
     for (let i = 0; i < 8; i++) fs.writeFileSync(path.join(source, i + '.pack'), 'PACK:' + 'data'.repeat(100));
     const policy = path.join(root, 'policy.json'), tokenFile = path.join(root, 'token.txt'), token = randomBytes(32).toString('base64url');
@@ -64,6 +88,7 @@ async function fixture(t, permissions = {}, pausePublication) {
     const clients = [], cleanups = [];
     t.after(async () => {
         if (pausePublication) fs.writeFileSync(publicationContinue, '');
+        if (pauseSecondFile) fs.writeFileSync(continueProcessing, '');
         for (const cleanup of cleanups) await cleanup();
         for (const client of clients) await client.close();
         child.kill(); await exited;
@@ -100,7 +125,8 @@ async function fixture(t, permissions = {}, pausePublication) {
         return { status: response.status, body: await response.json() };
     };
     const request = { mode: 'process', folder: source, outputDir: output, pipeline: [{ id: 'compress', resourceType: 'fixture', operation: 'compress', provider: 'fixture', enabled: true }] };
-    return { ...ready, token, connect, api, request, source, output, core, root, tool, policy, serverRoot, cleanups, publicationReady, publicationContinue };
+    return { ...ready, token, connect, api, request, source, output, core, root, tool, policy, serverRoot, cleanups,
+        publicationReady, publicationContinue, secondFileReady, continueProcessing };
 }
 async function until(call, jobId, predicate = state => state.done) {
     const deadline = Date.now() + 20000;
@@ -109,7 +135,7 @@ async function until(call, jobId, predicate = state => state.done) {
 }
 
 for (const filename of ['dispatch.json', 'worker.json']) test(`cross-entry status never observes partially published ${filename} after HTTP MCP disconnect`, async t => {
-    const f = await fixture(t, {}, filename), remote = await f.connect();
+    const f = await fixture(t, {}, { pausePublication: filename }), remote = await f.connect();
     const stdio = new Client({ name: 'publication-observer', version: '1.0.0' });
     f.cleanups.push(() => stdio.close());
     await stdio.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(f.serverRoot, 'server.mjs'), '--policy', f.policy], stderr: 'pipe' }));
@@ -197,24 +223,78 @@ test('顺序 MCP 请求在每个连接的第 100 次响应后正常轮换', asyn
     assert.match(next.body, /"id":101\b/);
 });
 
-test('MCP HTTP shares authentication and bounds; cancellation is explicit and resumes through the HTTP API', async t => {
+test('MCP HTTP 返回完整的认证、来源和正文大小拒绝响应', async t => {
     const f = await fixture(t);
-    assert.equal((await fetch(f.mcpUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
-    assert.equal((await fetch(f.mcpUrl, { method: 'POST', headers: { Authorization: 'Bearer ' + f.token, Origin: 'https://evil.example', 'Content-Type': 'application/json' }, body: '{}' })).status, 403);
-    const oversized = await fetch(f.mcpUrl, { method: 'POST', headers: { Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json' }, body: 'x'.repeat(1024 * 1024 + 1) }); assert.equal(oversized.status, 413);
-    const chunkedStatus = await new Promise((resolve, reject) => {
-        const request = http.request(f.mcpUrl, { method: 'POST', headers: { Authorization: 'Bearer ' + f.token, 'Content-Type': 'application/json', 'Transfer-Encoding': 'chunked' } }, response => { response.resume(); response.on('end', () => resolve(response.statusCode)); });
-        request.on('error', reject); request.write('"'); request.write('x'.repeat(1024 * 1024)); request.end('"');
+    const authorized = { Authorization: 'Bearer ' + f.token };
+    const rejected = [
+        ['缺少令牌', {}, '{}', 401, 'UNAUTHORIZED'],
+        ['携带外部 Origin', { ...authorized, Origin: 'https://evil.example' }, '{}', 403, 'ORIGIN_FORBIDDEN'],
+        ['声明正文超限', authorized, 'x'.repeat(1024 * 1024 + 1), 413, 'PAYLOAD_TOO_LARGE'],
+    ];
+    for (const [name, headers, body, status, code] of rejected) {
+        await t.test(name, async () => {
+            const response = await fetch(f.mcpUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body });
+            assert.equal(response.status, status);
+            assert.equal((await response.json()).error.code, code);
+        });
+    }
+    await t.test('分块正文超限', async () => {
+        const status = await new Promise((resolve, reject) => {
+            const request = http.request(f.mcpUrl, { method: 'POST', headers: { ...authorized, 'Content-Type': 'application/json', 'Transfer-Encoding': 'chunked' } }, response => {
+                response.on('error', reject);
+                response.on('end', () => resolve(response.statusCode));
+                response.resume();
+            });
+            request.on('error', reject);
+            request.write('"');
+            request.write('x'.repeat(1024 * 1024));
+            request.end('"');
+        });
+        assert.equal(status, 413);
     });
-    assert.equal(chunkedStatus, 413);
+});
+
+test('HTTP 取消 MCP 作业后在文件边界停止，续跑仅处理剩余文件', async t => {
+    const f = await fixture(t, {}, { pauseSecondFile: true });
+    const names = fs.readdirSync(f.source).sort();
+    const contents = name => Buffer.from('PACK:' + name + 'data'.repeat(100));
+    for (const name of names) fs.writeFileSync(path.join(f.source, name), contents(name));
     const client = await f.connect();
-    const submitted = await client.call('submit', { request: f.request, idempotencyKey: 'cancel-http' }); const { jobId } = submitted.result;
-    await until(client.call, jobId, state => state.processed >= 1);
-    assert.equal((await f.api('cancel', { jobId })).status, 200);
-    const stopped = await until(client.call, jobId); assert.equal(stopped.cancelled, true); assert.ok(stopped.task.completed < 8);
+    const submitted = await client.call('submit', { request: f.request, idempotencyKey: 'cancel-http' });
+    assert.equal(submitted.ok, true, JSON.stringify(submitted));
+    const { jobId } = submitted.result;
+    await until(client.call, jobId, state => {
+        assert.equal(state.done, false, JSON.stringify(state));
+        return fs.existsSync(f.secondFileReady);
+    });
+    assert.deepEqual(fs.readdirSync(f.output), names.slice(0, 1));
+    const cancellation = await f.api('cancel', { jobId });
+    assert.equal(cancellation.status, 200, JSON.stringify(cancellation.body));
+    assert.deepEqual(cancellation.body.result, { jobId, requested: true });
+    fs.writeFileSync(f.continueProcessing, '');
+
+    const stopped = await until(client.call, jobId);
+    assert.equal(stopped.cancelled, true, JSON.stringify(stopped));
+    assert.equal(stopped.exitCode, 2);
+    assert.equal(stopped.task.completed, 2);
+    assert.deepEqual(fs.readdirSync(f.output).sort(), names.slice(0, 2));
+
     const resumed = await f.api('submit', { request: { mode: 'resume', taskId: stopped.taskId }, idempotencyKey: 'http-resume' });
-    assert.equal((await until(client.call, resumed.body.result.jobId)).task.completed, 8);
-    const invalid = await client.call('validate', { request: { ...f.request, folder: path.dirname(f.source) } }); assert.equal(invalid.error.code, 'PATH_FORBIDDEN');
+    assert.equal(resumed.status, 202, JSON.stringify(resumed.body));
+    const resumedJobId = resumed.body.result.jobId;
+    const finished = await until(client.call, resumedJobId);
+    assert.equal(finished.exitCode, 0, JSON.stringify(finished));
+    assert.equal(finished.taskId, stopped.taskId);
+    assert.equal(finished.task.completed, 8);
+    const results = await client.call('results', { jobId: resumedJobId });
+    assert.equal(results.ok, true, JSON.stringify(results));
+    assert.deepEqual(results.result.items.map(file => file.path), names.slice(2));
+    for (const name of names) {
+        assert.deepEqual(fs.readFileSync(path.join(f.source, name)), contents(name));
+        assert.deepEqual(fs.readFileSync(path.join(f.output, name)), contents(name).subarray(0, 8));
+    }
+    const invalid = await client.call('validate', { request: { ...f.request, folder: path.dirname(f.source) } });
+    assert.equal(invalid.error.code, 'PATH_FORBIDDEN');
 });
 
 test('desktop, CLI, stdio MCP, HTTP and HTTP MCP share schemas, durable jobs, cancellation and results', async t => {

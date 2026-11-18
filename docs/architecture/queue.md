@@ -56,6 +56,8 @@ worker 独立登记 execution/2 占用（PID、随机 token、jobId、资源集�
 
 `.pending-*` 不符合 jobId 格式，不能被调度；正常失败清理本次暂存内容，崩溃遗留不自动接管或重试。未完成的写者预约、未知文件和坏记录继续保守阻塞写入/维护；不因达到等待时间就删除身份。文件/目录原子发布不改变 job/6 或公共接口格式。
 
+查询已派发作业时，先检查退出凭据及进程存活情况，再读取 `status.json`。确认退出后，遇到 Windows 的 `EBUSY`、`EPERM` 或 `EACCES`，持有会话和独立观察入口都仅重读该文件，最多等待 6 次、每次 25 毫秒。持续不可读或 JSON 损坏会报告读取错误。进程已退出且缺少完整终态才按中断处理。等待中取消的作业没有 worker，可直接采用已发布的取消状态。
+
 queued 状态包含 sequence、queuePosition、waitReason、runningCount、concurrencyLimit。queuePosition 是包含运行项的登记顺位，**不是启动顺序或预计时间**。waitReason 为 resource-conflict（运行资源冲突）、earlier-conflict（较早等待项优先）、capacity（槽位满）或 owner-dispatch（等待持有者）。原因是查询时的快照；短执行锁/维护争用和崩溃元数据窗口可能使实际派发继续等待。界面显示原因与槽位用量，不披露其他权限范围的路径或请求。
 
 公共 submit/cancel/queue/scheduling-set 对短暂提交锁竞争最多等待 5 秒；队列满、执行屏障忙碌、会话退出、权限拒绝不重试。低层同步 dispatch 仍可返回 BUSY。等待项取消直接写结束状态，不创建 worker、任务或报告；运行取消在文件边界生效。

@@ -2,6 +2,27 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { writeExclusive } = require('./publication');
+
+function readWorkerStatus(directory, exited) {
+    const filename = path.join(directory, 'status.json');
+    for (let attempt = 0; ; attempt++) {
+        try {
+            const state = JSON.parse(fs.readFileSync(filename, 'utf8'));
+            if (typeof state?.done !== 'boolean') throw new Error('作业状态记录缺少有效的 done 标志');
+            return state;
+        }
+        catch (error) {
+            if (error.code === 'ENOENT') return null;
+            if (!['EBUSY', 'EPERM', 'EACCES'].includes(error.code)) throw error;
+            if (!exited) return null;
+            // Windows 临时占用可能一直持续到 worker 退出之后。只给最终读取 150 ms，
+            // 持续拒绝访问时上报实际 I/O 错误，不把旧进度当作失败终态。
+            if (attempt >= 6) throw error;
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+        }
+    }
+}
+
 // 仅管理已由应用服务校验并落盘的作业进程，不定义第二套业务请求。
 class JobSession {
     constructor() { this.job = null; this.jobs = new Map(); this.closing = false; }
@@ -39,11 +60,11 @@ class JobSession {
     }
     poll(id) {
         const job = this.current(id);
-        try { job.state = JSON.parse(fs.readFileSync(path.join(job.directory, 'status.json'), 'utf8')); }
-        catch (error) { if (!['ENOENT', 'EBUSY', 'EPERM', 'EACCES'].includes(error.code)) job.error = error.message; }
+        const snapshot = readWorkerStatus(job.directory, job.exited);
+        if (snapshot) job.state = snapshot;
         // 必须等待进程退出和锁释放后才允许启动下一项任务。
         if (!job.exited) return { ...job.state, done: false };
-        if (!job.state.done) return { ...job.state, done: true, phase: 'finished', exitCode: 1, errorCode: 'INTERRUPTED',
+        if (!snapshot?.done) return { ...job.state, done: true, phase: 'finished', exitCode: 1, errorCode: 'INTERRUPTED',
             error: job.error || job.stderr || `工作进程意外退出（${job.code}），可从任务历史继续未完成文件。` };
         return job.state;
     }
@@ -63,4 +84,4 @@ class JobSession {
         this.cleanup();
     }
 }
-module.exports = { JobSession };
+module.exports = { JobSession, readWorkerStatus };

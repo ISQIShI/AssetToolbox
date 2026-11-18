@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const net = require('node:net');
 const assert = require('node:assert/strict');
 const { randomBytes } = require('node:crypto');
 const { spawnSync, spawn } = require('node:child_process');
@@ -97,6 +98,61 @@ test('HTTP rejects malformed, oversized and compressed inputs before application
     assert.equal((await f.call('capabilities', [])).status, 400);
     assert.equal((await f.call('capabilities')).status, 200);
     assert.equal(fs.existsSync(path.join(f.core, 'data/jobs/v6')), false);
+});
+
+// 完整接收拒绝响应后，才由测试决定是否继续发送正在上传的剩余字节。
+async function rejectedUpload(t, f, size) {
+    const origin = new URL(f.url);
+    const socket = net.createConnection({ host: origin.hostname, port: Number(origin.port) });
+    socket.setTimeout(5000, () => socket.destroy(Error('等待拒绝响应超时')));
+    t.after(() => socket.destroy());
+    const received = new Promise((resolve, reject) => {
+        const parts = [];
+        socket.on('error', reject);
+        socket.on('close', () => reject(Error('客户端未收到完整拒绝响应就已断开')));
+        socket.on('data', chunk => {
+            parts.push(chunk);
+            const response = Buffer.concat(parts).toString('utf8');
+            const split = response.indexOf('\r\n\r\n');
+            if (split < 0) return;
+            const headers = response.slice(0, split);
+            const body = response.slice(split + 4);
+            const expected = JSON.stringify({ schema: 'asset-toolbox.response/8', ok: false, error: { code: 'PAYLOAD_TOO_LARGE', message: '请求体超过 1 MiB' } });
+            if (body.includes(expected)) resolve(headers);
+        });
+    });
+    const finished = new Promise(resolve => f.server.server.prependOnceListener('request', (req, res) => {
+        res.once('finish', () => resolve(req.complete));
+    }));
+    socket.write('POST /api/v8/submit HTTP/1.1\r\nHost: ' + origin.host + '\r\nAuthorization: Bearer ' + f.token
+        + '\r\nContent-Type: application/json\r\nContent-Length: ' + size + '\r\n\r\nX');
+    const headers = await received;
+    assert.match(headers, /^HTTP\/1\.1 413/);
+    assert.match(headers, /connection: close/i);
+    return { socket, finished };
+}
+
+test('已拒绝的上传在正文送完前收到完整 413，正常收尾后才关闭连接', async t => {
+    const f = await fixture(t), size = 1024 * 1024 + 1;
+    const { socket, finished } = await rejectedUpload(t, f, size);
+    socket.end(Buffer.alloc(size - 1));
+    assert.equal(await finished, true, '服务器在客户端仍上传时就关闭了连接');
+});
+
+test('拒绝后的连接在丢弃字节达到上限或收尾时间到期后按期结束', { timeout: 10000 }, async t => {
+    const f = await fixture(t);
+    const drainLimit = 2 * 1024 * 1024;
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    try {
+        const sending = await rejectedUpload(t, f, drainLimit + 1000);
+        sending.socket.write(Buffer.alloc(drainLimit)); // 时钟保持不动，只有字节上限能结束响应。
+        assert.equal(await sending.finished, false);
+
+        const idle = await rejectedUpload(t, f, drainLimit + 1000);
+        t.mock.timers.tick(1000);
+        assert.equal(await idle.finished, false);
+        assert.equal(fs.existsSync(path.join(f.core, 'data/jobs/v6')), false);
+    } finally { t.mock.timers.reset(); }
 });
 
 test('HTTP submit survives request completion, shares idempotency with CLI and returns paginated results', async t => {

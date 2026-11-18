@@ -179,3 +179,37 @@ test('CLI previews and accepts a Unicode JSON checked list without restoring oth
     assert.deepEqual(sourceBytes(f, 0), f.processed.get(f.paths[0]));
 });
 
+test('CLI returns the confirmed restore preview when the first terminal status read is busy', t => {
+    const f = fixture(t), taskId = path.basename(path.dirname(f.taskFile));
+    const hook = path.join(f.root, 'busy-terminal.cjs'), observed = path.join(f.root, 'busy-observed');
+    // 只拦 CLI 本进程对已发布终态的读取；真实 worker 正常执行、写盘和退出。
+    fs.writeFileSync(hook, `
+        const fs = require('node:fs'), path = require('node:path');
+        const read = fs.readFileSync, observed = ${JSON.stringify(observed)};
+        const { JobSession } = require(${JSON.stringify(path.join(f.tool, 'resource-core/application/job-session'))});
+        const poll = JobSession.prototype.poll;
+        let polling = false;
+        JobSession.prototype.poll = function (id) {
+            polling = true;
+            try { return poll.call(this, id); } finally { polling = false; }
+        };
+        fs.readFileSync = function (filename, ...args) {
+            const value = read(filename, ...args);
+            if (polling && path.basename(filename) === 'status.json' && JSON.parse(value).done && !fs.existsSync(observed)) {
+                if (fs.existsSync(path.join(path.dirname(filename), 'exit.json'))) fs.writeFileSync(observed, '');
+                throw Object.assign(Error('共享占用'), { code: 'EBUSY' });
+            }
+            return value;
+        };
+    `);
+    const result = spawnSync(process.execPath, ['--require', hook, ...cliJob(f.tool, { mode: 'restore-preview', taskId })],
+        { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+    assert.ok(fs.existsSync(observed), result.stdout + result.stderr);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const { jobId, state } = JSON.parse(result.stdout).result;
+    assert.equal(JSON.parse(result.stderr).jobId, jobId);
+    assert.equal(state.exitCode, 0); assert.equal(state.done, true);
+    assert.equal(state.preview.recoverable, f.paths.length);
+    for (const [relative, bytes] of f.processed) assert.deepEqual(fs.readFileSync(path.join(f.source, relative)), bytes);
+});
+

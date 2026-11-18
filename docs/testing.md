@@ -4,6 +4,12 @@
 
 `desktop/tests/job-tracking.test.ts` 验证查询中断、同一作业恢复跟踪、取消与关窗、完整结果重读和迟到响应。`filters-native.spec.ts` 在隔离副本阻断状态读取、观察实际 worker 退出并终止原桥接，核对新桥接返回同一作业的终态和唯一输出。
 
+从根目录运行以下命令，可让 HTTP 拒绝上传、MCP 取消、CLI 恢复预览与跨入口终态查询同时执行。各文件使用独立便携副本。取消用例在第二个文件处理期间取得取消回执，再放行并核对续跑的六个文件。
+
+```powershell
+node --test --test-concurrency=4 resource-core/tests/http.test.js agent-mcp/tests/http.test.mjs resource-core/tests/restore-preview.test.js resource-core/tests/publication.test.js
+```
+
 音频属性的 source 用例为 `audio-properties.test.js`、`wav-properties.test.js`，覆盖有界读取、无时长、损坏头部、跨格式来源筛选和写入前失败。真实编码文件另由 `audio.test.js` 和原生 `audio.spec.ts` 验证。桌面恢复改选、晚到事件和任务搜索分别由 `app.test.ts`、`task-search.test.ts` 覆盖，原生 `native.spec.ts` 核对导出后新旧目标的磁盘内容。
 
 ## 运行矩阵

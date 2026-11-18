@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
-const { JobSession } = require('./job-session');
+const { JobSession, readWorkerStatus } = require('./job-session');
 const { writeExclusive, publishJob } = require('./publication');
 const { acquire, alive } = require('./lock');
 const { fail, record, canonical, within } = require('./policy');
@@ -157,23 +157,24 @@ class ApplicationService {
             if (state.errorCode === 'INTERRUPTED' && state.task?.id) state.task = require('../tasks').loadTask(this.taskFile(state.task.id)).info();
             return state;
         }
-        let state = { phase: fs.existsSync(path.join(meta.directory, 'dispatch.json')) ? 'starting' : 'queued', done: false, sequence: meta.sequence };
-        if (!fs.existsSync(path.join(meta.directory, 'dispatch.json')) && alive(meta.ownerPid) && !fs.existsSync(path.join(meta.directory, 'status.json'))) {
+        const dispatchFile = path.join(meta.directory, 'dispatch.json');
+        let state = { phase: fs.existsSync(dispatchFile) ? 'starting' : 'queued', done: false, sequence: meta.sequence };
+        if (state.phase === 'queued' && alive(meta.ownerPid) && !fs.existsSync(path.join(meta.directory, 'status.json'))) {
             const pending = (inventory || require('./queue').inventory(this.directory)).filter(item => item.pending);
             const { schedule } = require('./resources'), limit = require('./scheduling').read().maxConcurrent, decision = schedule(pending, limit);
             const waitReason = decision.reasons.get(id) || 'owner-dispatch';
             const messages = { 'resource-conflict': '等待冲突资源释放', 'earlier-conflict': '等待较早的冲突作业', capacity: '等待空闲执行槽位', 'owner-dispatch': '等待持有会话派发' };
             return { ...state, queuePosition: pending.findIndex(item => item.id === id) + 1, waitReason, concurrencyLimit: limit, runningCount: decision.runningCount, message: this.queueError || messages[waitReason] };
         }
-        try { state = read(path.join(meta.directory, 'status.json')); }
-        catch (error) { if (!['ENOENT', 'EBUSY', 'EACCES', 'EPERM'].includes(error.code)) throw error; }
         let worker;
         try { worker = read(path.join(meta.directory, 'worker.json')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
         worker ||= require('./lock').readers(false).find(item => item.jobId === id);
+        // 先取退出证据，再读状态，避免把上一次进度和之后发布的退出标记拼成中断。
         const exited = fs.existsSync(path.join(meta.directory, 'exit.json'));
-        if (!exited && worker && (alive(worker.pid) || alive(meta.ownerPid))) return { ...state, done: false };
-        if (state.done) return state;
-        if (!exited && !worker && alive(meta.ownerPid)) return state;
+        const canPublish = !exited && (alive(meta.ownerPid) || (worker && alive(worker.pid)));
+        state = readWorkerStatus(meta.directory, !canPublish) || state;
+        if (canPublish && (worker || fs.existsSync(dispatchFile))) return { ...state, done: false };
+        if (state.done || canPublish) return state;
         if (state.task?.id) {
             // 状态文件可能停留在作业开始时，任务事件日志才是崩溃恢复的依据。
             state.task = require('../tasks').loadTask(this.taskFile(state.task.id)).info();
