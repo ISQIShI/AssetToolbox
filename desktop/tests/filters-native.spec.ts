@@ -10,7 +10,7 @@ import { pickOption } from './native-select';
 const require = createRequire(import.meta.url);
 const project = fileURLToPath(new URL('../../', import.meta.url));
 
-test('native source and step filters use real image properties and preserve excluded sources', async ({}, info) => {
+test('native image filters preserve sources and track the same job across a status outage and bridge restart', async ({}, info) => {
     const parent = fs.realpathSync(os.tmpdir()), root = fs.mkdtempSync(path.join(parent, 'asset-filters-native-'));
     const tool = require(path.join(project, 'resource-core/tests/portable')).copyTool(root, true);
     const source = path.join(root, '素材'), output = path.join(root, '输出'); fs.mkdirSync(source);
@@ -24,6 +24,36 @@ test('native source and step filters use real image properties and preserve excl
     const settings = require(path.join(tool, 'resource-core/settings'));
     const step = (id: string, width: number) => ({ id, resourceType: 'jpg', operation: 'image-resize', provider: 'sharp', enabled: true, parameters: { width, height: width }, providerOptions: {} });
     settings.saveConfiguration({ ...settings.defaultConfiguration(), sourceDir: source, outputDir: output, saveMode: 'saveAs', pipeline: [step('first', 20), step('second', 10)] });
+    // 只改隔离副本。桌面查询与实际 worker 分别由测试放行，CLI/核心观察者可独立读取真实作业。
+    const statusGate = path.join(root, 'status-offline'), workerGate = path.join(root, 'worker-wait');
+    const exitBridge = path.join(root, 'exit-bridge'), exitedPid = path.join(root, 'exited-pid'), resumedPid = path.join(root, 'resumed-pid');
+    const submissions = path.join(root, 'process-submissions.txt');
+    fs.appendFileSync(path.join(tool, 'resource-core/desktop-bridge.js'), `
+        const fs = require('node:fs');
+        const dispatch = DesktopBridge.prototype.dispatch;
+        DesktopBridge.prototype.dispatch = function (action, payload) {
+            if (action === 'submit' && payload.request.mode === 'process') fs.appendFileSync(${JSON.stringify(submissions)}, '1');
+            if (action === 'status') {
+                if (fs.existsSync(${JSON.stringify(exitBridge)}) && !fs.existsSync(${JSON.stringify(exitedPid)})) {
+                    fs.writeFileSync(${JSON.stringify(exitedPid)}, String(process.pid));
+                    process.exit(91);
+                }
+                if (fs.existsSync(${JSON.stringify(statusGate)})) throw Error('验收门闩阻断状态查询');
+                if (fs.existsSync(${JSON.stringify(exitedPid)})) fs.writeFileSync(${JSON.stringify(resumedPid)}, String(process.pid));
+            }
+            return dispatch.call(this, action, payload);
+        };`);
+    fs.appendFileSync(path.join(tool, 'resource-core/providers/sharp/adapters/image-resize.js'), `
+        const execute = module.exports.execute;
+        module.exports.execute = function (input) {
+            const signal = new Int32Array(new SharedArrayBuffer(4));
+            const deadline = Date.now() + 60000;
+            while (require('node:fs').existsSync(${JSON.stringify(workerGate)})) {
+                if (Date.now() >= deadline) throw Error('验收门闩未释放 worker');
+                Atomics.wait(signal, 0, 0, 25);
+            }
+            return execute.call(this, input);
+        };`);
     let child: ChildProcess | undefined, browser: Browser | undefined, page: Page | undefined;
     try {
         const server = createServer(); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -82,22 +112,54 @@ test('native source and step filters use real image properties and preserve excl
         await page.getByRole('button', { name: '扫描预览', exact: true }).click();
         await expect(page.getByRole('heading', { name: '扫描结果', exact: true })).toBeVisible();
         await expect(page.getByRole('complementary', { name: '概览' })).toContainText('来源条件排除 2 个');
-        await page.getByRole('button', { name: '开始处理', exact: true }).click();
-        await expect(page.locator('.dock')).toHaveAttribute('data-state', 'done');
-        await expect(page.locator('.dock')).toContainText('已完成');
+        const start = page.getByRole('button', { name: '开始处理', exact: true });
+        const dock = page.locator('.dock');
+        fs.writeFileSync(workerGate, ''); fs.writeFileSync(statusGate, '');
+        await start.click();
+        await expect(dock).toHaveAttribute('data-job-id', /^[a-f0-9]{64}$/);
+        const jobId = (await dock.getAttribute('data-job-id'))!;
+        const { ApplicationService } = require(path.join(tool, 'resource-core/application/service'));
+        const observer = ApplicationService.forDesktop();
+        try {
+            await expect(dock).toContainText(/暂时无法取得.*状态/);
+            await expect(start).toBeDisabled();
+            await expect(page.getByRole('button', { name: '关闭作业结果' })).toHaveCount(0);
+            await expect.poll(() => fs.existsSync(path.join(tool, 'resource-core/data/jobs/v6', jobId, 'worker.json'))).toBe(true);
+            expect(observer.status(jobId).done).toBe(false);
+            await page.screenshot({ path: info.outputPath('job-status-offline-840-dark.png') });
+            await page.setViewportSize({ width: 1220, height: 850 });
+            await page.evaluate(() => document.documentElement.dataset.theme = 'light');
+            await page.screenshot({ path: info.outputPath('job-status-offline-1220-light.png') });
+            fs.unlinkSync(workerGate);
+            await expect.poll(() => observer.status(jobId).done).toBe(true);
+            expect(observer.status(jobId).exitCode).toBe(0);
+            await expect(dock).toHaveAttribute('data-job-id', jobId);
+            await expect(dock).toContainText(/暂时无法取得.*状态/);
+            await expect(start).toBeDisabled();
+
+            // 作业已由核心确认完成，桌面尚未知晓。让下一次 status 丢失响应并终止原桥接。
+            fs.writeFileSync(exitBridge, '');
+            await expect.poll(() => fs.existsSync(exitedPid)).toBe(true);
+            fs.unlinkSync(statusGate);
+            await expect(dock).toHaveAttribute('data-state', 'done', { timeout: 30000 });
+            await expect(dock).toHaveAttribute('data-job-id', jobId);
+            await expect(dock).toContainText('已完成');
+            await expect(dock).not.toContainText(/暂时无法取得.*状态/);
+            expect(fs.readFileSync(resumedPid, 'utf8')).not.toBe(fs.readFileSync(exitedPid, 'utf8'));
+            expect(fs.readFileSync(submissions, 'utf8')).toBe('1');
+            const processes = observer.dispatch('jobs', {}).items.filter((job: { mode: string }) => job.mode === 'process');
+            expect(processes.map((job: { jobId: string }) => job.jobId)).toEqual([jobId]);
+            expect(observer.results(jobId, 'files', {}).items[0].steps.map((step: { status: string }) => step.status)).toEqual(['processed', 'filtered']);
+        } finally { await observer.shutdown(); }
         expect(fs.readdirSync(output)).toEqual(['large.jpg']);
         const metadata = await sharp(path.join(output, 'large.jpg')).metadata(); expect([metadata.width, metadata.height]).toEqual([20, 10]);
         for (const [name, bytes] of originals) expect(fs.readFileSync(path.join(source, name))).toEqual(bytes);
         const saved = settings.loadConfiguration(); expect(saved.sourceFilter.any[0].all).toHaveLength(2); expect(saved.pipeline[1].filter.any[0].all[0].value).toBe(30);
-        const jobId = await page.locator('.dock').getAttribute('data-job-id');
-        const { ApplicationService } = require(path.join(tool, 'resource-core/application/service'));
-        const observer = ApplicationService.forDesktop();
-        try { expect(observer.results(jobId, 'files', {}).items[0].steps.map((step: { status: string }) => step.status)).toEqual(['processed', 'filtered']); }
-        finally { await observer.shutdown(); }
         await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('plugin:window|close', { label: 'main' })).catch(() => {});
         await expect.poll(() => child!.exitCode).not.toBeNull();
     } catch (error) { await page?.screenshot({ path: info.outputPath('failure.png') }).catch(() => {}); throw error; }
     finally {
+        fs.rmSync(workerGate, { force: true });
         await browser?.close();
         if (child && child.exitCode === null) { const closed = new Promise<void>(resolve => child!.once('close', () => resolve())); child.kill(); await closed; }
         expect(path.dirname(fs.realpathSync(root))).toBe(parent); expect(path.basename(root).startsWith('asset-filters-native-')).toBe(true);

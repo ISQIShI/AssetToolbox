@@ -9,12 +9,17 @@ import type { Bootstrap, Configuration, Definition, JobRequest, JobState, Provid
 
 export type Page = 'process' | 'tasks' | 'restore' | 'tools' | 'jobs';
 export type JobKind = 'preview' | 'process' | 'resume' | 'retry' | 'restore-check' | 'restore' | 'dependency';
-export interface ActiveJob { id: string; kind: JobKind; title: string; state: JobState; cancelRequested: boolean }
+export interface ActiveJob {
+    id: string; kind: JobKind; title: string; state: JobState; cancelRequested: boolean;
+    statusError?: string; resultError?: string; readingResults?: boolean;
+    onFinished?: (state: JobState) => void;
+}
 export type RestoreSource = { kind: 'task'; taskId: string } | { kind: 'export'; backupDir: string; outputDir: string };
 
 export interface ConfirmRequest { title: string; message: string; confirmLabel: string; danger?: boolean }
 
 const POLL_MS = 250;
+const MAX_RETRY_MS = 4000;
 
 export function createWorkbench() {
     const page = ref<Page>('process');
@@ -55,7 +60,7 @@ export function createWorkbench() {
     const closing = ref(false);
     let pendingCancel = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let completion: ((state: JobState) => void) | undefined;
+    let stopped = false;
 
     const definition = computed<Definition | undefined>(() => boot.value?.definition || undefined);
     const busy = computed(() => maintenanceBusy.value || submitting.value || Boolean(job.value && !job.value.state.done));
@@ -69,7 +74,8 @@ export function createWorkbench() {
         try { return JSON.stringify(processingRequest(config.value, 'preview', definition.value)) !== scanRequest.value; } catch { return true; }
     });
 
-    const fail = (cause: unknown) => { error.value = String(cause instanceof Error ? cause.message : cause); };
+    const messageOf = (cause: unknown) => String(cause instanceof Error ? cause.message : cause);
+    const fail = (cause: unknown) => { error.value = messageOf(cause); };
 
     async function allPages<T>(action: string, input = {}): Promise<T[]> {
         const items: T[] = []; let offset: number | null = 0;
@@ -124,30 +130,64 @@ export function createWorkbench() {
     }
 
     // ---------- 作业生命周期 ----------
-    async function poll(id: string) {
-        if (job.value?.id !== id) return;
+    // 终态与结果明细分开读取。整页恢复清单到齐后才交给恢复表单。
+    async function readJobResults() {
+        const active = job.value;
+        if (stopped || !active?.state.done || active.readingResults) return;
+        active.readingResults = true;
+        let state = active.state;
         try {
-            const state = await call<JobState>('status', { jobId: id });
-            if (state.done && state.preview && job.value.kind === 'restore-check') {
-                (state.preview as RestorePreview).files = await allPages<RestoreFile>('results', { jobId: id, kind: 'restore' });
+            if (state.preview && active.kind === 'restore-check') {
+                const files = await allPages<RestoreFile>('results', { jobId: active.id, kind: 'restore' });
+                state = { ...state, preview: { ...state.preview as RestorePreview, files } };
             }
-            if (state.done && state.hasReport && state.audioResultCount) {
-                state.audioResults = (await call<ResultPage<AudioResult>>('results', { jobId: id, kind: 'audio', limit: 100 })).items;
+            if (state.hasReport && state.audioResultCount && !state.resultsExpired) {
+                const page = await call<ResultPage<AudioResult>>('results', { jobId: active.id, kind: 'audio', limit: 100 });
+                state = { ...state, audioResults: page.items };
             }
-            if (job.value?.id !== id) return;
-            job.value = { ...job.value, state };
-            if (!state.done) { timer = setTimeout(() => void poll(id), POLL_MS); return; }
-            const finished = completion; completion = undefined; finished?.(state);
-            if (job.value.kind === 'dependency') await refreshProviders();
-            // 预览类作业的结果直接显示在所属页面，进度条随之收起。
-            if (state.preview && (job.value.kind === 'preview' || job.value.kind === 'restore-check')) job.value = undefined;
-            try { await refreshTasks(); } catch (cause) { fail(cause); }
-            if (closing.value) await getCurrentWindow().close();
         } catch (cause) {
-            fail(cause);
-            if (job.value?.id === id) job.value = { ...job.value, state: { ...job.value.state, phase: 'finished', done: true, exitCode: 1, error: String(cause) } };
-            closing.value = false;
+            if (!stopped && job.value === active) active.resultError = messageOf(cause) || '读取失败';
+            return;
+        } finally {
+            active.readingResults = false;
         }
+        if (stopped || job.value !== active) return;
+        active.resultError = undefined;
+        active.state = state;
+        const finished = active.onFinished;
+        active.onFinished = undefined;
+        finished?.(state);
+        if (state.preview && (active.kind === 'preview' || active.kind === 'restore-check')) job.value = undefined;
+    }
+
+    async function poll(active: ActiveJob, retryMs = POLL_MS * 2) {
+        if (stopped || job.value !== active) return;
+        let state: JobState;
+        try {
+            state = await call<JobState>('status', { jobId: active.id });
+            if (typeof state?.done !== 'boolean' || (state.jobId !== undefined && state.jobId !== active.id)) throw Error('核心返回的作业状态无效');
+        } catch (cause) {
+            if (stopped || job.value !== active) return;
+            active.statusError = messageOf(cause) || '查询失败';
+            timer = setTimeout(() => void poll(active, Math.min(retryMs * 2, MAX_RETRY_MS)), retryMs);
+            return;
+        }
+        if (stopped || job.value !== active) return;
+        active.statusError = undefined;
+        active.state = state;
+        if (!state.done) {
+            if (closing.value && !active.cancelRequested) void requestCancellation(active);
+            timer = setTimeout(() => void poll(active), POLL_MS);
+            return;
+        }
+        if (closing.value) {
+            try { await getCurrentWindow().close(); return; }
+            catch (cause) { closing.value = false; fail(cause); }
+        }
+        await readJobResults();
+        if (stopped) return;
+        if (active.kind === 'dependency') await refreshProviders();
+        try { await refreshTasks(); } catch (cause) { fail(cause); }
     }
 
     async function launch(request: JobRequest, kind: JobKind, title: string, finished?: (state: JobState) => void) {
@@ -155,21 +195,24 @@ export function createWorkbench() {
         error.value = ''; pendingCancel = false; submitting.value = true;
         try {
             const { jobId: id } = await call<{ jobId: string }>('submit', { request, idempotencyKey: crypto.randomUUID() });
-            completion = finished;
-            job.value = { id, kind, title, cancelRequested: pendingCancel, state: { phase: 'starting', done: false, processed: 0, total: 0 } };
-            if (pendingCancel || closing.value) {
-                job.value.cancelRequested = true;
-                try { await call('cancel', { jobId: id }); } catch (cause) { fail(cause); }
-            }
-            void poll(id);
+            job.value = { id, kind, title, cancelRequested: false, onFinished: finished, state: { phase: 'starting', done: false, processed: 0, total: 0 } };
+            const active = job.value;
+            if (pendingCancel || closing.value) await requestCancellation(active);
+            void poll(active);
         } catch (cause) { fail(cause); } finally { submitting.value = false; }
     }
 
+    async function requestCancellation(active: ActiveJob) {
+        if (active.cancelRequested || active.state.done) return;
+        active.cancelRequested = true;
+        try { await call('cancel', { jobId: active.id }); }
+        catch (cause) {
+            if (!stopped && job.value === active && !active.state.done) { active.cancelRequested = false; fail(cause); }
+        }
+    }
     async function cancelJob() {
         if (submitting.value) { pendingCancel = true; return; }
-        if (!job.value || job.value.state.done) return;
-        job.value.cancelRequested = true;
-        try { await call('cancel', { jobId: job.value.id }); } catch (cause) { job.value.cancelRequested = false; fail(cause); }
+        if (job.value) await requestCancellation(job.value);
     }
 
     function dismissJob() { if (job.value?.state.done) job.value = undefined; }
@@ -335,7 +378,7 @@ export function createWorkbench() {
         selectedTaskId, restoreForm, restorePreview, restoreScope, restoreChoices,
         job, submitting, closing, definition, busy, missingProviders, blockedSteps,
         fail, initialize, refreshTasks, refreshProviders, browse, saveConfig, installDependency,
-        launch, cancelJob, dismissJob, openJobReport, requestClose, stop: () => clearTimeout(timer),
+        launch, cancelJob, dismissJob, readJobResults, openJobReport, requestClose, stop: () => { stopped = true; clearTimeout(timer); },
         runPipeline, useDroppedSource, addStep, moveStep, moveStepTo, toggleStep, removeStep, updateStep,
         confirmation, confirm, answerConfirmation, requestRemoveStep, requestProcess,
         continueTask, showTask, revealFolder, checkRestore, recheckRestore, restoreSelected, openSource,

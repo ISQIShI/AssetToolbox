@@ -38,6 +38,7 @@ const activity = computed(() => {
     if (loading.value) return '正在读取配置和处理工具';
     if (closing.value) return '正在安全退出';
     if (maintenanceBusy.value) return '正在维护存储';
+    if (job.value?.statusError) return '暂时无法取得作业状态';
     if (busy.value) return job.value ? `正在运行：${job.value.title}` : '正在启动作业';
     return '就绪';
 });

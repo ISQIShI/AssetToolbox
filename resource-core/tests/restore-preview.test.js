@@ -168,7 +168,7 @@ test('old backup preview and selective export support arbitrary file types, prot
 test('CLI previews and accepts a Unicode JSON checked list without restoring other files', t => {
     const f = fixture(t), taskId = path.basename(path.dirname(f.taskFile));
     const p = spawnSync(process.execPath, cliJob(f.tool, { mode: 'restore-preview', taskId }), { encoding: 'utf8', windowsHide: true });
-    assert.equal(p.status, 0, p.stderr);
+    assert.equal(p.status, 0, p.stdout + p.stderr);
     assert.equal(/[^\x00-\x7f]/.test(p.stdout), false, 'CLI JSON must survive legacy PowerShell native encoding');
     const listed = spawnSync(process.execPath, cliCommand(f.tool, 'results', { jobId: JSON.parse(p.stdout).result.jobId, kind: 'restore' }), { encoding: 'utf8', windowsHide: true });
     assert.equal(listed.status, 0, listed.stderr);

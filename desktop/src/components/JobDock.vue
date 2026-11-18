@@ -21,10 +21,11 @@ const restoring = computed(() => state.value.summary?.restored !== undefined);
 const status = computed(() => {
     const value = state.value;
     const boundary = job.value!.kind === 'dependency' ? '等待依赖检查结束' : '等待当前文件结束';
+    if (job.value!.statusError) return { label: '暂时无法取得作业状态', tone: 'warn' };
     if (closing.value) return { label: `正在安全退出，${boundary}`, tone: 'warn' };
     if (!value.done) return job.value!.cancelRequested ? { label: `已请求取消，${boundary}`, tone: 'warn' } : { label: phases[value.phase] || value.phase, tone: 'neutral' };
     if (value.cancelled) return { label: '已取消', tone: 'warn' };
-    if (value.error) return { label: '未完成', tone: 'danger' };
+    if (value.error || value.exitCode) return { label: '未完成', tone: 'danger' };
     if (value.summary?.failed) return { label: `完成，${value.summary.failed} 个失败`, tone: 'danger' };
     return { label: '已完成', tone: 'ok' };
 });
@@ -65,6 +66,7 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
       <div class="actions">
         <button v-if="running" type="button" class="button" :disabled="job.cancelRequested" @click="bench.cancelJob()">取消</button>
         <template v-else>
+          <button v-if="job.resultError" type="button" class="button" :disabled="job.readingResults" @click="bench.readJobResults()">重新读取结果</button>
           <button v-if="state.hasReport" type="button" class="button" @click="bench.openJobReport()"><Icon name="report" />打开报告</button>
           <button v-if="state.task" type="button" class="button" @click="bench.showTask(state.task); bench.dismissJob()">查看任务</button>
           <Tip text="关闭" side="top"><button type="button" class="button quiet icon-only" aria-label="关闭作业结果" @click="bench.dismissJob()"><Icon name="close" /></button></Tip>
@@ -72,6 +74,8 @@ const notes = computed(() => [state.value.reportWarning, ...(state.value.recover
       </div>
     </div>
 
+    <p v-if="job.statusError" class="small tone warn selectable">{{ closing ? '正在等待核心确认后退出。' : '' }}正在自动重试，进度保留上次读数。{{ job.statusError }}</p>
+    <p v-if="job.resultError" class="small tone warn selectable">暂时无法读取作业结果。{{ job.resultError }}</p>
     <AudioResults v-if="!running && state.audioResults?.length" :results="state.audioResults" :total="state.audioResultCount || state.audioResults.length" />
     <p v-if="state.resultsExpired" class="small muted">报告与明细已清理；任务和备份保留。</p>
     <p v-if="running && state.current" class="current path">{{ state.current }}</p>

@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use std::{io::{BufRead, BufReader, Write}, path::PathBuf, process::{Child, ChildStdin, ChildStdout, Command, Stdio}, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}};
 #[cfg(windows)] use std::os::windows::process::CommandExt;
 
-struct Bridge { child: Child, input: ChildStdin, output: BufReader<ChildStdout>, sequence: u64 }
+struct Bridge { child: Child, input: Option<ChildStdin>, output: BufReader<ChildStdout>, sequence: u64 }
 fn hidden(command: &mut Command) -> &mut Command {
     #[cfg(windows)] command.creation_flags(0x08000000);
     command
@@ -27,15 +27,21 @@ impl Bridge {
             .spawn().map_err(|e| format!("无法启动内置 Node.js：{e}"))?;
         let input = child.stdin.take().ok_or("无法建立输入通道")?;
         let output = BufReader::new(child.stdout.take().ok_or("无法建立输出通道")?);
-        Ok(Self { child, input, output, sequence: 0 })
+        Ok(Self { child, input: Some(input), output, sequence: 0 })
     }
     fn call(&mut self, action: &str, payload: Value) -> Result<Value, String> {
-        if self.child.try_wait().map_err(|e| e.to_string())?.is_some() { return Err("核心进程已退出，请重新打开工具；未完成文件可从任务历史继续。".into()); }
+        let input = self.input.as_mut().ok_or("核心通信中断，正在等待旧会话退出")?;
         self.sequence += 1;
         let message = json!({"id":self.sequence,"action":action,"payload":payload});
-        writeln!(self.input, "{message}").and_then(|_| self.input.flush()).map_err(|e| e.to_string())?;
         let mut line = String::new();
-        if self.output.read_line(&mut line).map_err(|e| e.to_string())? == 0 { return Err("核心通信中断，请重新打开工具。".into()); }
+        let received = writeln!(input, "{message}")
+            .and_then(|_| input.flush())
+            .and_then(|_| self.output.read_line(&mut line));
+        match received {
+            Ok(0) => { self.input.take(); return Err("核心通信中断，响应管道已关闭".into()); }
+            Err(error) => { self.input.take(); return Err(format!("核心通信中断：{error}")); }
+            Ok(_) => {}
+        }
         let answer: Value = serde_json::from_str(&line).map_err(|e| format!("核心响应无效：{e}"))?;
         if answer["id"].as_u64() != Some(self.sequence) { return Err("核心响应序号不匹配".into()); }
         if answer["schema"].as_str() != Some("asset-toolbox.response/8") { return Err("核心接口版本不匹配，需要应用接口 /8".into()); }
@@ -54,6 +60,10 @@ async fn core_call(host: tauri::State<'_, Host>, action: String, payload: Value)
     tauri::async_runtime::spawn_blocking(move || {
         let mut guard = shared.lock().map_err(|_| "核心会话锁异常")?;
         if closing.load(Ordering::SeqCst) { return Err("应用正在退出".into()); }
+        // 只在旧桥接已退出后建立新会话。已发出但丢失响应的命令可能已执行，不能重放。
+        if let Some(bridge) = guard.as_mut() {
+            if bridge.child.try_wait().map_err(|e| e.to_string())?.is_some() { *guard = None; }
+        }
         if guard.is_none() { *guard = Some(Bridge::start()?); }
         guard.as_mut().unwrap().call(&action, payload)
     }).await.map_err(|e| e.to_string())?
