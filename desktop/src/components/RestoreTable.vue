@@ -6,21 +6,22 @@ import { bytes, initialSelection, selectionPayload, visibleFiles } from '../core
 import Icon from './Icon.vue';
 
 const props = defineProps<{ preview: RestorePreview; scope: RestoreScope; disabled?: boolean }>();
-const emit = defineEmits<{ restore: [selection: Selection[]]; recheck: [] }>();
+const emit = defineEmits<{ restore: [selection: Selection[], preview: RestorePreview]; recheck: [] }>();
+const choices = defineModel<Map<string, boolean>>('choices', { default: () => new Map<string, boolean>() });
 const PAGE = 100;
 const filter = ref<'all' | RestoreFile['state']>('all');
 const search = ref('');
 const page = ref(1);
-const selected = ref(new Set<string>());
-
-watch(() => props.preview, (preview, previous) => {
-    // 重新检查后：之前出现过的可选文件沿用用户勾选，新出现的按范围默认勾选。
-    const defaults = initialSelection(preview.files, props.scope);
-    const known = new Set(previous?.files.filter(file => file.selectable).map(file => file.path));
-    selected.value = new Set(preview.files.filter(file => file.selectable && (known.has(file.path) ? selected.value.has(file.path) : defaults.has(file.path))).map(file => file.path));
-    page.value = 1;
-}, { immediate: true });
-watch([filter, search], () => { page.value = 1; });
+const selected = computed(() => {
+    const paths = initialSelection(props.preview.files, props.scope);
+    for (const file of props.preview.files) {
+        const choice = choices.value.get(file.path);
+        if (choice === false) paths.delete(file.path);
+        else if (choice && file.selectable) paths.add(file.path);
+    }
+    return paths;
+});
+watch([filter, search, () => props.preview], () => { page.value = 1; });
 
 const locked = computed(() => props.disabled || props.preview.cancelled);
 const visible = computed(() => visibleFiles(props.preview.files, filter.value, search.value));
@@ -37,11 +38,11 @@ const labels: Record<RestoreFile['state'], { label: string; tone: string }> = {
     recoverable: { label: '可恢复', tone: '' }, restored: { label: '已恢复', tone: 'ok' }, conflict: { label: '冲突', tone: 'danger' },
 };
 
-function toggle(path: string, checked: boolean) { const copy = new Set(selected.value); if (checked) copy.add(path); else copy.delete(path); selected.value = copy; }
+function toggle(path: string, checked: boolean) { choices.value = new Map(choices.value).set(path, checked); }
 function selectVisible(checked: boolean) {
-    const copy = new Set(selected.value);
-    for (const file of visible.value) if (file.selectable) { if (checked) copy.add(file.path); else copy.delete(file.path); }
-    selected.value = copy;
+    const copy = new Map(choices.value);
+    for (const file of visible.value) if (file.selectable) copy.set(file.path, checked);
+    choices.value = copy;
 }
 </script>
 
@@ -97,7 +98,7 @@ function selectVisible(checked: boolean) {
       </div>
       <div class="commit">
         <p class="small muted">冲突和已恢复的文件不能勾选。写入前会再次核对哈希，备份始终保留。</p>
-        <button type="button" class="button primary" :disabled="locked || !selected.size" @click="emit('restore', selectionPayload(preview.files, selected))">恢复所选 {{ selected.size }} 项</button>
+        <button type="button" class="button primary" :disabled="locked || !selected.size" @click="emit('restore', selectionPayload(preview.files, selected), preview)">恢复所选 {{ selected.size }} 项</button>
       </div>
     </footer>
   </section>

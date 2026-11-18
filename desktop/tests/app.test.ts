@@ -3,7 +3,7 @@ import { config, definition, missingProvider, task } from './fixtures';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import App from '../src/App.vue';
-import { call, isDirectory, openFolder } from '../src/core/api';
+import { call, chooseFolder, isDirectory, openFolder } from '../src/core/api';
 import type { Definition, JobState, RestorePreview, ScanPreview } from '../src/core/types';
 
 let dropHandler: ((event: { type: 'over' | 'leave' | 'drop'; paths: string[] }) => void) | undefined;
@@ -41,7 +41,7 @@ beforeEach(() => {
         if (action === 'providers') return structuredClone(catalog.providers) as any;
         if (action === 'submit') return { jobId: 'job-1', replayed: false } as any;
         if (action === 'status') return { ...state, preview: state.preview ? { ...state.preview, files: undefined } : undefined } as any;
-        if (action === 'results') return { items: restorePreview.files, total: restorePreview.files.length, nextOffset: null } as any;
+        if (action === 'results' && state.preview && 'files' in state.preview) return { items: state.preview.files, total: state.preview.files.length, nextOffset: null } as any;
         return payload as any;
     });
 });
@@ -264,6 +264,81 @@ it('checks a standalone backup with both folders', async () => {
     await backup!.setValue('D:\\独立备份'); await target!.setValue('D:\\目标');
     await button('检查独立备份').trigger('click'); await flushPromises();
     expect(call).toHaveBeenCalledWith('submit', { request: { mode: 'restore-export-preview', backupDir: 'D:\\独立备份', outputDir: 'D:\\目标' }, idempotencyKey: expect.any(String) });
+});
+
+it.each(['恢复目标文件夹', '备份文件夹', '备份模式'])('invalidates a checked restore when %s changes, even if the old value is entered again', async field => {
+    await mountApp(); await go('恢复');
+    await wrapper.findAll('.mode input')[1]!.setValue(true);
+    const [backup, target] = wrapper.findAll('input.path');
+    await backup!.setValue('D:\\备份'); await target!.setValue('D:\\目标');
+    await button('检查独立备份').trigger('click'); await flushPromises();
+    await finish({ preview: restorePreview });
+    expect(button('恢复所选 2 项').attributes('disabled')).toBeUndefined();
+    if (field === '备份模式') {
+        await wrapper.findAll('.mode input')[0]!.setValue(true);
+        expect(wrapper.find('.restore-table').exists()).toBe(false);
+        await wrapper.findAll('.mode input')[1]!.setValue(true);
+    } else {
+        const input = field === '备份文件夹' ? backup! : target!;
+        const original = (input.element as HTMLInputElement).value;
+        await input.setValue('D:\\新目录');
+        expect(wrapper.find('.restore-table').exists()).toBe(false);
+        await input.setValue(original);
+    }
+    expect(wrapper.find('.restore-table').exists()).toBe(false);
+    await go('活动'); await go('恢复');
+    expect(wrapper.find('.restore-table').exists()).toBe(false);
+    expect(vi.mocked(call).mock.calls.filter(([action]) => action === 'submit')).toHaveLength(1);
+});
+
+it('discards an in-flight preview after a late folder choice, including across page navigation', async () => {
+    await mountApp(); await go('恢复');
+    await wrapper.findAll('.mode input')[1]!.setValue(true);
+    const [backup, target] = wrapper.findAll('input.path');
+    await backup!.setValue('D:\\备份'); await target!.setValue('D:\\旧目标');
+    let chooseTarget!: (folder: string) => void;
+    vi.mocked(chooseFolder).mockReturnValueOnce(new Promise(resolve => { chooseTarget = resolve; }));
+    await button('选择恢复目标文件夹').trigger('click');
+    await button('检查独立备份').trigger('click'); await flushPromises();
+    chooseTarget('D:\\新目标'); await flushPromises();
+    await go('工具');
+    await finish({ preview: { ...restorePreview, destination: 'D:\\旧目标' } });
+    await go('恢复');
+    expect((wrapper.findAll('input.path')[1]!.element as HTMLInputElement).value).toBe('D:\\新目标');
+    expect(wrapper.find('.restore-table').exists()).toBe(false);
+    expect(vi.mocked(call).mock.calls.filter(([action]) => action === 'submit')).toHaveLength(1);
+});
+
+it('rejects a restore event queued by an obsolete table before Vue finishes updating the view', async () => {
+    await mountApp(); await go('恢复');
+    await wrapper.findAll('.mode input')[1]!.setValue(true);
+    const [backup, target] = wrapper.findAll('input.path');
+    await backup!.setValue('D:\\备份'); await target!.setValue('D:\\旧目标');
+    await button('检查独立备份').trigger('click'); await flushPromises();
+    await finish({ preview: restorePreview });
+    const table = wrapper.findComponent({ name: 'RestoreTable' });
+    wrapper.findAllComponents({ name: 'PathField' })[1]!.vm.$emit('update:modelValue', 'D:\\新目标');
+    table.vm.$emit('restore', [{ path: 'a.png', backupHash: 'a'.repeat(64), targetHash: 'b'.repeat(64) }], table.props('preview'));
+    await flushPromises();
+    expect(wrapper.find('.restore-table').exists()).toBe(false);
+    expect(vi.mocked(call).mock.calls.filter(([action]) => action === 'submit')).toHaveLength(1);
+});
+
+it('preserves explicit choices across pages and same-task rechecks, and submits the latest preview hashes', async () => {
+    await mountApp(); await go('活动');
+    await button('检查备份').trigger('click'); await flushPromises();
+    await finish({ preview: restorePreview });
+    await wrapper.find('input[aria-label="恢复 b.png"]').setValue(false);
+    await go('工具'); await go('恢复');
+    expect(button('恢复所选 1 项')).toBeDefined();
+    state = { done: false, phase: 'checking', processed: 0, total: 2 };
+    await button('重新检查').trigger('click'); await flushPromises();
+    expect(wrapper.find('.restore-table').exists()).toBe(false);
+    const first = { ...restorePreview.files[0]!, backupHash: 'c'.repeat(64), targetHash: null };
+    await finish({ preview: { ...restorePreview, files: [first, restorePreview.files[1]!] } });
+    expect((wrapper.find('input[aria-label="恢复 b.png"]').element as HTMLInputElement).checked).toBe(false);
+    await button('恢复所选 1 项').trigger('click'); await flushPromises();
+    expect(call).toHaveBeenCalledWith('submit', { request: { mode: 'restore', taskId: task.id, selection: [{ path: 'a.png', backupHash: first.backupHash, targetHash: null }] }, idempotencyKey: expect.any(String) });
 });
 
 it('installs a missing dependency by ID, locks concurrent work and refreshes availability without losing edits', async () => {

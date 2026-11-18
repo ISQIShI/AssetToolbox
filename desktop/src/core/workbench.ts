@@ -1,6 +1,6 @@
 // 工作台状态：一个 App 实例创建一份，通过 provide/inject 交给视图。
 // 所有对核心的调用、作业生命周期（启动、轮询、取消、安全退出）都集中在这里。
-import { computed, inject, ref, type InjectionKey } from 'vue';
+import { computed, inject, reactive, ref, watch, type InjectionKey } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { call, chooseFolder, isDirectory, openFolder, openProviderSource, openReport } from './api';
 import { bytes, createStep, isMissing, processingRequest, providerOf, stepTitle } from './model';
@@ -34,10 +34,20 @@ export function createWorkbench() {
 
     // 任务页与恢复页。
     const selectedTaskId = ref<string>();
-    const restoreSource = ref<RestoreSource>();
+    const restoreForm = reactive({ kind: 'task' as RestoreSource['kind'], taskId: '', backupDir: '', outputDir: '' });
+    const restoreSource = computed<RestoreSource | undefined>(() => {
+        if (restoreForm.kind === 'task') return restoreForm.taskId ? { kind: 'task', taskId: restoreForm.taskId } : undefined;
+        const backupDir = restoreForm.backupDir.trim(), outputDir = restoreForm.outputDir.trim();
+        return backupDir && outputDir ? { kind: 'export', backupDir, outputDir } : undefined;
+    });
     const restorePreview = ref<RestorePreview>();
     const restoreScope = ref<RestoreScope>('all');
-    const restoreRevision = ref(0);
+    const restoreChoices = ref(new Map<string, boolean>());
+    watch(restoreSource, () => {
+        restorePreview.value = undefined;
+        restoreScope.value = 'all';
+        restoreChoices.value = new Map();
+    }, { flush: 'sync' });
 
     // 作业：同一时间最多一个；submitting 覆盖 submit 请求尚未返回的窗口。
     const job = ref<ActiveJob>();
@@ -283,19 +293,29 @@ export function createWorkbench() {
 
     // ---------- 恢复页 ----------
     async function checkRestore(source: RestoreSource, scope: RestoreScope = 'all') {
-        restoreSource.value = source; restoreScope.value = scope; restorePreview.value = undefined; restoreRevision.value++;
+        if (busy.value) return;
+        restoreForm.kind = source.kind;
+        if (source.kind === 'task') restoreForm.taskId = source.taskId;
+        else { restoreForm.backupDir = source.backupDir; restoreForm.outputDir = source.outputDir; }
+        if (restoreScope.value !== scope) restoreChoices.value = new Map();
+        restoreScope.value = scope;
         page.value = 'restore';
         await recheckRestore();
     }
     async function recheckRestore() {
+        if (busy.value) return;
         const source = restoreSource.value;
-        if (!source) return;
+        if (!source) { fail(restoreForm.kind === 'task' ? '请选择一个有备份的任务' : '请选择备份文件夹和恢复目标文件夹'); return; }
+        restorePreview.value = undefined;
         const request: JobRequest = source.kind === 'task' ? { mode: 'restore-preview', taskId: source.taskId } : { mode: 'restore-export-preview', backupDir: source.backupDir, outputDir: source.outputDir };
-        await launch(request, 'restore-check', '检查备份', state => { restorePreview.value = state.preview as RestorePreview | undefined; });
+        await launch(request, 'restore-check', '检查备份', state => {
+            // 文件夹对话框可能迟于检查返回；即使编辑后改回相同路径，也必须使用新检查。
+            if (restoreSource.value === source) restorePreview.value = state.preview as RestorePreview | undefined;
+        });
     }
-    async function restoreSelected(selection: Selection[]) {
+    async function restoreSelected(selection: Selection[], preview: RestorePreview) {
         const source = restoreSource.value;
-        if (!source || !selection.length) return;
+        if (!source || busy.value || !preview || preview !== restorePreview.value || preview.cancelled || !selection.length) return;
         const request: JobRequest = source.kind === 'task' ? { mode: 'restore', taskId: source.taskId, selection } : { mode: 'restore-export', backupDir: source.backupDir, outputDir: source.outputDir, selection };
         await launch(request, 'restore', '恢复所选文件', () => { restorePreview.value = undefined; notice.value = '恢复已结束。重新检查可查看文件的最新状态。'; });
     }
@@ -312,7 +332,7 @@ export function createWorkbench() {
     return {
         page, boot, config, tasks, loading, error, notice, station, scan, scanStale,
         maintenanceBusy, storagePreview, previewStorage, cleanStorage,
-        selectedTaskId, restoreSource, restorePreview, restoreScope, restoreRevision,
+        selectedTaskId, restoreForm, restorePreview, restoreScope, restoreChoices,
         job, submitting, closing, definition, busy, missingProviders, blockedSteps,
         fail, initialize, refreshTasks, refreshProviders, browse, saveConfig, installDependency,
         launch, cancelJob, dismissJob, openJobReport, requestClose, stop: () => clearTimeout(timer),

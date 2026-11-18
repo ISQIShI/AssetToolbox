@@ -149,6 +149,26 @@ test('native portable app: config + dynamic providers + image resize + save-as +
         expect(fs.readFileSync(path.join(source, '二级/c.pack'))).toEqual(originals.get(path.join('二级/c.pack')));
         expect(fs.readFileSync(path.join(source, '二级/b.pack')).length).toBe(10);
         expect(fs.readFileSync(conflict, 'utf8')).toBe('用户后来编辑的内容');
+        // 独立导出改选目标后必须重新检查，最终只写入界面所示目录。
+        await button('关闭作业结果').click();
+        const exportBackup = path.join(root, '独立备份');
+        const previousTarget = path.join(root, '初选目标');
+        const finalTarget = path.join(root, '改选目标');
+        fs.mkdirSync(exportBackup);
+        fs.writeFileSync(path.join(exportBackup, 'asset.pack'), '独立备份内容');
+        await page.getByText('独立备份文件夹', { exact: true }).click();
+        await page.getByLabel('备份文件夹', { exact: true }).fill(exportBackup);
+        const targetInput = page.getByLabel('恢复目标文件夹', { exact: true });
+        await targetInput.fill(previousTarget);
+        await button('检查独立备份').click();
+        await expect(button('恢复所选 1 项')).toBeEnabled();
+        await targetInput.fill(finalTarget);
+        await expect(page.getByRole('region', { name: '恢复前检查结果' })).toHaveCount(0);
+        await button('检查独立备份').click();
+        await button('恢复所选 1 项').click();
+        await done();
+        expect(fs.existsSync(previousTarget)).toBe(false);
+        expect(fs.readFileSync(path.join(finalTarget, 'asset.pack'), 'utf8')).toBe('独立备份内容');
         // 在同一原生应用中新增非压缩步骤，实测另存结果尺寸和透明通道。
         await button('关闭作业结果').click();
         await tab('处理').click();

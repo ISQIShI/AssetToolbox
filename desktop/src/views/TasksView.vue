@@ -15,7 +15,7 @@ const rows = computed(() => {
     const text = query.value.trim().toLocaleLowerCase();
     return tasks.value.filter(task => !text || `${task.source || ''}\n${task.id}`.toLocaleLowerCase().includes(text));
 });
-const task = computed(() => tasks.value.find(item => item.id === selectedTaskId.value) || rows.value[0]);
+const task = computed(() => rows.value.find(item => item.id === selectedTaskId.value) ?? rows.value[0]);
 const name = (item: Task) => item.source ? folderName(item.source) : item.id;
 const share = (item: Task, value: number) => item.total ? `${(value / item.total) * 100}%` : '0%';
 // 体积统计只覆盖已完成的文件；旧核心或读取失败的任务没有这些字段，此时整块不显示。
@@ -51,7 +51,7 @@ const places = computed(() => task.value ? [
           </button>
         </li>
       </ul>
-      <p v-else class="empty">{{ tasks.length ? '没有匹配的任务。' : '还没有任务。在“处理”页开始处理后，进度会保存在这里。' }}</p>
+      <p v-else class="empty">{{ tasks.length ? '没有匹配的任务。请更换文件夹名或任务编号。' : '还没有任务。在“处理”页开始处理后，进度会保存在这里。' }}</p>
     </aside>
 
     <section class="detail">
@@ -114,7 +114,7 @@ const places = computed(() => task.value ? [
           </div>
         </section>
       </article>
-      <div v-else class="sheet empty-detail">
+      <div v-else-if="!tasks.length" class="sheet empty-detail">
         <h2>任务会记录每个文件的进度</h2>
         <p class="muted">处理中途取消或关闭窗口后，可以在这里继续剩余文件；启用了备份的任务还能检查并恢复原文件。</p>
       </div>
