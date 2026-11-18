@@ -31,7 +31,7 @@ function update(change: (next: ResourceFilter) => void) {
     const next = structuredClone(JSON.parse(JSON.stringify(filter.value))) as ResourceFilter;
     change(next); emit('update:modelValue', next);
 }
-function newRule(property = fields.value[0]?.id): FilterRule {
+function newRule(property = (fields.value.find(field => field.group === 'file') ?? fields.value[0])?.id): FilterRule {
     const field = fields.value.find(item => item.id === property)!;
     return { property: field.id, operator: field.type === 'number' ? 'gte' : 'eq', value: field.type === 'number' ? 0 : field.type === 'boolean' ? true : '' };
 }

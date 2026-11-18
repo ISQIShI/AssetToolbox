@@ -1,1 +1,1 @@
-module.exports = { apiVersion: 1, version: '1.0.0', displayName: 'WAV', kind: 'audio', extensions: ['.wav'], validate: data => data.length >= 12 && ['RIFF', 'RF64'].includes(data.toString('ascii', 0, 4)) && data.toString('ascii', 8, 12) === 'WAVE' };
+module.exports = { apiVersion: 1, version: '1.0.0', displayName: 'WAV', kind: 'audio', propertyGroups: ['audio'], extensions: ['.wav'], validate: data => data.length >= 12 && ['RIFF', 'RF64'].includes(data.toString('ascii', 0, 4)) && data.toString('ascii', 8, 12) === 'WAVE' };

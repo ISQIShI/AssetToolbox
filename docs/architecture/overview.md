@@ -21,7 +21,7 @@ flowchart TD
     Worker --> Engine[engine.js 流水线]
     Engine --> Catalog[类型 / 操作 / 提供方]
     Engine --> Filter[共享过滤器 / 来源与步骤条件]
-    Filter --> Properties[代码属性目录 / 通用文件与专属图片属性]
+    Filter --> Properties[代码属性目录 / 文件、图片与音频属性]
     Engine --> Tool[编码器 / Sharp 子进程]
     Worker --> Restore[restore.js 恢复服务]
     Worker --> Data[任务事件 / 报告]
@@ -34,7 +34,7 @@ Rust 定位相邻 `runtime/node.exe` 和 `resource-core/`，开发模式可回�
 
 | 入口 | 职责 |
 | --- | --- |
-| `desktop/src/App.vue`、`core/workbench.ts`、`views/`、`components/` | 自绘标题栏、活动栏与状态栏，五个工作区、处理线与步骤编辑、全局作业栏、任务与恢复，见[前端架构](frontend.md) |
+| `desktop/src/App.vue`、`core/workbench.ts`、`views/`、`components/` | 自绘标题栏、活动栏与状态栏，处理、活动、恢复、工具四个工作区；活动页包含任务与作业队列，见[前端架构](frontend.md) |
 | `desktop/src-tauri/src/main.rs` | 本地宿主、目录对话框、报告打开、退出协作 |
 | `desktop-bridge.js` | 桌面 JSON Lines 传输与应用服务委托 |
 | `application/`、`../agent-mcp/` | 统一公共作业、权限/生命周期上下文、持久 jobId、JobSession、HTTP API 及 MCP 双传输；见[统一应用接口](application.md)、[自动化专题](automation.md)和[HTTP 专题](http.md) |

@@ -4,6 +4,14 @@
 
 资源按图片、音频等类别分组，JPEG/PNG 等格式保留独立步骤。来源和每个步骤都可以设置属性条件。例如来源选择“资源格式等于 JPEG”且“图片宽度大于 1024 px”；也可选“资源类别等于图片”涵盖所有已识别图片格式。排除文件不复制、不处理、不备份。步骤过滤读取前一步的实际产物，未匹配只跳过该步骤。分辨率可分别约束宽/高或总像素数；规则支持“且/或”，详见[属性与过滤器](../docs/architecture/properties-and-filters.md)。恢复不继承处理过滤条件。
 
+例如，要筛出短于 1 秒的 WAV、FLAC 音效，可将以下内容保存为过滤文件，再通过 `--source-filter <文件>` 传入。公共 API、MCP 和 HTTP 使用相同的 `sourceFilter` 对象。
+
+```json
+{ "schema": "asset-toolbox.filter/1", "any": [{ "all": [
+    { "property": "audio-duration", "operator": "lt", "value": 1 }
+] }] }
+```
+
 ## 快捷处理
 
 将下面的步骤数组保存为 `pipeline.json`，需要核心 Sharp 依赖；默认参数之外的选项见[扩展契约](../docs/architecture/extensions.md#步骤及参数)：

@@ -89,6 +89,11 @@ test('FLAC, MP3, Vorbis and Opus retain format, channels and rate and pass encod
     const { root, source, outputDir } = fixture(t), original = path.join(root, 'input.wav'); wav(original, { channels: 2 });
     for (const [name, codec] of [['sample.flac', 'flac'], ['sample.mp3', 'libmp3lame'], ['sample.ogg', 'libvorbis'], ['sample.opus', 'libopus']]) run(executable, ['-v', 'error', '-y', '-i', original, '-c:a', codec, path.join(source, name)]);
     const pipeline = ['flac', 'mp3', 'ogg'].map(type => step('audio-gain', { gainDb: 3, truePeakDb: -1 }, type, type));
+    pipeline[0].filter = { schema: 'asset-toolbox.filter/1', any: [{ all: [
+        { property: 'audio-sample-rate', operator: 'eq', value: 48000 },
+        { property: 'audio-channels', operator: 'eq', value: 2 },
+        { property: 'audio-duration', operator: 'eq', value: 2 },
+    ] }] };
     const { summary, records } = process(source, { pipeline, outputDir });
     assert.equal(summary.failed, 0, JSON.stringify(records)); assert.equal(summary.processed, 4);
     for (const row of records) {

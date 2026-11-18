@@ -18,8 +18,11 @@ test(`${browserOnly ? 'browser with real core' : 'native'} audio analysis, peak-
     fs.mkdirSync(path.join(tool, 'runtime')); fs.copyFileSync(path.join(project, 'runtime/node.exe'), path.join(tool, 'runtime/node.exe'));
     if (!browserOnly) fs.copyFileSync(path.join(project, 'AssetToolbox.exe'), path.join(tool, 'AssetToolbox.exe'));
     const ffmpeg = path.join(tool, 'resource-core/providers/ffmpeg/ffmpeg.exe');
-    require(path.join(project, 'resource-core/providers/ffmpeg/audio')).run(ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2', path.join(source, 'tone.wav')]);
+    const { run: runFfmpeg } = require(path.join(project, 'resource-core/providers/ffmpeg/audio'));
+    runFfmpeg(ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2', path.join(source, 'tone.wav')]);
+    runFfmpeg(ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.5', path.join(source, 'short.flac')]);
     const original = fs.readFileSync(path.join(source, 'tone.wav'));
+    const short = fs.readFileSync(path.join(source, 'short.flac'));
     const settings = { schema: 'asset-toolbox.settings/3', sourceDir: source, outputDir: '', backupDir: '', saveMode: 'saveAs', backupEnabled: false,
         pipeline: [{ id: 'audio', resourceType: 'wav', operation: 'audio-analyze', provider: 'ffmpeg', enabled: true, parameters: {}, providerOptions: {} }] };
     fs.mkdirSync(path.join(tool, 'resource-core/data')); fs.writeFileSync(path.join(tool, 'resource-core/data/settings.json'), JSON.stringify(settings));
@@ -55,6 +58,16 @@ test(`${browserOnly ? 'browser with real core' : 'native'} audio analysis, peak-
             expect(fs.readFileSync(path.join(source, 'tone.wav'))).toEqual(original);
         }
         await expect(page.getByText('仅分析，不写入素材', { exact: true })).toBeVisible();
+        const sourceFilter = page.getByRole('region', { name: '来源过滤', exact: true });
+        await sourceFilter.getByRole('button', { name: '添加过滤条件', exact: true }).click();
+        await pickOption(page, sourceFilter, '属性 1-1', 'audio-duration');
+        await pickOption(page, sourceFilter, '比较 1-1', 'lt');
+        await sourceFilter.getByLabel('值 1-1', { exact: true }).fill('1');
+        await button('扫描预览').click();
+        const inspector = page.getByRole('complementary', { name: '概览' });
+        await expect(inspector).toContainText('发现 2 个支持的文件，来源条件排除 1 个');
+        await expect(inspector.getByRole('row').filter({ has: page.getByRole('cell', { name: 'FLAC', exact: true }) }).getByRole('cell').nth(2)).toHaveText('1');
+        await pickOption(page, sourceFilter, '比较 1-1', 'gte');
         await run(); await expect(page.locator('.audio-results')).toContainText('仅分析');
         expect(fs.existsSync(output)).toBe(false);
         await page.screenshot({ path: info.outputPath('audio-analysis.png'), fullPage: true });
@@ -66,6 +79,8 @@ test(`${browserOnly ? 'browser with real core' : 'native'} audio analysis, peak-
         await page.getByLabel('另存文件夹', { exact: true }).fill(output);
         await run(); await expect(page.locator('.audio-results')).toContainText('已限制整段增益');
         await expect(page.locator('.audio-results')).toContainText('未使用动态压缩');
+        expect(fs.readdirSync(output)).toEqual(['tone.wav']);
+        expect(fs.readFileSync(path.join(source, 'short.flac'))).toEqual(short);
         const measure = require(path.join(project, 'resource-core/providers/ffmpeg/audio')).inspect;
         expect(measure(ffmpeg, path.join(output, 'tone.wav'), 'wav').truePeakDb).toBeLessThanOrEqual(-1);
         for (const width of [1220, 840]) {

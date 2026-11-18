@@ -283,6 +283,41 @@ test('desktop, CLI, stdio MCP, HTTP and HTTP MCP share schemas, durable jobs, ca
         assert.ok((await call('jobs')).result.items.some(item => item.jobId === jobId));
         assert.ok((await call('tasks')).result.items.some(item => item.id === cancelled.taskId));
     }
+    // 无外部编码器的副本也能经五种入口读取 WAV 头并用同一条规则预览。
+    const audioFolder = path.join(f.source, 'audio-properties');
+    fs.mkdirSync(audioFolder);
+    const frames = 400, rate = 8000, wav = Buffer.alloc(44 + frames * 2);
+    wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 2, 28);
+    wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(frames * 2, 40);
+    fs.writeFileSync(path.join(audioFolder, 'short.wav'), wav);
+    fs.writeFileSync(path.join(audioFolder, 'other.pack'), 'PACK:other');
+    const audioFilter = { schema: 'asset-toolbox.filter/1', any: [{ all: [
+        { property: 'audio-duration', operator: 'eq', value: frames / rate },
+        { property: 'audio-sample-rate', operator: 'eq', value: rate },
+        { property: 'audio-channels', operator: 'eq', value: 1 },
+    ] }] };
+    const analyze = { id: 'analyze', operation: 'audio-analyze', resourceType: 'wav', provider: 'ffmpeg', enabled: true, filter: audioFilter };
+    const audioPreview = { mode: 'preview', folder: audioFolder, pipeline: [analyze], sourceFilter: audioFilter };
+    for (const [index, call] of calls.entries()) {
+        const fields = catalogs[index].result.properties.filter(field => field.group === 'audio');
+        assert.deepEqual(fields.map(field => field.id).sort(), ['audio-channels', 'audio-duration', 'audio-sample-rate']);
+        for (const field of fields) assert.deepEqual([...field.resourceTypes].sort(), ['flac', 'wav']);
+        const checked = await call('validate', { request: audioPreview });
+        assert.equal(checked.ok, true, JSON.stringify(checked));
+        const expected = audioFilter.any[0].all.map(rule => ({ ...rule, version: '1.0.0' }));
+        assert.deepEqual(checked.result.request.sourceFilter.any[0].all, expected);
+        assert.deepEqual(checked.result.request.pipeline[0].filter.any[0].all, expected);
+        const unsupported = await call('validate', { request: { ...audioPreview, pipeline: [{ ...analyze, resourceType: 'mp3' }] } });
+        assert.equal(unsupported.error.code, 'INVALID_REQUEST');
+        const submittedAudio = await call('submit', { request: audioPreview, idempotencyKey: 'audio-property-preview-' + index });
+        assert.equal(submittedAudio.ok, true, JSON.stringify(submittedAudio));
+        const state = await until(remote.call, submittedAudio.result.jobId);
+        assert.equal(state.exitCode, 0, JSON.stringify(state));
+        assert.equal(state.preview.filteredOut, 1);
+        assert.deepEqual(state.preview.resources.map(row => [row.id, row.count]), [['wav', 1]]);
+    }
+    assert.deepEqual(fs.readFileSync(path.join(audioFolder, 'short.wav')), wav);
     // 外部提交由桌面读取；HTTP 客户端断开不结束作业。
     const preview = await remote.call('submit', { request: { ...f.request, mode: 'preview' }, idempotencyKey: 'http-preview' });
     await remote.client.close(); assert.equal((await until(desktop, preview.result.jobId)).exitCode, 0);

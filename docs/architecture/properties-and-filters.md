@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | file（common） | 全部已注册资源类型 | `file-size` 字节数、`file-name` 含扩展名、`relative-path` 相对路径、`extension` 小写含点、`resource-type` 类型 ID、`resource-kind` 种类 |
 | image | PNG、JPG/JPEG | `image-width`、`image-height`（px）、`image-pixels` 总像素数、`image-aspect-ratio` 宽高比 |
+| audio | WAV、原生 FLAC | `audio-duration` 时长（秒，可含小数）、`audio-sample-rate` 采样率（Hz）、`audio-channels` 声道数 |
 
 在 `resource-core/properties/<group>/index.js` 导出属性组；`common:true` 自动应用于所有类型，专属组由类型的 `propertyGroups` 显式关联。例如：
 
@@ -25,7 +26,12 @@ module.exports = {
 
 这是替换现有 file 组的接口示意，不能与其重复注册同一 ID。字段 ID 全局唯一，类型为 number/string/boolean；读取函数同步返回字段值对象，不得修改素材。上下文还提供 filename、relativePath、resourceType 和 `readPrefix(length)`；同一文件/步骤上下文中按需读取并缓存整组，下一步新建上下文。专属组示例见 `properties/image/index.js`，PNG/JPG 类型声明 `propertyGroups:['image']`。行为、单位或字段含义改变必须升级组 version，不能依靠重启静默改变已有任务含义。
 
-图片尺寸最多读取 1 MiB 文件头，不要求 Sharp 或 FFmpeg。PNG 使用 IHDR 编码尺寸；JPEG 使用 SOF 尺寸并按 EXIF 方向交换宽高，XMP 不覆盖 EXIF。PNG eXIf 方向尚未解释。此读取不是完整图像解码或格式验收；超过头部上限、损坏/缺失尺寸明确报错。音频目前只有通用属性，尚无时长、采样率等专属读取器。
+图片尺寸最多读取 1 MiB 文件头，不要求 Sharp 或 FFmpeg。PNG 使用 IHDR 编码尺寸；JPEG 使用 SOF 尺寸并按 EXIF 方向交换宽高，XMP 不覆盖 EXIF。PNG eXIf 方向尚未解释。此读取不是完整图像解码或格式验收；超过头部上限、损坏/缺失尺寸明确报错。
+
+音频属性组 `audio/1.0.0` 由核心直接读取容器声明。上下文提供当前输入的字节数 `size` 及精确读取 `readRange(offset, length)`。扫描时同一组复用只读句柄，读取完成即关闭。步骤使用当前中间缓冲区。两者均无需启动 FFmpeg 或遍历音频样本。
+
+- WAV 按 RIFF 块定位 fmt 与 data，最多遍历 256 个普通块，跳过数据区与填充字节。支持单 data 的 PCM、IEEE 浮点及对应 extensible 子格式，时长为完整帧数除以采样率。RF64 支持通过首个 ds64 声明单一超大 data。压缩 WAV、分段 wavl、额外超大块长度表以及无效帧对齐会报错。[Microsoft RIFF 说明](https://learn.microsoft.com/en-us/windows/win32/xaudio2/resource-interchange-file-format--riff-) · [EBU RF64 规范](https://tech.ebu.ch/docs/tech/tech3306v1_1.pdf)
+- FLAC 只读开头 42 字节，按 STREAMINFO 的 36 位总采样数计算时长。总数为 0 表示未知，此时按时长过滤会报错，单独按采样率或声道仍可用。头部属性适合预筛选，完整解码、响度及真峰值测量由音频操作执行。MP3 和 Ogg 可按通用文件属性过滤。[RFC 9639 §8.2](https://www.rfc-editor.org/rfc/rfc9639.html#section-8.2)
 
 ## 过滤表达式
 

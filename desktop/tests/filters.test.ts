@@ -17,7 +17,9 @@ describe('共享属性过滤编辑器', () => {
         expect(wrapper.text()).toContain('未设置，全部通过');
         expect(wrapper.get('button.info').attributes('aria-label')).toBe('来源过滤说明');
         await wrapper.get('.add-group').trigger('click'); await sync();
-        expect(optionGroups(selectBox(wrapper, 'property')).map(group => group.label)).toEqual(['通用文件属性', '图片属性']);
+        const first = selectBox(wrapper, 'property').props('modelValue');
+        expect(definition.properties.find(property => property.id === first)?.group).toBe('file');
+        expect(optionGroups(selectBox(wrapper, 'property')).map(group => group.label)).toEqual(['通用文件属性', '图片属性', '音频属性']);
         expect(optionGroups(selectBox(wrapper, '比较 1-1'))).toEqual([]);
         await choose(selectBox(wrapper, 'property'), 'image-width'); await sync();
         await wrapper.get('input[type=number]').setValue('1024');
@@ -25,6 +27,22 @@ describe('共享属性过滤编辑器', () => {
         await wrapper.get('.filter-group > button').trigger('click'); expect((await sync()).any[0]!.all).toHaveLength(2);
         await wrapper.get('.add-group').trigger('click'); expect((await sync()).any).toHaveLength(2);
         await wrapper.get('.filter-heading .button').trigger('click'); expect((await sync()).any).toEqual([]);
+    });
+    it('WAV、FLAC 步骤可按秒、Hz 和声道筛选，其他格式只显示适用的属性', async () => {
+        const modelValue: ResourceFilter = { schema: 'asset-toolbox.filter/1', any: [{ all: [{ property: 'audio-duration', operator: 'lt', value: 1 }] }] };
+        const wrapper = mount(FilterEditor, { props: { modelValue, properties: definition.properties, resourceType: 'wav', title: '步骤过滤', hint: '' } });
+        for (const resourceType of ['wav', 'flac']) {
+            await wrapper.setProps({ resourceType });
+            const property = selectBox(wrapper, 'property');
+            expect(optionGroups(property).map(group => group.label)).toEqual(['通用文件属性', '音频属性']);
+            expect(optionLabels(property)).toEqual(expect.arrayContaining(['音频时长 (s)', '采样率 (Hz)', '声道数']));
+            await wrapper.get('input[type="number"]').setValue('0.125');
+            expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toMatchObject({ any: [{ all: [{ property: 'audio-duration', operator: 'lt', value: 0.125 }] }] });
+        }
+        for (const resourceType of ['mp3', 'ogg', 'png']) {
+            await wrapper.setProps({ resourceType });
+            expect(optionLabels(selectBox(wrapper, 'property'))).not.toContain('音频属性');
+        }
     });
     it('步骤只列出适用属性，修改值移除旧版本，忙碌禁止编辑', async () => {
         const initial: ResourceFilter = { schema: 'asset-toolbox.filter/1', any: [{ all: [{ property: 'file-size', operator: 'gt', value: 1, version: '1.0.0' }] }] };

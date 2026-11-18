@@ -1,6 +1,33 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const operators = { number: ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'], string: ['eq', 'ne', 'contains', 'starts-with', 'ends-with'], boolean: ['eq', 'ne'] };
+
+function readGroup(group, source) {
+    const { filename, buffer, stat } = source;
+    const size = buffer?.length ?? stat.size;
+    let fd;
+    function readRange(offset, length) {
+        if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset > size - length) {
+            throw Error('属性读取范围超出文件');
+        }
+        if (buffer) return buffer.subarray(offset, offset + length);
+        fd ??= fs.openSync(filename, 'r');
+        const data = Buffer.alloc(length);
+        let read = 0;
+        while (read < length) {
+            const bytes = fs.readSync(fd, data, read, length - read, offset + read);
+            if (!bytes) throw Error('属性读取期间文件被截断');
+            read += bytes;
+        }
+        return data;
+    }
+    try {
+        return group.read({ ...source, size, readRange, readPrefix: length => readRange(0, Math.min(length, size)) });
+    } finally {
+        if (fd !== undefined) fs.closeSync(fd);
+    }
+}
+
 function createProperties(root, resourceTypes) {
     const groups = new Map(), properties = new Map(), directory = path.join(root, 'properties');
     if (fs.existsSync(directory)) for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
@@ -19,19 +46,13 @@ function createProperties(root, resourceTypes) {
     }
     for (const type of resourceTypes.values()) if (type.propertyGroups !== undefined && (!Array.isArray(type.propertyGroups)
         || type.propertyGroups.some(id => !groups.has(id)) || new Set(type.propertyGroups).size !== type.propertyGroups.length)) throw Error('资源属性组无效：' + type.id);
-    function context({ filename, relativePath, resourceType, buffer, stat }) {
+    function context(source) {
         const cache = new Map();
-        const readPrefix = length => {
-            if (buffer) return buffer.subarray(0, length);
-            const fd = fs.openSync(filename, 'r');
-            try { const data = Buffer.alloc(Math.min(length, stat.size)); const size = fs.readSync(fd, data, 0, data.length, 0); return data.subarray(0, size); }
-            finally { fs.closeSync(fd); }
-        };
         return id => {
             const property = properties.get(id);
-            if (!property || !property.resourceTypes.includes(resourceType.id)) return undefined;
+            if (!property || !property.resourceTypes.includes(source.resourceType.id)) return undefined;
             if (!cache.has(property.group)) {
-                const values = groups.get(property.group).read({ filename, relativePath, resourceType, buffer, stat, readPrefix });
+                const values = readGroup(groups.get(property.group), source);
                 if (!values || values.then || typeof values !== 'object') throw Error('属性读取必须同步返回对象');
                 cache.set(property.group, values);
             }

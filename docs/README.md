@@ -16,7 +16,7 @@
 | [前端架构](architecture/frontend.md) | 源码结构、工作台状态、作业生命周期、资源类别分组、步骤编辑与恢复勾选 |
 | [后端与框架设计](architecture/backend.md) | Rust 宿主、Node 调度、处理流水线、提供方扩展、安全恢复 |
 | [扩展契约](architecture/extensions.md) | 类型/操作/提供方、按操作适配器、公共与专属参数、版本及新增实现示例 |
-| [资源属性与过滤器](architecture/properties-and-filters.md) | 通用/专属代码属性、有界 AND/OR、来源排除、步骤条件、中间产物、续跑及恢复边界 |
+| [资源属性与过滤器](architecture/properties-and-filters.md) | 文件、图片与 WAV/FLAC 音频属性，有界 AND/OR、来源排除、步骤条件、中间产物、续跑及恢复边界 |
 | [音频处理](architecture/audio.md) | 分析、固定增益、响度归一化、峰值策略、质量边界和报告 |
 | [提供方依赖管理](architecture/dependencies.md) | 固定核验清单、HTTPS/摘要校验、自动安装更新、取消与不可变目录 |
 | [通信协议](architecture/protocol.md) | Tauri 命令、JSON Lines、操作与作业模式、错误语义 |
