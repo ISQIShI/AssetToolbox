@@ -66,3 +66,5 @@ JS/TS/Rust 使用四空格，Vue 模板两空格，JS/TS 使用单引号和分�
 作业中心相关改动必读[作业中心与入口冲突](docs/architecture/job-center.md)。观察状态独立于本会话 ActiveJob；关闭观察窗口或离开页面不能取消其他入口作业。资源感知队列支持 1–8 项并行（默认 2）、100 个未结束项；预算仅受信任本地上下文在全局空闲时修改，policy 入口拒绝。队列改动必读[持久队列与有限并行](docs/architecture/queue.md)及 [ADR 0014](docs/decisions/0014-resource-aware-concurrency.md)/[0015](docs/decisions/0015-configurable-concurrency.md)。由核心推导资源并分配稳定槽位，整体授予；保留冲突 FIFO、防饥饿、维护屏障、原持有会话、启动预约、worker 独立占用、退出确认及取消边界。submit 不能指定资源、槽位或预算；CPU 建议不是线程/内存配额，不随查询自动应用。
 
 跨入口首次作业记录统一经 `application/publication.js` 完整写入/fsync 后原子发布，新作业目录整体公布；禁止在可见最终文件名上 open 后逐步写 JSON。保留排他预约、目标存在拒绝、退出确认和持久坏记录报错；不要用忽略解析错误或增加客户端重试掩盖发布竞争。对应 source 层 publication 回归及 MCP 双传输门闩测试必须保留。
+
+修改桌面恢复交互时，将预览、勾选与当前任务或备份/目标目录绑定。改选后须重新检查，提交使用当前预览的哈希。修改 MCP HTTP 适配时保留 Node 的连接轮换，回归需覆盖同一客户端跨越单连接请求上限。

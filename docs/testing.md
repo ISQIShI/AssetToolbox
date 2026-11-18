@@ -2,6 +2,8 @@
 
 源码入口：`scripts/test-core.cjs`、`.github/workflows/source.yml`、`desktop/playwright.config.ts`。所有文件处理测试使用生成素材和隔离副本，不能以真实用户目录作为夹具。
 
+音频属性的 source 用例为 `audio-properties.test.js`、`wav-properties.test.js`，覆盖有界读取、无时长、损坏头部、跨格式来源筛选和写入前失败。真实编码文件另由 `audio.test.js` 和原生 `audio.spec.ts` 验证。桌面恢复改选、晚到事件和任务搜索分别由 `app.test.ts`、`task-search.test.ts` 覆盖，原生 `native.spec.ts` 核对导出后新旧目标的磁盘内容。
+
 ## 运行矩阵
 
 | 目录 | 命令 | 前提与范围 |
